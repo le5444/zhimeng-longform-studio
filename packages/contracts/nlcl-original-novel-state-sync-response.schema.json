@@ -1,0 +1,266 @@
+{
+  "$defs": {
+    "NlclOriginalNovelStateSyncReceipt": {
+      "additionalProperties": false,
+      "description": "Receipt for writing original-compatible state/*.json after inventory bridge.\n\nWrites project-root state/project_status.json, character_state.json,\nplot_state.json, foreshadowing_state.json and the truth-matrix triad\n(truth_character_matrix/truth_foreshadow_lifecycle/truth_info_boundary).\nDoes not mutate 03/04 truth markdown and does not authorize formal prose.",
+      "properties": {
+        "schema": {
+          "const": "zhimeng.nlcl-original-novel-state-sync-receipt.v1",
+          "default": "zhimeng.nlcl-original-novel-state-sync-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "receipt_id": {
+          "pattern": "^nlcl-original-novel-state-sync-[0-9a-f]{32}$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "nlcl_original_novel_state_bridge_receipt_id": {
+          "pattern": "^nlcl-original-novel-state-bridge-[0-9a-f]{32}$",
+          "title": "Nlcl Original Novel State Bridge Receipt Id",
+          "type": "string"
+        },
+        "nlcl_original_novel_state_bridge_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Nlcl Original Novel State Bridge Receipt Hash",
+          "type": "string"
+        },
+        "nlcl_original_chapter_ops_usage_export_receipt_id": {
+          "pattern": "^nlcl-original-chapter-ops-usage-[0-9a-f]{32}$",
+          "title": "Nlcl Original Chapter Ops Usage Export Receipt Id",
+          "type": "string"
+        },
+        "nlcl_original_chapter_ops_usage_export_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Nlcl Original Chapter Ops Usage Export Receipt Hash",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "applied",
+            "rolled_back"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "chapter_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Chapter Id",
+          "type": "string"
+        },
+        "canonical_chapter_key": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Canonical Chapter Key",
+          "type": "string"
+        },
+        "chapter_relative_paths": {
+          "items": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+\\.(?:json|jsonl|md|txt|yaml|yml)$",
+            "type": "string",
+            "x-zhimeng-invariants": [
+              "path segments cannot use Windows device names",
+              "path segments are at most 255 characters"
+            ]
+          },
+          "maxItems": 64,
+          "title": "Chapter Relative Paths",
+          "type": "array"
+        },
+        "written_files": {
+          "items": {
+            "$ref": "#/$defs/NlclOriginalNovelStateWrittenFile"
+          },
+          "maxItems": 7,
+          "minItems": 7,
+          "title": "Written Files",
+          "type": "array"
+        },
+        "state_root_relative_path": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^(?:state|07_[^/]+/nlcl_state)$",
+          "title": "State Root Relative Path",
+          "type": "string"
+        },
+        "record_mode": {
+          "const": "product_bridge_original_state_json_writeback",
+          "default": "product_bridge_original_state_json_writeback",
+          "title": "Record Mode",
+          "type": "string"
+        },
+        "original_nlcl_call_usage_recorded": {
+          "const": true,
+          "default": true,
+          "title": "Original Nlcl Call Usage Recorded",
+          "type": "boolean"
+        },
+        "original_nlcl_chapter_ops_usage_synced": {
+          "const": true,
+          "default": true,
+          "title": "Original Nlcl Chapter Ops Usage Synced",
+          "type": "boolean"
+        },
+        "original_nlcl_novel_state_bridge_recorded": {
+          "const": true,
+          "default": true,
+          "title": "Original Nlcl Novel State Bridge Recorded",
+          "type": "boolean"
+        },
+        "original_nlcl_novel_state_synced": {
+          "const": true,
+          "default": true,
+          "title": "Original Nlcl Novel State Synced",
+          "type": "boolean"
+        },
+        "original_nlcl_truth_matrix_synced": {
+          "const": true,
+          "default": true,
+          "title": "Original Nlcl Truth Matrix Synced",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "quality_assessed": {
+          "const": false,
+          "default": false,
+          "title": "Quality Assessed",
+          "type": "boolean"
+        },
+        "novel_state_synced": {
+          "const": true,
+          "default": true,
+          "title": "Novel State Synced",
+          "type": "boolean"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "change_set_id",
+        "project_id",
+        "nlcl_original_novel_state_bridge_receipt_id",
+        "nlcl_original_novel_state_bridge_receipt_hash",
+        "nlcl_original_chapter_ops_usage_export_receipt_id",
+        "nlcl_original_chapter_ops_usage_export_receipt_hash",
+        "outcome",
+        "chapter_id",
+        "canonical_chapter_key",
+        "written_files",
+        "state_root_relative_path",
+        "created_at",
+        "receipt_hash"
+      ],
+      "title": "NlclOriginalNovelStateSyncReceipt",
+      "type": "object"
+    },
+    "NlclOriginalNovelStateWrittenFile": {
+      "additionalProperties": false,
+      "properties": {
+        "relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?:state|07_[^/]+/nlcl_state)/(?:project_status|character_state|plot_state|foreshadowing_state|truth_character_matrix|truth_foreshadow_lifecycle|truth_info_boundary)\\.json$",
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "source_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Hash",
+          "type": "string"
+        },
+        "domain": {
+          "enum": [
+            "character",
+            "plot",
+            "foreshadowing",
+            "project_status",
+            "truth_character_matrix",
+            "truth_foreshadow_lifecycle",
+            "truth_info_boundary"
+          ],
+          "title": "Domain",
+          "type": "string"
+        },
+        "created": {
+          "title": "Created",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "relative_path",
+        "source_hash",
+        "domain",
+        "created"
+      ],
+      "title": "NlclOriginalNovelStateWrittenFile",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.nlcl-original-novel-state-sync-response.v1",
+      "default": "zhimeng.nlcl-original-novel-state-sync-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "change_set_id": {
+      "pattern": "^changeset-[0-9a-f]{32}$",
+      "title": "Change Set Id",
+      "type": "string"
+    },
+    "receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NlclOriginalNovelStateSyncReceipt"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "history": {
+      "items": {
+        "$ref": "#/$defs/NlclOriginalNovelStateSyncReceipt"
+      },
+      "maxItems": 32,
+      "title": "History",
+      "type": "array"
+    }
+  },
+  "required": [
+    "change_set_id"
+  ],
+  "title": "NlclOriginalNovelStateSyncResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/nlcl-original-novel-state-sync-response.schema.json"
+}

@@ -1,0 +1,406 @@
+{
+  "$defs": {
+    "LiteraryQualityDimension": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/LiteraryQualityDimensionCode"
+        },
+        "status": {
+          "$ref": "#/$defs/LiteraryQualityDimensionStatus"
+        },
+        "detail": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "status",
+        "detail"
+      ],
+      "title": "LiteraryQualityDimension",
+      "type": "object"
+    },
+    "LiteraryQualityDimensionCode": {
+      "enum": [
+        "candidate_present",
+        "placeholder_scan",
+        "ai_smell_markers",
+        "hard_fact_signal",
+        "dialogue_balance",
+        "sensory_density",
+        "pacing_variation",
+        "hook_opening",
+        "repetition_risk",
+        "deterministic_rubric",
+        "subjective_literary_score",
+        "authorization_unlock"
+      ],
+      "title": "LiteraryQualityDimensionCode",
+      "type": "string"
+    },
+    "LiteraryQualityDimensionStatus": {
+      "enum": [
+        "pass",
+        "watch",
+        "fail",
+        "not_scored"
+      ],
+      "title": "LiteraryQualityDimensionStatus",
+      "type": "string"
+    },
+    "LiteraryQualityFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "finding_id": {
+          "pattern": "^lq-finding-[0-9a-f]{12}$",
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "structural",
+            "hard_fact_signal",
+            "subjective_note",
+            "rubric_note"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "watch",
+            "concern"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "evidence_quote": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Evidence Quote",
+          "type": "string"
+        },
+        "relative_path": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Path"
+        }
+      },
+      "required": [
+        "finding_id",
+        "kind",
+        "severity",
+        "summary"
+      ],
+      "title": "LiteraryQualityFinding",
+      "type": "object"
+    },
+    "LiteraryQualityGateReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.literary-quality-gate-receipt.v1",
+          "default": "zhimeng.literary-quality-gate-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "receipt_id": {
+          "pattern": "^literary-quality-[0-9a-f]{32}$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "applied",
+            "rolled_back",
+            "ready_candidate"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "result_revision": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result Revision"
+        },
+        "result_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result Fingerprint"
+        },
+        "review_revision": {
+          "minimum": 0,
+          "title": "Review Revision",
+          "type": "integer"
+        },
+        "gate_mode": {
+          "default": "deterministic_structural_rubric_v2",
+          "enum": [
+            "deterministic_structural_v1",
+            "deterministic_structural_rubric_v2"
+          ],
+          "title": "Gate Mode",
+          "type": "string"
+        },
+        "decision": {
+          "const": "advisory_only",
+          "default": "advisory_only",
+          "title": "Decision",
+          "type": "string"
+        },
+        "authorization_unlock": {
+          "const": false,
+          "default": false,
+          "title": "Authorization Unlock",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "quality_assessed": {
+          "const": false,
+          "default": false,
+          "title": "Quality Assessed",
+          "type": "boolean"
+        },
+        "structural_checks_run": {
+          "const": true,
+          "default": true,
+          "title": "Structural Checks Run",
+          "type": "boolean"
+        },
+        "deterministic_rubric_scored": {
+          "const": true,
+          "default": true,
+          "title": "Deterministic Rubric Scored",
+          "type": "boolean"
+        },
+        "dimensions": {
+          "items": {
+            "$ref": "#/$defs/LiteraryQualityDimension"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Dimensions",
+          "type": "array"
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/LiteraryQualityFinding"
+          },
+          "maxItems": 64,
+          "title": "Findings",
+          "type": "array"
+        },
+        "finding_counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Finding Counts",
+          "type": "object"
+        },
+        "rubric_scores": {
+          "items": {
+            "$ref": "#/$defs/LiteraryRubricScore"
+          },
+          "maxItems": 16,
+          "title": "Rubric Scores",
+          "type": "array"
+        },
+        "rubric_total_score": {
+          "default": 0,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Rubric Total Score",
+          "type": "integer"
+        },
+        "policy_version": {
+          "default": "local-v1-advisory-2",
+          "enum": [
+            "local-v1-advisory-1",
+            "local-v1-advisory-2"
+          ],
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "evaluated_at": {
+          "format": "date-time",
+          "title": "Evaluated At",
+          "type": "string"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "change_set_id",
+        "project_id",
+        "outcome",
+        "review_revision",
+        "dimensions",
+        "evaluated_at",
+        "receipt_hash"
+      ],
+      "title": "LiteraryQualityGateReceipt",
+      "type": "object"
+    },
+    "LiteraryRubricScore": {
+      "additionalProperties": false,
+      "description": "Deterministic literary rubric axis score. Advisory only; not quality_assessed.",
+      "properties": {
+        "code": {
+          "enum": [
+            "dialogue_balance",
+            "sensory_density",
+            "pacing_variation",
+            "hook_opening",
+            "repetition_risk"
+          ],
+          "title": "Code",
+          "type": "string"
+        },
+        "score": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Score",
+          "type": "integer"
+        },
+        "weight": {
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Weight",
+          "type": "integer"
+        },
+        "weighted_score": {
+          "maximum": 10000,
+          "minimum": 0,
+          "title": "Weighted Score",
+          "type": "integer"
+        },
+        "detail": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "score",
+        "weight",
+        "weighted_score",
+        "detail"
+      ],
+      "title": "LiteraryRubricScore",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.literary-quality-gate-response.v1",
+      "default": "zhimeng.literary-quality-gate-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "change_set_id": {
+      "pattern": "^changeset-[0-9a-f]{32}$",
+      "title": "Change Set Id",
+      "type": "string"
+    },
+    "receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LiteraryQualityGateReceipt"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "history": {
+      "items": {
+        "$ref": "#/$defs/LiteraryQualityGateReceipt"
+      },
+      "maxItems": 32,
+      "title": "History",
+      "type": "array"
+    },
+    "not_claiming": {
+      "default": [
+        "literary_quality_score",
+        "llm_literary_score",
+        "subjective_literary_score",
+        "quality_assessed",
+        "formal_prose_writeback",
+        "formal_draft_authorization_unlock",
+        "four_skills_generic_exactly_once",
+        "local_v1_exe"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Not Claiming",
+      "type": "array"
+    }
+  },
+  "required": [
+    "change_set_id"
+  ],
+  "title": "LiteraryQualityGateResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/literary-quality-gate-response.schema.json"
+}

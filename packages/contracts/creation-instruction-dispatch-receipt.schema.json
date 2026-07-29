@@ -1,0 +1,151 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.creation-instruction-dispatch-receipt.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "dispatch_receipt_id": {
+      "pattern": "^creation-instruction-dispatch-[0-9a-f]{32}$",
+      "title": "Dispatch Receipt Id",
+      "type": "string"
+    },
+    "run_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "workflow_plan_id": {
+      "pattern": "^workflow-plan-[0-9a-f]{32}$",
+      "title": "Workflow Plan Id",
+      "type": "string"
+    },
+    "workflow_plan_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Workflow Plan Hash",
+      "type": "string"
+    },
+    "final_checkpoint_id": {
+      "pattern": "^workflow-checkpoint-[0-9a-f]{32}$",
+      "title": "Final Checkpoint Id",
+      "type": "string"
+    },
+    "final_checkpoint_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Final Checkpoint Hash",
+      "type": "string"
+    },
+    "writer_task_id": {
+      "pattern": "^writer-task-[0-9a-f]{32}$",
+      "title": "Writer Task Id",
+      "type": "string"
+    },
+    "writer_task_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Writer Task Hash",
+      "type": "string"
+    },
+    "materialization_id": {
+      "pattern": "^creation-instruction-materialization-[0-9a-f]{32}$",
+      "title": "Materialization Id",
+      "type": "string"
+    },
+    "materialization_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Materialization Hash",
+      "type": "string"
+    },
+    "provider_boundary_id": {
+      "pattern": "^provider-io-[0-9a-f]{32}$",
+      "title": "Provider Boundary Id",
+      "type": "string"
+    },
+    "provider_boundary_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Provider Boundary Hash",
+      "type": "string"
+    },
+    "provider_request_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Provider Request Hash",
+      "type": "string"
+    },
+    "provider_messages_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Provider Messages Hash",
+      "type": "string"
+    },
+    "tool_definitions_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Tool Definitions Hash",
+      "type": "string"
+    },
+    "provider_dispatch_config_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Provider Dispatch Config Fingerprint",
+      "type": "string"
+    },
+    "automatic_provider_replay_count": {
+      "const": 0,
+      "title": "Automatic Provider Replay Count",
+      "type": "integer"
+    },
+    "status": {
+      "const": "committed_before_dispatch",
+      "title": "Status",
+      "type": "string"
+    },
+    "formal_draft_allowed": {
+      "const": false,
+      "title": "Formal Draft Allowed",
+      "type": "boolean"
+    },
+    "writes_project_truth": {
+      "const": false,
+      "title": "Writes Project Truth",
+      "type": "boolean"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Receipt Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "dispatch_receipt_id",
+    "run_id",
+    "workflow_plan_id",
+    "workflow_plan_hash",
+    "final_checkpoint_id",
+    "final_checkpoint_hash",
+    "writer_task_id",
+    "writer_task_hash",
+    "materialization_id",
+    "materialization_hash",
+    "provider_boundary_id",
+    "provider_boundary_hash",
+    "provider_request_hash",
+    "provider_messages_hash",
+    "tool_definitions_hash",
+    "provider_dispatch_config_fingerprint",
+    "automatic_provider_replay_count",
+    "status",
+    "formal_draft_allowed",
+    "writes_project_truth",
+    "created_at",
+    "receipt_hash"
+  ],
+  "title": "CreationInstructionDispatchReceipt",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/creation-instruction-dispatch-receipt.schema.json"
+}

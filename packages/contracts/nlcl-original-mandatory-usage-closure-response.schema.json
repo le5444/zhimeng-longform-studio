@@ -1,0 +1,355 @@
+{
+  "$defs": {
+    "NlclOriginalMandatoryUsageClosureItem": {
+      "additionalProperties": false,
+      "properties": {
+        "item_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Item Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "character",
+            "foreshadow",
+            "plot_thread",
+            "info_boundary",
+            "selected_card"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "source_relative_path": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Relative Path"
+        },
+        "required_action": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Required Action",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "used",
+            "unused",
+            "missed",
+            "suppressed_for_project_truth"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id",
+        "kind",
+        "title",
+        "required_action",
+        "status"
+      ],
+      "title": "NlclOriginalMandatoryUsageClosureItem",
+      "type": "object"
+    },
+    "NlclOriginalMandatoryUsageClosureReceipt": {
+      "additionalProperties": false,
+      "description": "Author-closed mandatory usage closure bound to a plan scaffold.\n\nMay set mandatory_usage_closure_closed=true only when every item is decided.\nStill never sets formal_draft_allowed or quality_assessed.",
+      "properties": {
+        "schema": {
+          "const": "zhimeng.nlcl-original-mandatory-usage-closure-receipt.v1",
+          "default": "zhimeng.nlcl-original-mandatory-usage-closure-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "receipt_id": {
+          "pattern": "^nlcl-original-mandatory-usage-closure-[0-9a-f]{32}$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "nlcl_original_mandatory_usage_plan_receipt_id": {
+          "pattern": "^nlcl-original-mandatory-usage-plan-[0-9a-f]{32}$",
+          "title": "Nlcl Original Mandatory Usage Plan Receipt Id",
+          "type": "string"
+        },
+        "nlcl_original_mandatory_usage_plan_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Nlcl Original Mandatory Usage Plan Receipt Hash",
+          "type": "string"
+        },
+        "nlcl_original_truth_content_extract_receipt_id": {
+          "pattern": "^nlcl-original-truth-content-extract-[0-9a-f]{32}$",
+          "title": "Nlcl Original Truth Content Extract Receipt Id",
+          "type": "string"
+        },
+        "nlcl_original_truth_content_extract_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Nlcl Original Truth Content Extract Receipt Hash",
+          "type": "string"
+        },
+        "nlcl_original_novel_state_sync_receipt_id": {
+          "pattern": "^nlcl-original-novel-state-sync-[0-9a-f]{32}$",
+          "title": "Nlcl Original Novel State Sync Receipt Id",
+          "type": "string"
+        },
+        "nlcl_original_novel_state_sync_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Nlcl Original Novel State Sync Receipt Hash",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "applied",
+            "rolled_back"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "chapter_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Chapter Id",
+          "type": "string"
+        },
+        "canonical_chapter_key": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Canonical Chapter Key",
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/NlclOriginalMandatoryUsageClosureItem"
+          },
+          "maxItems": 512,
+          "minItems": 1,
+          "title": "Items",
+          "type": "array"
+        },
+        "written_files": {
+          "items": {
+            "$ref": "#/$defs/NlclOriginalMandatoryUsageClosureWrittenFile"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Written Files",
+          "type": "array"
+        },
+        "closure_relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?:chapter_context|07_[^/]+/nlcl_state/chapter_context)/[A-Za-z0-9._-]+_mandatory_usage_closure_latest\\.json$",
+          "title": "Closure Relative Path",
+          "type": "string"
+        },
+        "overall_status": {
+          "const": "closed",
+          "default": "closed",
+          "title": "Overall Status",
+          "type": "string"
+        },
+        "record_mode": {
+          "const": "product_bridge_mandatory_usage_closure_author_decided",
+          "default": "product_bridge_mandatory_usage_closure_author_decided",
+          "title": "Record Mode",
+          "type": "string"
+        },
+        "original_nlcl_novel_state_synced": {
+          "const": true,
+          "default": true,
+          "title": "Original Nlcl Novel State Synced",
+          "type": "boolean"
+        },
+        "original_nlcl_truth_matrix_synced": {
+          "const": true,
+          "default": true,
+          "title": "Original Nlcl Truth Matrix Synced",
+          "type": "boolean"
+        },
+        "truth_content_extracted": {
+          "const": true,
+          "default": true,
+          "title": "Truth Content Extracted",
+          "type": "boolean"
+        },
+        "mandatory_usage_plan_synced": {
+          "const": true,
+          "default": true,
+          "title": "Mandatory Usage Plan Synced",
+          "type": "boolean"
+        },
+        "mandatory_usage_closure_closed": {
+          "const": true,
+          "default": true,
+          "title": "Mandatory Usage Closure Closed",
+          "type": "boolean"
+        },
+        "route_validated": {
+          "const": false,
+          "default": false,
+          "title": "Route Validated",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "quality_assessed": {
+          "const": false,
+          "default": false,
+          "title": "Quality Assessed",
+          "type": "boolean"
+        },
+        "novel_state_synced": {
+          "const": true,
+          "default": true,
+          "title": "Novel State Synced",
+          "type": "boolean"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "change_set_id",
+        "project_id",
+        "nlcl_original_mandatory_usage_plan_receipt_id",
+        "nlcl_original_mandatory_usage_plan_receipt_hash",
+        "nlcl_original_truth_content_extract_receipt_id",
+        "nlcl_original_truth_content_extract_receipt_hash",
+        "nlcl_original_novel_state_sync_receipt_id",
+        "nlcl_original_novel_state_sync_receipt_hash",
+        "outcome",
+        "chapter_id",
+        "canonical_chapter_key",
+        "items",
+        "written_files",
+        "closure_relative_path",
+        "created_at",
+        "receipt_hash"
+      ],
+      "title": "NlclOriginalMandatoryUsageClosureReceipt",
+      "type": "object"
+    },
+    "NlclOriginalMandatoryUsageClosureWrittenFile": {
+      "additionalProperties": false,
+      "properties": {
+        "relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?:chapter_context|07_[^/]+/nlcl_state/chapter_context)/[A-Za-z0-9._-]+_mandatory_usage_closure_(?:latest|post_writeback)\\.(?:json|md)$",
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "source_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Hash",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "json_latest",
+            "md_latest",
+            "json_stage",
+            "md_stage"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "created": {
+          "title": "Created",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "relative_path",
+        "source_hash",
+        "kind",
+        "created"
+      ],
+      "title": "NlclOriginalMandatoryUsageClosureWrittenFile",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.nlcl-original-mandatory-usage-closure-response.v1",
+      "default": "zhimeng.nlcl-original-mandatory-usage-closure-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "change_set_id": {
+      "pattern": "^changeset-[0-9a-f]{32}$",
+      "title": "Change Set Id",
+      "type": "string"
+    },
+    "receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NlclOriginalMandatoryUsageClosureReceipt"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "history": {
+      "items": {
+        "$ref": "#/$defs/NlclOriginalMandatoryUsageClosureReceipt"
+      },
+      "maxItems": 32,
+      "title": "History",
+      "type": "array"
+    }
+  },
+  "required": [
+    "change_set_id"
+  ],
+  "title": "NlclOriginalMandatoryUsageClosureResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/nlcl-original-mandatory-usage-closure-response.schema.json"
+}

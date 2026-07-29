@@ -1,0 +1,53 @@
+{
+  "$defs": {
+    "HunkDecisionUpdate": {
+      "additionalProperties": false,
+      "properties": {
+        "hunk_id": {
+          "pattern": "^hunk-[0-9a-f]{32}$",
+          "title": "Hunk Id",
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "accepted",
+            "rejected"
+          ],
+          "title": "Decision",
+          "type": "string"
+        }
+      },
+      "required": [
+        "hunk_id",
+        "decision"
+      ],
+      "title": "HunkDecisionUpdate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "expected_review_revision": {
+      "minimum": 0,
+      "title": "Expected Review Revision",
+      "type": "integer"
+    },
+    "decisions": {
+      "items": {
+        "$ref": "#/$defs/HunkDecisionUpdate"
+      },
+      "maxItems": 4096,
+      "minItems": 1,
+      "title": "Decisions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "expected_review_revision",
+    "decisions"
+  ],
+  "title": "ChangeSetDecisionRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/change-set-decisions.schema.json"
+}

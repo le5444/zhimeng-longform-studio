@@ -1,0 +1,343 @@
+{
+  "$defs": {
+    "AgentCandidateContent": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "maxLength": 500000,
+          "minLength": 1,
+          "title": "Body",
+          "type": "string"
+        },
+        "format": {
+          "const": "markdown",
+          "default": "markdown",
+          "title": "Format",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 8000,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "summary",
+        "body"
+      ],
+      "title": "AgentCandidateContent",
+      "type": "object"
+    },
+    "AgentCandidateReference": {
+      "additionalProperties": false,
+      "properties": {
+        "reference_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Reference Hash",
+          "type": "string"
+        },
+        "reference_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Reference Id",
+          "type": "string"
+        },
+        "reference_kind": {
+          "enum": [
+            "workflow_checkpoint",
+            "runtime_identity",
+            "artifact",
+            "change_set"
+          ],
+          "title": "Reference Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reference_kind",
+        "reference_id",
+        "reference_hash"
+      ],
+      "title": "AgentCandidateReference",
+      "type": "object"
+    },
+    "ProviderTurnReceiptBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        },
+        "receipt_id": {
+          "pattern": "^provider-turn-receipt-[0-9a-f]{32}$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "turn_ordinal": {
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Turn Ordinal",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "turn_ordinal",
+        "receipt_id",
+        "receipt_hash"
+      ],
+      "title": "ProviderTurnReceiptBinding",
+      "type": "object"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/agent-candidate-output-v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Legacy Candidate envelope with Runtime-observed Provider identity evidence.",
+  "properties": {
+    "allowed_output": {
+      "const": "repair_plan_or_risk_draft_only",
+      "title": "Allowed Output",
+      "type": "string"
+    },
+    "candidate_output_id": {
+      "pattern": "^agent-candidate-[0-9a-f]{32}$",
+      "title": "Candidate Output Id",
+      "type": "string"
+    },
+    "content": {
+      "$ref": "#/$defs/AgentCandidateContent"
+    },
+    "content_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Content Hash",
+      "type": "string"
+    },
+    "context_pack_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Context Pack Hash",
+      "type": "string"
+    },
+    "context_pack_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Context Pack Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "envelope_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Envelope Hash",
+      "type": "string"
+    },
+    "failure_signatures": {
+      "items": {
+        "maxLength": 256,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Failure Signatures",
+      "type": "array"
+    },
+    "final_checkpoint_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Final Checkpoint Hash",
+      "type": "string"
+    },
+    "final_checkpoint_id": {
+      "pattern": "^workflow-checkpoint-[0-9a-f]{32}$",
+      "title": "Final Checkpoint Id",
+      "type": "string"
+    },
+    "formal_draft_allowed": {
+      "const": false,
+      "title": "Formal Draft Allowed",
+      "type": "boolean"
+    },
+    "handoff_status": {
+      "enum": [
+        "blocked",
+        "risk_draft_only"
+      ],
+      "title": "Handoff Status",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "repair_plan",
+        "risk_draft",
+        "change_proposal",
+        "next_step_advice"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "operation_package_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Operation Package Hash",
+      "type": "string"
+    },
+    "operation_package_id": {
+      "pattern": "^prewrite-package-[0-9a-f]{32}$",
+      "title": "Operation Package Id",
+      "type": "string"
+    },
+    "project_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Project Fingerprint",
+      "type": "string"
+    },
+    "project_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "project_revision": {
+      "minimum": 1,
+      "title": "Project Revision",
+      "type": "integer"
+    },
+    "provider_boundary_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Provider Boundary Hash",
+      "type": "string"
+    },
+    "provider_boundary_id": {
+      "pattern": "^provider-io-[0-9a-f]{32}$",
+      "title": "Provider Boundary Id",
+      "type": "string"
+    },
+    "provider_identity_status": {
+      "enum": [
+        "verified",
+        "unreported"
+      ],
+      "title": "Provider Identity Status",
+      "type": "string"
+    },
+    "provider_request_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Provider Request Hash",
+      "type": "string"
+    },
+    "provider_turn_receipts": {
+      "items": {
+        "$ref": "#/$defs/ProviderTurnReceiptBinding"
+      },
+      "maxItems": 8,
+      "minItems": 1,
+      "title": "Provider Turn Receipts",
+      "type": "array"
+    },
+    "provider_turn_receipts_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Provider Turn Receipts Hash",
+      "type": "string"
+    },
+    "references": {
+      "items": {
+        "$ref": "#/$defs/AgentCandidateReference"
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "title": "References",
+      "type": "array"
+    },
+    "references_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "References Hash",
+      "type": "string"
+    },
+    "requires_author_review": {
+      "const": true,
+      "title": "Requires Author Review",
+      "type": "boolean"
+    },
+    "run_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "schema": {
+      "const": "zhimeng.agent-candidate-output.v2",
+      "title": "Schema",
+      "type": "string"
+    },
+    "workflow_plan_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Workflow Plan Hash",
+      "type": "string"
+    },
+    "workflow_plan_id": {
+      "pattern": "^workflow-plan-[0-9a-f]{32}$",
+      "title": "Workflow Plan Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "candidate_output_id",
+    "run_id",
+    "workflow_plan_id",
+    "workflow_plan_hash",
+    "final_checkpoint_id",
+    "final_checkpoint_hash",
+    "provider_boundary_id",
+    "provider_boundary_hash",
+    "provider_request_hash",
+    "context_pack_id",
+    "context_pack_hash",
+    "operation_package_id",
+    "operation_package_hash",
+    "project_id",
+    "project_revision",
+    "project_fingerprint",
+    "handoff_status",
+    "allowed_output",
+    "failure_signatures",
+    "kind",
+    "content",
+    "content_hash",
+    "references",
+    "references_hash",
+    "formal_draft_allowed",
+    "requires_author_review",
+    "created_at",
+    "envelope_hash",
+    "provider_turn_receipts",
+    "provider_turn_receipts_hash",
+    "provider_identity_status"
+  ],
+  "title": "AgentCandidateOutputV2",
+  "type": "object",
+  "x-zhimeng-invariants": [
+    "candidate_output_id is derived from run_id and provider_boundary_id",
+    "content_hash hashes the canonical content object",
+    "references_hash hashes the ordered canonical references",
+    "reference identities are unique within one envelope",
+    "references must resolve to Runtime identities or same-Run persisted evidence",
+    "envelope_hash hashes every field except envelope_hash",
+    "Runtime-owned identities must match one persisted managed workflow chain",
+    "v3 candidates bind the Runtime Writer task, instruction materialization and atomic dispatch receipt",
+    "v3 references contain exactly one Runtime Writer-task identity and one instruction artifact"
+  ]
+}

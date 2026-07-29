@@ -1,0 +1,348 @@
+{
+  "$defs": {
+    "NlclOriginalLibraryLayoutCompletenessReceipt": {
+      "additionalProperties": false,
+      "description": "Assess whether inventoried library layout slots satisfy completeness.\n\nMay set library_layout_complete=true only when all required slots are present.\nNever authorizes whole-library load or formal draft.",
+      "properties": {
+        "schema": {
+          "const": "zhimeng.nlcl-original-library-layout-completeness-receipt.v1",
+          "default": "zhimeng.nlcl-original-library-layout-completeness-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "receipt_id": {
+          "pattern": "^nlcl-original-library-layout-completeness-[0-9a-f]{32}$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "nlcl_original_library_layout_inventory_receipt_id": {
+          "pattern": "^nlcl-original-library-layout-inventory-[0-9a-f]{32}$",
+          "title": "Nlcl Original Library Layout Inventory Receipt Id",
+          "type": "string"
+        },
+        "nlcl_original_library_layout_inventory_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Nlcl Original Library Layout Inventory Receipt Hash",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "applied",
+            "rolled_back"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "chapter_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Chapter Id",
+          "type": "string"
+        },
+        "canonical_chapter_key": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Canonical Chapter Key",
+          "type": "string"
+        },
+        "slots": {
+          "items": {
+            "$ref": "#/$defs/NlclOriginalLibraryLayoutSlot"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "title": "Slots",
+          "type": "array"
+        },
+        "required_slot_count": {
+          "maximum": 128,
+          "minimum": 1,
+          "title": "Required Slot Count",
+          "type": "integer"
+        },
+        "present_required_slot_count": {
+          "maximum": 128,
+          "minimum": 0,
+          "title": "Present Required Slot Count",
+          "type": "integer"
+        },
+        "missing_required_slot_count": {
+          "maximum": 128,
+          "minimum": 0,
+          "title": "Missing Required Slot Count",
+          "type": "integer"
+        },
+        "completeness_status": {
+          "enum": [
+            "complete",
+            "incomplete"
+          ],
+          "title": "Completeness Status",
+          "type": "string"
+        },
+        "written_files": {
+          "items": {
+            "$ref": "#/$defs/NlclOriginalLibraryLayoutCompletenessWrittenFile"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Written Files",
+          "type": "array"
+        },
+        "assessment_relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?:chapter_context|07_[^/]+/nlcl_state/chapter_context)/[A-Za-z0-9._-]+_library_layout_completeness_latest\\.json$",
+          "title": "Assessment Relative Path",
+          "type": "string"
+        },
+        "record_mode": {
+          "const": "product_bridge_library_layout_completeness",
+          "default": "product_bridge_library_layout_completeness",
+          "title": "Record Mode",
+          "type": "string"
+        },
+        "library_layout_inventoried": {
+          "const": true,
+          "default": true,
+          "title": "Library Layout Inventoried",
+          "type": "boolean"
+        },
+        "library_layout_assessed": {
+          "const": true,
+          "default": true,
+          "title": "Library Layout Assessed",
+          "type": "boolean"
+        },
+        "library_layout_complete": {
+          "title": "Library Layout Complete",
+          "type": "boolean"
+        },
+        "whole_library_load_forbidden": {
+          "const": true,
+          "default": true,
+          "title": "Whole Library Load Forbidden",
+          "type": "boolean"
+        },
+        "route_validated": {
+          "const": false,
+          "default": false,
+          "title": "Route Validated",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "quality_assessed": {
+          "const": false,
+          "default": false,
+          "title": "Quality Assessed",
+          "type": "boolean"
+        },
+        "novel_state_synced": {
+          "const": true,
+          "default": true,
+          "title": "Novel State Synced",
+          "type": "boolean"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "change_set_id",
+        "project_id",
+        "nlcl_original_library_layout_inventory_receipt_id",
+        "nlcl_original_library_layout_inventory_receipt_hash",
+        "outcome",
+        "chapter_id",
+        "canonical_chapter_key",
+        "slots",
+        "required_slot_count",
+        "present_required_slot_count",
+        "missing_required_slot_count",
+        "completeness_status",
+        "written_files",
+        "assessment_relative_path",
+        "library_layout_complete",
+        "created_at",
+        "receipt_hash"
+      ],
+      "title": "NlclOriginalLibraryLayoutCompletenessReceipt",
+      "type": "object"
+    },
+    "NlclOriginalLibraryLayoutCompletenessWrittenFile": {
+      "additionalProperties": false,
+      "properties": {
+        "relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?:chapter_context|07_[^/]+/nlcl_state/chapter_context)/[A-Za-z0-9._-]+_library_layout_completeness_(?:latest|post_writeback)\\.(?:json|md)$",
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "source_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Hash",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "json_latest",
+            "md_latest",
+            "json_stage",
+            "md_stage"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "created": {
+          "title": "Created",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "relative_path",
+        "source_hash",
+        "kind",
+        "created"
+      ],
+      "title": "NlclOriginalLibraryLayoutCompletenessWrittenFile",
+      "type": "object"
+    },
+    "NlclOriginalLibraryLayoutSlot": {
+      "additionalProperties": false,
+      "properties": {
+        "slot_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Slot Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "section_01",
+            "section_02",
+            "section_03",
+            "section_04",
+            "section_05",
+            "section_06",
+            "section_07",
+            "section_08",
+            "section_09",
+            "state_file",
+            "chapter_context"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "relative_path": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Path"
+        },
+        "present": {
+          "title": "Present",
+          "type": "boolean"
+        },
+        "file_count": {
+          "default": 0,
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "File Count",
+          "type": "integer"
+        },
+        "note": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "slot_id",
+        "kind",
+        "label",
+        "present"
+      ],
+      "title": "NlclOriginalLibraryLayoutSlot",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.nlcl-original-library-layout-completeness-response.v1",
+      "default": "zhimeng.nlcl-original-library-layout-completeness-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "change_set_id": {
+      "pattern": "^changeset-[0-9a-f]{32}$",
+      "title": "Change Set Id",
+      "type": "string"
+    },
+    "receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NlclOriginalLibraryLayoutCompletenessReceipt"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "history": {
+      "items": {
+        "$ref": "#/$defs/NlclOriginalLibraryLayoutCompletenessReceipt"
+      },
+      "maxItems": 32,
+      "title": "History",
+      "type": "array"
+    }
+  },
+  "required": [
+    "change_set_id"
+  ],
+  "title": "NlclOriginalLibraryLayoutCompletenessResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/nlcl-original-library-layout-completeness-response.schema.json"
+}

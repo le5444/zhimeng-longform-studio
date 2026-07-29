@@ -1,0 +1,31 @@
+{
+  "schema": "zhimeng.skill-manifest.v1",
+  "id": "novel-creation-suite.writer-instruction",
+  "display_name": "Creation Suite Writer Instruction",
+  "description": "Provides a classified, immutable Creation writer instruction source for Runtime-owned materialization after the managed workflow.",
+  "kind": "instruction_source",
+  "version": "2026.07.23-o2.2",
+  "source": {
+    "type": "builtin_managed",
+    "reference": "PROVENANCE.md",
+    "license": null,
+    "source_url": null,
+    "source_version": null,
+    "modified": true
+  },
+  "approval": "none",
+  "permissions": {
+    "read": [],
+    "write": [],
+    "network": false,
+    "secrets": []
+  },
+  "artifacts": [],
+  "capabilities": [
+    "writer.instruction-source"
+  ],
+  "resources": [
+    "instruction-map.json",
+    "references/bundled-skills/novel-volume-folder/SKILL.md"
+  ]
+}

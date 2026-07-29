@@ -1,0 +1,38 @@
+{
+  "schema": "zhimeng.skill-manifest.v1",
+  "id": "novel-creation-suite.prewrite-gate",
+  "display_name": "Creation Suite Prewrite Gate",
+  "description": "Deterministic prewrite boundary over one immutable Runtime operation package and the prior managed project-audit receipt; v1 never authorizes formal prose.",
+  "kind": "deterministic_tool",
+  "version": "2026.07.20-m3e.1",
+  "source": {
+    "type": "builtin_managed",
+    "reference": "PROVENANCE.md",
+    "license": null,
+    "source_url": null,
+    "source_version": null,
+    "modified": true
+  },
+  "entrypoint": "run_prewrite_gate.py",
+  "approval": "none",
+  "permissions": {
+    "read": [
+      "bound_project_snapshot"
+    ],
+    "write": [
+      "run_staging"
+    ],
+    "network": false,
+    "secrets": []
+  },
+  "timeout_seconds": 60,
+  "exit_codes": {
+    "0": "success",
+    "1": "domain_blocked"
+  },
+  "artifacts": [
+    "prewrite_gate"
+  ],
+  "input_schema": "https://zhimeng.local/contracts/creation-prewrite-gate-request.schema.json",
+  "output_schema": "https://zhimeng.local/contracts/creation-prewrite-gate-result.schema.json"
+}

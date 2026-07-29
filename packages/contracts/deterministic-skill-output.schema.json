@@ -1,0 +1,78 @@
+{
+  "$defs": {
+    "JsonValue": {},
+    "SkillArtifactOutput": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]*$",
+          "title": "Artifact Type",
+          "type": "string"
+        },
+        "relative_path": {
+          "anyOf": [
+            {
+              "maxLength": 1024,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Path"
+        },
+        "payload": {
+          "$ref": "#/$defs/JsonValue",
+          "default": null
+        }
+      },
+      "required": [
+        "artifact_type"
+      ],
+      "title": "SkillArtifactOutput",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "health": {
+      "enum": [
+        "healthy",
+        "degraded",
+        "blocked"
+      ],
+      "title": "Health",
+      "type": "string"
+    },
+    "summary": {
+      "maxLength": 16384,
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    },
+    "result": {
+      "$ref": "#/$defs/JsonValue"
+    },
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/SkillArtifactOutput"
+      },
+      "maxItems": 128,
+      "title": "Artifacts",
+      "type": "array"
+    }
+  },
+  "required": [
+    "health",
+    "summary",
+    "result",
+    "artifacts"
+  ],
+  "title": "DeterministicSkillOutput",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/deterministic-skill-output.schema.json"
+}

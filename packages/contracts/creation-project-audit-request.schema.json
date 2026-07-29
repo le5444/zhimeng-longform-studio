@@ -1,0 +1,15 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.creation-project-audit-request.v1",
+      "default": "zhimeng.creation-project-audit-request.v1",
+      "title": "Schema",
+      "type": "string"
+    }
+  },
+  "title": "CreationProjectAuditRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/creation-project-audit-request.schema.json"
+}

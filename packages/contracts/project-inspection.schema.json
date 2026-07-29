@@ -1,0 +1,333 @@
+{
+  "$defs": {
+    "ProjectChapter": {
+      "additionalProperties": false,
+      "properties": {
+        "chapter_id": {
+          "pattern": "^(?:VOL\\d{3,}-)?CH\\d{3,}$",
+          "title": "Chapter Id",
+          "type": "string"
+        },
+        "number": {
+          "minimum": 0,
+          "title": "Number",
+          "type": "integer"
+        },
+        "volume_id": {
+          "anyOf": [
+            {
+              "pattern": "^VOL\\d{3,}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Volume Id"
+        },
+        "file_ids": {
+          "items": {
+            "pattern": "^file-[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "title": "File Ids",
+          "type": "array"
+        },
+        "prose_file_ids": {
+          "items": {
+            "pattern": "^file-[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "title": "Prose File Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "chapter_id",
+        "number",
+        "file_ids",
+        "prose_file_ids"
+      ],
+      "title": "ProjectChapter",
+      "type": "object"
+    },
+    "ProjectFile": {
+      "additionalProperties": false,
+      "properties": {
+        "file_id": {
+          "pattern": "^file-[0-9a-f]{32}$",
+          "title": "File Id",
+          "type": "string"
+        },
+        "relative_path": {
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "absolute_path": {
+          "title": "Absolute Path",
+          "type": "string"
+        },
+        "section_index": {
+          "anyOf": [
+            {
+              "maximum": 9,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section Index"
+        },
+        "chapter_id": {
+          "anyOf": [
+            {
+              "pattern": "^(?:VOL\\d{3,}-)?CH\\d{3,}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chapter Id"
+        },
+        "volume_id": {
+          "anyOf": [
+            {
+              "pattern": "^VOL\\d{3,}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Volume Id"
+        },
+        "kind": {
+          "enum": [
+            "prose",
+            "document",
+            "control",
+            "handoff",
+            "context",
+            "review",
+            "status",
+            "structured_state",
+            "asset"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file_id",
+        "relative_path",
+        "absolute_path",
+        "kind",
+        "size_bytes",
+        "sha256"
+      ],
+      "title": "ProjectFile",
+      "type": "object"
+    },
+    "ProjectSection": {
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "maximum": 9,
+          "minimum": 1,
+          "title": "Index",
+          "type": "integer"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "present": {
+          "title": "Present",
+          "type": "boolean"
+        },
+        "relative_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Relative Path"
+        }
+      },
+      "required": [
+        "index",
+        "label",
+        "present",
+        "relative_path"
+      ],
+      "title": "ProjectSection",
+      "type": "object"
+    },
+    "ProjectSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        },
+        "root_path": {
+          "title": "Root Path",
+          "type": "string"
+        },
+        "format": {
+          "const": "01-09",
+          "title": "Format",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fingerprint",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "display_name",
+        "root_path",
+        "format",
+        "revision",
+        "fingerprint"
+      ],
+      "title": "ProjectSummary",
+      "type": "object"
+    },
+    "ProjectVolume": {
+      "additionalProperties": false,
+      "properties": {
+        "volume_id": {
+          "pattern": "^VOL\\d{3,}$",
+          "title": "Volume Id",
+          "type": "string"
+        },
+        "number": {
+          "minimum": 0,
+          "title": "Number",
+          "type": "integer"
+        },
+        "chapter_ids": {
+          "items": {
+            "pattern": "^(?:VOL\\d{3,}-)?CH\\d{3,}$",
+            "type": "string"
+          },
+          "title": "Chapter Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "volume_id",
+        "number",
+        "chapter_ids"
+      ],
+      "title": "ProjectVolume",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.project-inspection.v1",
+      "default": "zhimeng.project-inspection.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "read_only": {
+      "const": true,
+      "title": "Read Only",
+      "type": "boolean"
+    },
+    "project": {
+      "$ref": "#/$defs/ProjectSummary"
+    },
+    "sections": {
+      "items": {
+        "$ref": "#/$defs/ProjectSection"
+      },
+      "title": "Sections",
+      "type": "array"
+    },
+    "missing_sections": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Missing Sections",
+      "type": "array"
+    },
+    "volumes": {
+      "items": {
+        "$ref": "#/$defs/ProjectVolume"
+      },
+      "title": "Volumes",
+      "type": "array"
+    },
+    "chapters": {
+      "items": {
+        "$ref": "#/$defs/ProjectChapter"
+      },
+      "title": "Chapters",
+      "type": "array"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/ProjectFile"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "read_only",
+    "project",
+    "sections",
+    "missing_sections",
+    "volumes",
+    "chapters",
+    "files",
+    "warnings"
+  ],
+  "title": "ProjectInspectionResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/project-inspection.schema.json"
+}

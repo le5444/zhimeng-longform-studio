@@ -1,0 +1,80 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.formal-draft-continuous-o2-request.v1",
+      "default": "zhimeng.formal-draft-continuous-o2-request.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "expected_project_revision": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Project Revision"
+    },
+    "expected_project_fingerprint": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Project Fingerprint"
+    },
+    "adjacent_chain_id": {
+      "anyOf": [
+        {
+          "maxLength": 160,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Adjacent Chain Id"
+    },
+    "managed_skill_chain_id": {
+      "anyOf": [
+        {
+          "maxLength": 160,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Managed Skill Chain Id"
+    },
+    "source_import_id": {
+      "anyOf": [
+        {
+          "maxLength": 160,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Import Id"
+    }
+  },
+  "title": "FormalDraftContinuousO2EvaluateRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/formal-draft-continuous-o2-request.schema.json"
+}

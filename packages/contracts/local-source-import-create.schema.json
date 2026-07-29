@@ -1,0 +1,93 @@
+{
+  "$defs": {
+    "LocalFileSourceCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "const": 1,
+          "default": 1,
+          "title": "Index",
+          "type": "integer"
+        },
+        "source_path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Source Path",
+          "type": "string"
+        },
+        "source_format": {
+          "default": "txt",
+          "enum": [
+            "txt",
+            "epub"
+          ],
+          "title": "Source Format",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "author": {
+          "default": "unknown",
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Author",
+          "type": "string"
+        },
+        "source_size_bytes": {
+          "minimum": 1,
+          "title": "Source Size Bytes",
+          "type": "integer"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        },
+        "source_locator_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Locator Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_path",
+        "title",
+        "source_size_bytes",
+        "source_sha256",
+        "source_locator_hash"
+      ],
+      "title": "LocalFileSourceCandidate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "provider": {
+      "const": "local_file",
+      "default": "local_file",
+      "title": "Provider",
+      "type": "string"
+    },
+    "query": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "title": "Query",
+      "type": "string"
+    },
+    "candidate": {
+      "$ref": "#/$defs/LocalFileSourceCandidate"
+    }
+  },
+  "required": [
+    "query",
+    "candidate"
+  ],
+  "title": "LocalSourceImportCreateRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/local-source-import-create.schema.json"
+}

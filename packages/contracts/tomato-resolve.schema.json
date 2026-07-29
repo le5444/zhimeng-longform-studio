@@ -1,0 +1,80 @@
+{
+  "$defs": {
+    "TomatoSearchCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "minimum": 1,
+          "title": "Index",
+          "type": "integer"
+        },
+        "book_id": {
+          "pattern": "^[0-9]{1,32}$",
+          "title": "Book Id",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "author": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Author",
+          "type": "string"
+        }
+      },
+      "required": [
+        "index",
+        "book_id",
+        "title",
+        "author"
+      ],
+      "title": "TomatoSearchCandidate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.tomato-resolve.v1",
+      "default": "zhimeng.tomato-resolve.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "locator_kind": {
+      "enum": [
+        "book_id",
+        "url"
+      ],
+      "title": "Locator Kind",
+      "type": "string"
+    },
+    "source_locator": {
+      "maxLength": 2048,
+      "minLength": 1,
+      "title": "Source Locator",
+      "type": "string"
+    },
+    "resolution": {
+      "const": "resolved",
+      "default": "resolved",
+      "title": "Resolution",
+      "type": "string"
+    },
+    "candidate": {
+      "$ref": "#/$defs/TomatoSearchCandidate"
+    }
+  },
+  "required": [
+    "locator_kind",
+    "source_locator",
+    "candidate"
+  ],
+  "title": "TomatoResolveResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/tomato-resolve.schema.json"
+}

@@ -1,0 +1,41 @@
+{
+  "schema": "zhimeng.skill-manifest.v1",
+  "id": "novel-distillation.kb-handoff",
+  "display_name": "Novel Distillation to KB Manager Handoff",
+  "description": "Managed thin adapter that turns a formal novel-distillation work/voice/validator batch into a controlled novel-kb-manager distillation_index handoff artifact without copying full card text.",
+  "kind": "deterministic_tool",
+  "version": "2026.07.24-o2d.1",
+  "source": {
+    "type": "builtin_managed",
+    "reference": "PROVENANCE.md",
+    "license": null,
+    "source_url": null,
+    "source_version": null,
+    "modified": true
+  },
+  "entrypoint": "run_kb_handoff.py",
+  "approval": "none",
+  "permissions": {
+    "read": [
+      "bound_project_snapshot"
+    ],
+    "write": [
+      "run_staging"
+    ],
+    "network": false,
+    "secrets": []
+  },
+  "timeout_seconds": 60,
+  "exit_codes": {
+    "0": "success",
+    "1": "domain_blocked"
+  },
+  "artifacts": [
+    "distillation_index_handoff"
+  ],
+  "capabilities": [
+    "novel-distillation.to-novel-kb-manager.handoff.v1"
+  ],
+  "input_schema": "https://zhimeng.local/contracts/novel-kb-handoff-request.schema.json",
+  "output_schema": "https://zhimeng.local/contracts/novel-kb-handoff-result.schema.json"
+}

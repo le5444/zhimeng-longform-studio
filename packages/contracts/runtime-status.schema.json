@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/runtime-status.schema.json",
+  "title": "RuntimeStatus",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "service", "version", "environment", "state", "started_at", "uptime_seconds", "database", "event_transport"],
+  "properties": {
+    "schema": {"const": "zhimeng.runtime-status.v1"},
+    "service": {"type": "string", "minLength": 1},
+    "version": {"type": "string", "minLength": 1},
+    "environment": {"type": "string", "minLength": 1},
+    "state": {"enum": ["starting", "ready", "degraded"]},
+    "started_at": {"type": "string", "format": "date-time"},
+    "uptime_seconds": {"type": "number", "minimum": 0},
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ready", "journal_mode", "schema_version"],
+      "properties": {
+        "ready": {"type": "boolean"},
+        "journal_mode": {"type": "string"},
+        "schema_version": {"type": "integer", "minimum": 0}
+      }
+    },
+    "event_transport": {"const": "sse"}
+  }
+}

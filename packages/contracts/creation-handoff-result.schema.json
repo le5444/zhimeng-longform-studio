@@ -1,0 +1,205 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.creation-handoff-result.v1",
+      "default": "zhimeng.creation-handoff-result.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "handoff_status": {
+      "enum": [
+        "blocked",
+        "risk_draft_only"
+      ],
+      "title": "Handoff Status",
+      "type": "string"
+    },
+    "formal_draft_allowed": {
+      "const": false,
+      "default": false,
+      "title": "Formal Draft Allowed",
+      "type": "boolean"
+    },
+    "allowed_output": {
+      "const": "repair_plan_or_risk_draft_only",
+      "default": "repair_plan_or_risk_draft_only",
+      "title": "Allowed Output",
+      "type": "string"
+    },
+    "workflow_plan_id": {
+      "pattern": "^workflow-plan-[0-9a-f]{32}$",
+      "title": "Workflow Plan Id",
+      "type": "string"
+    },
+    "workflow_plan_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Workflow Plan Hash",
+      "type": "string"
+    },
+    "context_pack_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Context Pack Id",
+      "type": "string"
+    },
+    "context_pack_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Context Pack Hash",
+      "type": "string"
+    },
+    "route_receipt_id": {
+      "pattern": "^nlcl-route-[0-9a-f]{32}$",
+      "title": "Route Receipt Id",
+      "type": "string"
+    },
+    "route_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Route Receipt Hash",
+      "type": "string"
+    },
+    "operation_package_id": {
+      "pattern": "^prewrite-package-[0-9a-f]{32}$",
+      "title": "Operation Package Id",
+      "type": "string"
+    },
+    "operation_package_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Operation Package Hash",
+      "type": "string"
+    },
+    "project_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Project Id",
+      "type": "string"
+    },
+    "project_revision": {
+      "minimum": 1,
+      "title": "Project Revision",
+      "type": "integer"
+    },
+    "project_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Project Fingerprint",
+      "type": "string"
+    },
+    "active_chapter_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Active Chapter Id"
+    },
+    "task_goal": {
+      "maxLength": 100000,
+      "minLength": 1,
+      "title": "Task Goal",
+      "type": "string"
+    },
+    "knowledge_fingerprint": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Knowledge Fingerprint"
+    },
+    "evidence_ref_count": {
+      "minimum": 0,
+      "title": "Evidence Ref Count",
+      "type": "integer"
+    },
+    "must_obey_truth_count": {
+      "minimum": 0,
+      "title": "Must Obey Truth Count",
+      "type": "integer"
+    },
+    "current_character_state_count": {
+      "minimum": 0,
+      "title": "Current Character State Count",
+      "type": "integer"
+    },
+    "project_audit_execution_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Project Audit Execution Receipt Hash",
+      "type": "string"
+    },
+    "prewrite_gate_execution_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Prewrite Gate Execution Receipt Hash",
+      "type": "string"
+    },
+    "workflow_checkpoint_hashes": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 32,
+      "minItems": 2,
+      "title": "Workflow Checkpoint Hashes",
+      "type": "array"
+    },
+    "prewrite_gate_status": {
+      "enum": [
+        "blocked",
+        "risk_draft_only"
+      ],
+      "title": "Prewrite Gate Status",
+      "type": "string"
+    },
+    "failure_signatures": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Failure Signatures",
+      "type": "array"
+    },
+    "next_actions": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Next Actions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "handoff_status",
+    "workflow_plan_id",
+    "workflow_plan_hash",
+    "context_pack_id",
+    "context_pack_hash",
+    "route_receipt_id",
+    "route_receipt_hash",
+    "operation_package_id",
+    "operation_package_hash",
+    "project_id",
+    "project_revision",
+    "project_fingerprint",
+    "task_goal",
+    "evidence_ref_count",
+    "must_obey_truth_count",
+    "current_character_state_count",
+    "project_audit_execution_receipt_hash",
+    "prewrite_gate_execution_receipt_hash",
+    "workflow_checkpoint_hashes",
+    "prewrite_gate_status"
+  ],
+  "title": "CreationHandoffResult",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/creation-handoff-result.schema.json"
+}

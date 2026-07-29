@@ -1,0 +1,174 @@
+{
+  "$defs": {
+    "ProjectInstructionChainHandoffBindingReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.project-instruction-chain-handoff-binding-receipt.v1",
+          "default": "zhimeng.project-instruction-chain-handoff-binding-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "binding_id": {
+          "pattern": "^project-instruction-chain-handoff-[0-9a-f]{32}$",
+          "title": "Binding Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "project_revision": {
+          "minimum": 1,
+          "title": "Project Revision",
+          "type": "integer"
+        },
+        "project_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Project Fingerprint",
+          "type": "string"
+        },
+        "batch_id": {
+          "pattern": "^four-skills-raw-adaptation-[0-9a-f]{32}$",
+          "title": "Batch Id",
+          "type": "string"
+        },
+        "batch_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Batch Hash",
+          "type": "string"
+        },
+        "handoff_id": {
+          "pattern": "^four-skills-instruction-chain-handoff-[0-9a-f]{32}$",
+          "title": "Handoff Id",
+          "type": "string"
+        },
+        "handoff_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Handoff Hash",
+          "type": "string"
+        },
+        "prepared_step_count": {
+          "maximum": 4,
+          "minimum": 0,
+          "title": "Prepared Step Count",
+          "type": "integer"
+        },
+        "instruction_chain_ready": {
+          "title": "Instruction Chain Ready",
+          "type": "boolean"
+        },
+        "status": {
+          "const": "bound",
+          "default": "bound",
+          "title": "Status",
+          "type": "string"
+        },
+        "managed_skill_execution": {
+          "const": false,
+          "default": false,
+          "title": "Managed Skill Execution",
+          "type": "boolean"
+        },
+        "raw_skill_md_execution": {
+          "const": false,
+          "default": false,
+          "title": "Raw Skill Md Execution",
+          "type": "boolean"
+        },
+        "four_skills_generic_exactly_once": {
+          "const": false,
+          "default": false,
+          "title": "Four Skills Generic Exactly Once",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "writes_project_truth": {
+          "const": false,
+          "default": false,
+          "title": "Writes Project Truth",
+          "type": "boolean"
+        },
+        "policy_version": {
+          "const": "local-v1-project-instruction-chain-handoff-1",
+          "default": "local-v1-project-instruction-chain-handoff-1",
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "detail": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Detail",
+          "type": "string"
+        },
+        "bound_at": {
+          "format": "date-time",
+          "title": "Bound At",
+          "type": "string"
+        },
+        "binding_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Binding Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "binding_id",
+        "project_id",
+        "project_revision",
+        "project_fingerprint",
+        "batch_id",
+        "batch_hash",
+        "handoff_id",
+        "handoff_hash",
+        "prepared_step_count",
+        "instruction_chain_ready",
+        "detail",
+        "bound_at",
+        "binding_hash"
+      ],
+      "title": "ProjectInstructionChainHandoffBindingReceipt",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.project-instruction-chain-handoff-binding-response.v1",
+      "default": "zhimeng.project-instruction-chain-handoff-binding-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "receipt": {
+      "$ref": "#/$defs/ProjectInstructionChainHandoffBindingReceipt"
+    },
+    "not_claiming": {
+      "default": [
+        "four_skills_generic_exactly_once",
+        "raw_skill_md_execution",
+        "managed_skill_execution",
+        "deterministic_tool_auto_generation",
+        "formal_draft_authorization_unlock",
+        "local_v1_exe"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Not Claiming",
+      "type": "array"
+    }
+  },
+  "required": [
+    "receipt"
+  ],
+  "title": "ProjectInstructionChainHandoffBindingResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/project-instruction-chain-handoff-binding-response.schema.json"
+}

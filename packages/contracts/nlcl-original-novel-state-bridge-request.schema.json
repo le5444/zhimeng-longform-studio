@@ -1,0 +1,18 @@
+{
+  "additionalProperties": false,
+  "description": "Author-triggered novel-state inventory bridge after chapter/ops usage export.",
+  "properties": {
+    "expected_nlcl_original_chapter_ops_usage_export_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Nlcl Original Chapter Ops Usage Export Receipt Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "expected_nlcl_original_chapter_ops_usage_export_receipt_hash"
+  ],
+  "title": "NlclOriginalNovelStateBridgeRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/nlcl-original-novel-state-bridge-request.schema.json"
+}

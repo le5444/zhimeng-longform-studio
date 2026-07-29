@@ -1,0 +1,23 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.post-draft-gate-request.v1",
+      "default": "zhimeng.post-draft-gate-request.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "expected_review_revision": {
+      "minimum": 0,
+      "title": "Expected Review Revision",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "expected_review_revision"
+  ],
+  "title": "PostDraftGateRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/post-draft-gate-request.schema.json"
+}

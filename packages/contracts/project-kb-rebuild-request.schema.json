@@ -1,0 +1,35 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "expected_project_revision": {
+      "minimum": 1,
+      "title": "Expected Project Revision",
+      "type": "integer"
+    },
+    "expected_project_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Project Fingerprint",
+      "type": "string"
+    },
+    "expected_scope_state_revision": {
+      "minimum": 1,
+      "title": "Expected Scope State Revision",
+      "type": "integer"
+    },
+    "expected_knowledge_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Knowledge Fingerprint",
+      "type": "string"
+    }
+  },
+  "required": [
+    "expected_project_revision",
+    "expected_project_fingerprint",
+    "expected_scope_state_revision",
+    "expected_knowledge_fingerprint"
+  ],
+  "title": "ProjectKbRebuildRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/project-kb-rebuild-request.schema.json"
+}

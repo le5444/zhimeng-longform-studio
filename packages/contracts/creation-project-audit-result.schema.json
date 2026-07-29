@@ -1,0 +1,190 @@
+{
+  "$defs": {
+    "CreationProjectAuditCounts": {
+      "additionalProperties": false,
+      "properties": {
+        "P0": {
+          "minimum": 0,
+          "title": "P0",
+          "type": "integer"
+        },
+        "P1": {
+          "minimum": 0,
+          "title": "P1",
+          "type": "integer"
+        },
+        "P2": {
+          "minimum": 0,
+          "title": "P2",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "P0",
+        "P1",
+        "P2"
+      ],
+      "title": "CreationProjectAuditCounts",
+      "type": "object"
+    },
+    "CreationProjectAuditFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "severity": {
+          "enum": [
+            "P0",
+            "P1",
+            "P2"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "code": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Code",
+          "type": "string"
+        },
+        "path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 16384,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "route": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Route",
+          "type": "string"
+        },
+        "details": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/JsonValue"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Details"
+        }
+      },
+      "required": [
+        "severity",
+        "code",
+        "path",
+        "message",
+        "route"
+      ],
+      "title": "CreationProjectAuditFinding",
+      "type": "object"
+    },
+    "JsonValue": {}
+  },
+  "additionalProperties": false,
+  "properties": {
+    "project": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "health": {
+      "enum": [
+        "healthy",
+        "degraded",
+        "blocked"
+      ],
+      "title": "Health",
+      "type": "string"
+    },
+    "counts": {
+      "$ref": "#/$defs/CreationProjectAuditCounts"
+    },
+    "expected_files": {
+      "minimum": 0,
+      "title": "Expected Files",
+      "type": "integer"
+    },
+    "chapter_files": {
+      "minimum": 0,
+      "title": "Chapter Files",
+      "type": "integer"
+    },
+    "issue_cards": {
+      "minimum": 0,
+      "title": "Issue Cards",
+      "type": "integer"
+    },
+    "continuation_gate_results": {
+      "items": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "title": "Continuation Gate Results",
+      "type": "array"
+    },
+    "ai_smell_reports": {
+      "items": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "title": "Ai Smell Reports",
+      "type": "array"
+    },
+    "ai_smell_bridge_proofs": {
+      "items": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "title": "Ai Smell Bridge Proofs",
+      "type": "array"
+    },
+    "ai_smell_gate_results": {
+      "items": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "title": "Ai Smell Gate Results",
+      "type": "array"
+    },
+    "findings": {
+      "items": {
+        "$ref": "#/$defs/CreationProjectAuditFinding"
+      },
+      "title": "Findings",
+      "type": "array"
+    },
+    "next_actions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Next Actions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "project",
+    "health",
+    "counts",
+    "expected_files",
+    "chapter_files",
+    "issue_cards",
+    "continuation_gate_results",
+    "ai_smell_reports",
+    "ai_smell_bridge_proofs",
+    "ai_smell_gate_results",
+    "findings",
+    "next_actions"
+  ],
+  "title": "CreationProjectAuditResult",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/creation-project-audit-result.schema.json"
+}

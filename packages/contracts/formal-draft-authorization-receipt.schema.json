@@ -1,0 +1,224 @@
+{
+  "$defs": {
+    "FormalDraftDenial": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/FormalDraftDenialCode"
+        },
+        "message": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "FormalDraftDenial",
+      "type": "object"
+    },
+    "FormalDraftDenialCode": {
+      "enum": [
+        "local_v1_policy_locked",
+        "authorization_contract_unproven",
+        "four_skills_chain_incomplete",
+        "literary_quality_gate_missing",
+        "hard_fact_gate_incomplete",
+        "author_authorization_missing",
+        "gate_pipeline_incomplete",
+        "provenance_incomplete"
+      ],
+      "title": "FormalDraftDenialCode",
+      "type": "string"
+    },
+    "FormalDraftPrerequisite": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/FormalDraftPrerequisiteCode"
+        },
+        "satisfied": {
+          "title": "Satisfied",
+          "type": "boolean"
+        },
+        "detail": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "satisfied",
+        "detail"
+      ],
+      "title": "FormalDraftPrerequisite",
+      "type": "object"
+    },
+    "FormalDraftPrerequisiteCode": {
+      "enum": [
+        "project_bound",
+        "four_skills_continuous_o2",
+        "literary_quality_gate",
+        "author_explicit_authorization",
+        "hard_fact_gate_pass",
+        "gate_pipeline_complete",
+        "provenance_complete"
+      ],
+      "title": "FormalDraftPrerequisiteCode",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.formal-draft-authorization-receipt.v1",
+      "default": "zhimeng.formal-draft-authorization-receipt.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "receipt_id": {
+      "pattern": "^formal-draft-auth-[0-9a-f]{32}$",
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "project_id": {
+      "pattern": "^project-[0-9a-f]{24}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "project_revision": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Project Revision"
+    },
+    "project_fingerprint": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Project Fingerprint"
+    },
+    "context_pack_id": {
+      "anyOf": [
+        {
+          "maxLength": 160,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Context Pack Id"
+    },
+    "run_id": {
+      "anyOf": [
+        {
+          "maxLength": 160,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Run Id"
+    },
+    "change_set_id": {
+      "anyOf": [
+        {
+          "maxLength": 160,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Change Set Id"
+    },
+    "decision": {
+      "const": "denied",
+      "default": "denied",
+      "title": "Decision",
+      "type": "string"
+    },
+    "formal_draft_allowed": {
+      "const": false,
+      "default": false,
+      "title": "Formal Draft Allowed",
+      "type": "boolean"
+    },
+    "writes_project_truth": {
+      "const": false,
+      "default": false,
+      "title": "Writes Project Truth",
+      "type": "boolean"
+    },
+    "prerequisites": {
+      "items": {
+        "$ref": "#/$defs/FormalDraftPrerequisite"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "title": "Prerequisites",
+      "type": "array"
+    },
+    "denials": {
+      "items": {
+        "$ref": "#/$defs/FormalDraftDenial"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "title": "Denials",
+      "type": "array"
+    },
+    "policy_version": {
+      "const": "local-v1-locked-1",
+      "default": "local-v1-locked-1",
+      "title": "Policy Version",
+      "type": "string"
+    },
+    "evaluated_at": {
+      "format": "date-time",
+      "title": "Evaluated At",
+      "type": "string"
+    },
+    "receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Receipt Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "project_id",
+    "prerequisites",
+    "denials",
+    "evaluated_at",
+    "receipt_hash"
+  ],
+  "title": "FormalDraftAuthorizationReceipt",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/formal-draft-authorization-receipt.schema.json"
+}

@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.codex/novel-creation-suite/packaging-triage.schema.json",
+  "title": "Novel creation suite packaging triage",
+  "type": "object",
+  "required": [
+    "version",
+    "trigger",
+    "evidence",
+    "title_score",
+    "cover_copy_score",
+    "synopsis_front30_score",
+    "tag_fit_score",
+    "chapter_front500_promise_match",
+    "triage_verdict",
+    "return_layer",
+    "next_action"
+  ],
+  "properties": {
+    "version": {
+      "const": "v1"
+    },
+    "trigger": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "低阅读",
+          "点击低",
+          "首日数据弱",
+          "曝光转化弱",
+          "没人看",
+          "人工要求包装复核",
+          "书名",
+          "封面",
+          "简介",
+          "标签",
+          "第一章前500字"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "evidence": {
+      "type": "string",
+      "minLength": 1
+    },
+    "title_score": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "cover_copy_score": {
+      "type": ["integer", "string"],
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        {
+          "const": "pending"
+        }
+      ]
+    },
+    "synopsis_front30_score": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "tag_fit_score": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "chapter_front500_promise_match": {
+      "enum": ["pass", "warn", "fail", "pending"]
+    },
+    "triage_verdict": {
+      "enum": [
+        "packaging_rework",
+        "title_rework",
+        "synopsis_rework",
+        "tag_rework",
+        "chapter_front500_rework",
+        "upstream_replan",
+        "body_quality_review",
+        "platform_wait_and_observe"
+      ]
+    },
+    "return_layer": {
+      "enum": [
+        "L1_PROJECT_TRUTH",
+        "L2_CONTROL_CARD",
+        "L4_DRAFT_EXECUTION",
+        "L6_REVIEW_ACCEPTANCE"
+      ]
+    },
+    "next_action": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "novel-title-tags",
+          "novel-synopsis",
+          "novel-selling-points",
+          "novel-market-analysis",
+          "novel-reader-avatar",
+          "novel-golden-three-chapters",
+          "novel-retention-design",
+          "novel-chapter-outline",
+          "novel-chapter-brief",
+          "novel-volume-folder",
+          "novel-project-reviewer",
+          "novel-score-improver",
+          "manual_decision"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "notes": {
+      "type": "string"
+    },
+    "evaluated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "triage_verdict": {
+            "enum": ["title_rework", "synopsis_rework", "tag_rework", "packaging_rework"]
+          }
+        },
+        "required": ["triage_verdict"]
+      },
+      "then": {
+        "properties": {
+          "return_layer": {
+            "const": "L1_PROJECT_TRUTH"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "triage_verdict": {
+            "const": "chapter_front500_rework"
+          }
+        },
+        "required": ["triage_verdict"]
+      },
+      "then": {
+        "properties": {
+          "return_layer": {
+            "const": "L4_DRAFT_EXECUTION"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "triage_verdict": {
+            "const": "upstream_replan"
+          }
+        },
+        "required": ["triage_verdict"]
+      },
+      "then": {
+        "properties": {
+          "return_layer": {
+            "const": "L2_CONTROL_CARD"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "triage_verdict": {
+            "const": "platform_wait_and_observe"
+          }
+        },
+        "required": ["triage_verdict"]
+      },
+      "then": {
+        "properties": {
+          "return_layer": {
+            "const": "L6_REVIEW_ACCEPTANCE"
+          }
+        }
+      }
+    }
+  ]
+}

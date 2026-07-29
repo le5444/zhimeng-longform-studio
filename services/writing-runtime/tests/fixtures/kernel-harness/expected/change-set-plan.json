@@ -1,0 +1,18 @@
+{
+  "schema": "kernel-harness.expected-change-set.v1",
+  "required_operations": [
+    {
+      "path": "05_正文内容/第一卷/CH001_正文.md",
+      "operation": "update"
+    },
+    {
+      "path": "03_人物设定/characters.json",
+      "operation": "update"
+    },
+    {
+      "path": "07_运营数据/timeline.json",
+      "operation": "update"
+    }
+  ],
+  "formal_project_must_remain_unchanged": true
+}

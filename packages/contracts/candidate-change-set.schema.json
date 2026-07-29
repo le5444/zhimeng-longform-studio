@@ -1,0 +1,293 @@
+{
+  "$defs": {
+    "CandidateFileChange": {
+      "additionalProperties": false,
+      "properties": {
+        "file_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "File Id"
+        },
+        "path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string",
+          "pattern": "^(?![A-Za-z]:)(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*(?:^|/)\\.(?:/|$))(?!.*(?:^|/)\\.git(?:/|$)).+$"
+        },
+        "operation": {
+          "enum": [
+            "create",
+            "update",
+            "delete"
+          ],
+          "title": "Operation",
+          "type": "string"
+        },
+        "before_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Before Sha256"
+        },
+        "after_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "After Sha256"
+        },
+        "patch_format": {
+          "$ref": "#/$defs/PatchFormat"
+        },
+        "patch_artifact_ref": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Patch Artifact Ref",
+          "type": "string"
+        },
+        "hunks": {
+          "items": {
+            "$ref": "#/$defs/CandidateHunk"
+          },
+          "minItems": 1,
+          "title": "Hunks",
+          "type": "array"
+        }
+      },
+      "required": [
+        "file_id",
+        "path",
+        "operation",
+        "before_sha256",
+        "after_sha256",
+        "patch_format",
+        "patch_artifact_ref",
+        "hunks"
+      ],
+      "title": "CandidateFileChange",
+      "type": "object",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "const": "create"
+              }
+            },
+            "required": [
+              "operation"
+            ]
+          },
+          "then": {
+            "properties": {
+              "file_id": {
+                "type": "null"
+              },
+              "before_sha256": {
+                "type": "null"
+              },
+              "after_sha256": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "const": "update"
+              }
+            },
+            "required": [
+              "operation"
+            ]
+          },
+          "then": {
+            "properties": {
+              "file_id": {
+                "type": "string"
+              },
+              "before_sha256": {
+                "type": "string"
+              },
+              "after_sha256": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "const": "delete"
+              }
+            },
+            "required": [
+              "operation"
+            ]
+          },
+          "then": {
+            "properties": {
+              "file_id": {
+                "type": "string"
+              },
+              "before_sha256": {
+                "type": "string"
+              },
+              "after_sha256": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ],
+      "x-zhimeng-invariants": [
+        "paths must satisfy the Runtime normalized POSIX and Windows-safe path validator",
+        "update before_sha256 and after_sha256 values must differ",
+        "hunk_id values must be unique per file"
+      ]
+    },
+    "CandidateHunk": {
+      "additionalProperties": false,
+      "properties": {
+        "hunk_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Hunk Id",
+          "type": "string"
+        },
+        "anchor": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Anchor",
+          "type": "string"
+        },
+        "patch_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Patch Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "hunk_id",
+        "anchor",
+        "patch_hash"
+      ],
+      "title": "CandidateHunk",
+      "type": "object"
+    },
+    "PatchFormat": {
+      "enum": [
+        "unified_diff",
+        "json_patch"
+      ],
+      "title": "PatchFormat",
+      "type": "string"
+    },
+    "ProjectRevision": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fingerprint",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "revision",
+        "fingerprint",
+        "observed_at"
+      ],
+      "title": "ProjectRevision",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.candidate-change-set.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "change_set_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Change Set Id",
+      "type": "string"
+    },
+    "base_revision": {
+      "$ref": "#/$defs/ProjectRevision"
+    },
+    "staging_root_ref": {
+      "maxLength": 2048,
+      "minLength": 1,
+      "title": "Staging Root Ref",
+      "type": "string"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/CandidateFileChange"
+      },
+      "minItems": 1,
+      "title": "Files",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "change_set_id",
+    "base_revision",
+    "staging_root_ref",
+    "files"
+  ],
+  "title": "CandidateChangeSet",
+  "type": "object",
+  "x-zhimeng-invariants": [
+    "candidate file paths must be unique under Windows path identity rules"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/candidate-change-set.schema.json"
+}

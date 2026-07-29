@@ -1,0 +1,34 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.four-skills-raw-adaptation-materialize-request.v1",
+      "default": "zhimeng.four-skills-raw-adaptation-materialize-request.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "expected_batch_id": {
+      "pattern": "^four-skills-raw-adaptation-[0-9a-f]{32}$",
+      "title": "Expected Batch Id",
+      "type": "string"
+    },
+    "expected_batch_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Batch Hash",
+      "type": "string"
+    },
+    "import_after_materialize": {
+      "default": true,
+      "title": "Import After Materialize",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "expected_batch_id",
+    "expected_batch_hash"
+  ],
+  "title": "FourSkillsRawAdaptationMaterializeRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/four-skills-raw-adaptation-materialize-request.schema.json"
+}

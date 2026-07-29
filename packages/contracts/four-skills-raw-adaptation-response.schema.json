@@ -1,0 +1,310 @@
+{
+  "$defs": {
+    "FourSkillsRawAdaptationReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.four-skills-raw-adaptation-receipt.v1",
+          "default": "zhimeng.four-skills-raw-adaptation-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "batch_id": {
+          "pattern": "^four-skills-raw-adaptation-[0-9a-f]{32}$",
+          "title": "Batch Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/FourSkillsRawAdaptationStatus"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/FourSkillsRawMemberRecord"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "title": "Members",
+          "type": "array"
+        },
+        "member_count": {
+          "maximum": 4,
+          "minimum": 4,
+          "title": "Member Count",
+          "type": "integer"
+        },
+        "all_present": {
+          "title": "All Present",
+          "type": "boolean"
+        },
+        "all_linked": {
+          "title": "All Linked",
+          "type": "boolean"
+        },
+        "authorization_input_ready": {
+          "title": "Authorization Input Ready",
+          "type": "boolean"
+        },
+        "authorization_unlock": {
+          "const": false,
+          "default": false,
+          "title": "Authorization Unlock",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "writes_project_truth": {
+          "const": false,
+          "default": false,
+          "title": "Writes Project Truth",
+          "type": "boolean"
+        },
+        "four_skills_generic_exactly_once": {
+          "const": false,
+          "default": false,
+          "title": "Four Skills Generic Exactly Once",
+          "type": "boolean"
+        },
+        "raw_skill_md_execution": {
+          "const": false,
+          "default": false,
+          "title": "Raw Skill Md Execution",
+          "type": "boolean"
+        },
+        "policy_version": {
+          "const": "local-v1-four-skills-raw-adaptation-1",
+          "default": "local-v1-four-skills-raw-adaptation-1",
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "detail": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Detail",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        },
+        "batch_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Batch Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "batch_id",
+        "status",
+        "members",
+        "member_count",
+        "all_present",
+        "all_linked",
+        "authorization_input_ready",
+        "detail",
+        "updated_at",
+        "batch_hash"
+      ],
+      "title": "FourSkillsRawAdaptationReceipt",
+      "type": "object"
+    },
+    "FourSkillsRawAdaptationStatus": {
+      "enum": [
+        "planned",
+        "materialized",
+        "incomplete"
+      ],
+      "title": "FourSkillsRawAdaptationStatus",
+      "type": "string"
+    },
+    "FourSkillsRawFamily": {
+      "enum": [
+        "source_ingest",
+        "distillation",
+        "knowledge_context",
+        "creation_suite"
+      ],
+      "title": "FourSkillsRawFamily",
+      "type": "string"
+    },
+    "FourSkillsRawMemberRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "$ref": "#/$defs/FourSkillsRawFamily"
+        },
+        "ordinal": {
+          "maximum": 4,
+          "minimum": 1,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "source_path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Source Path",
+          "type": "string"
+        },
+        "plan_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plan Id"
+        },
+        "plan_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plan Hash"
+        },
+        "materialization_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Materialization Id"
+        },
+        "skill_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skill Id"
+        },
+        "skill_version_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skill Version Id"
+        },
+        "package_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Package Fingerprint"
+        },
+        "present": {
+          "title": "Present",
+          "type": "boolean"
+        },
+        "linked": {
+          "title": "Linked",
+          "type": "boolean"
+        },
+        "executable": {
+          "const": false,
+          "default": false,
+          "title": "Executable",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "detail": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "family",
+        "ordinal",
+        "source_path",
+        "present",
+        "linked",
+        "detail"
+      ],
+      "title": "FourSkillsRawMemberRecord",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.four-skills-raw-adaptation-response.v1",
+      "default": "zhimeng.four-skills-raw-adaptation-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "receipt": {
+      "$ref": "#/$defs/FourSkillsRawAdaptationReceipt"
+    },
+    "history": {
+      "items": {
+        "$ref": "#/$defs/FourSkillsRawAdaptationReceipt"
+      },
+      "maxItems": 32,
+      "title": "History",
+      "type": "array"
+    },
+    "not_claiming": {
+      "default": [
+        "four_skills_generic_exactly_once",
+        "raw_skill_md_execution",
+        "deterministic_tool_auto_generation",
+        "formal_draft_authorization_unlock",
+        "local_v1_exe"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Not Claiming",
+      "type": "array"
+    }
+  },
+  "required": [
+    "receipt"
+  ],
+  "title": "FourSkillsRawAdaptationResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/four-skills-raw-adaptation-response.schema.json"
+}

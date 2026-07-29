@@ -1,0 +1,124 @@
+{
+  "$defs": {
+    "EvalSuiteBlindReviewItem": {
+      "additionalProperties": false,
+      "properties": {
+        "member_token": {
+          "pattern": "^eval-member-[0-9a-f]{24}$",
+          "title": "Member Token",
+          "type": "string"
+        },
+        "score": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Score",
+          "type": "integer"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        }
+      },
+      "required": [
+        "member_token",
+        "score"
+      ],
+      "title": "EvalSuiteBlindReviewItem",
+      "type": "object"
+    },
+    "EvalSuiteStatus": {
+      "enum": [
+        "prepared",
+        "frozen",
+        "compare_ready",
+        "compare_degraded",
+        "blind_review_open",
+        "blind_review_finalized"
+      ],
+      "title": "EvalSuiteStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.eval-suite-action-request.v1",
+      "default": "zhimeng.eval-suite-action-request.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "action": {
+      "enum": [
+        "freeze",
+        "compare",
+        "blind_review_open",
+        "blind_review_submit",
+        "blind_review_finalize"
+      ],
+      "title": "Action",
+      "type": "string"
+    },
+    "expected_status": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EvalSuiteStatus"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "expected_state_revision": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected State Revision"
+    },
+    "compare_against_suite_id": {
+      "anyOf": [
+        {
+          "pattern": "^eval-suite-[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Compare Against Suite Id"
+    },
+    "blind_review_items": {
+      "items": {
+        "$ref": "#/$defs/EvalSuiteBlindReviewItem"
+      },
+      "maxItems": 32,
+      "title": "Blind Review Items",
+      "type": "array"
+    }
+  },
+  "required": [
+    "action"
+  ],
+  "title": "EvalSuiteActionRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/eval-suite-action-request.schema.json"
+}

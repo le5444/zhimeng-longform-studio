@@ -1,0 +1,300 @@
+{
+  "$defs": {
+    "GatePipelineReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.gate-pipeline-receipt.v1",
+          "default": "zhimeng.gate-pipeline-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "receipt_id": {
+          "pattern": "^gate-pipeline-[0-9a-f]{32}$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "applied",
+            "rolled_back",
+            "ready_candidate"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "result_revision": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result Revision"
+        },
+        "result_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result Fingerprint"
+        },
+        "review_revision": {
+          "minimum": 0,
+          "title": "Review Revision",
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/GatePipelineStatus"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/GatePipelineStep"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Steps",
+          "type": "array"
+        },
+        "hard_fact_receipt_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hard Fact Receipt Id"
+        },
+        "literary_quality_receipt_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Literary Quality Receipt Id"
+        },
+        "post_draft_gate_status": {
+          "default": "missing",
+          "enum": [
+            "missing",
+            "passed",
+            "blocked",
+            "stale"
+          ],
+          "title": "Post Draft Gate Status",
+          "type": "string"
+        },
+        "authorization_input_ready": {
+          "title": "Authorization Input Ready",
+          "type": "boolean"
+        },
+        "authorization_unlock": {
+          "const": false,
+          "default": false,
+          "title": "Authorization Unlock",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "quality_assessed": {
+          "const": false,
+          "default": false,
+          "title": "Quality Assessed",
+          "type": "boolean"
+        },
+        "policy_version": {
+          "const": "local-v1-gate-pipeline-1",
+          "default": "local-v1-gate-pipeline-1",
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "evaluated_at": {
+          "format": "date-time",
+          "title": "Evaluated At",
+          "type": "string"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "change_set_id",
+        "project_id",
+        "outcome",
+        "review_revision",
+        "status",
+        "steps",
+        "authorization_input_ready",
+        "evaluated_at",
+        "receipt_hash"
+      ],
+      "title": "GatePipelineReceipt",
+      "type": "object"
+    },
+    "GatePipelineStatus": {
+      "enum": [
+        "complete",
+        "blocked",
+        "incomplete"
+      ],
+      "title": "GatePipelineStatus",
+      "type": "string"
+    },
+    "GatePipelineStep": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/GatePipelineStepCode"
+        },
+        "ordinal": {
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "required": {
+          "title": "Required",
+          "type": "boolean"
+        },
+        "present": {
+          "title": "Present",
+          "type": "boolean"
+        },
+        "status": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Status",
+          "type": "string"
+        },
+        "receipt_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Receipt Id"
+        },
+        "detail": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "ordinal",
+        "required",
+        "present",
+        "status",
+        "detail"
+      ],
+      "title": "GatePipelineStep",
+      "type": "object"
+    },
+    "GatePipelineStepCode": {
+      "enum": [
+        "post_draft_gate",
+        "literary_quality_gate",
+        "hard_fact_gate"
+      ],
+      "title": "GatePipelineStepCode",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.gate-pipeline-response.v1",
+      "default": "zhimeng.gate-pipeline-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "change_set_id": {
+      "pattern": "^changeset-[0-9a-f]{32}$",
+      "title": "Change Set Id",
+      "type": "string"
+    },
+    "receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GatePipelineReceipt"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "history": {
+      "items": {
+        "$ref": "#/$defs/GatePipelineReceipt"
+      },
+      "maxItems": 32,
+      "title": "History",
+      "type": "array"
+    },
+    "not_claiming": {
+      "default": [
+        "literary_quality_score",
+        "formal_prose_writeback",
+        "formal_draft_authorization_unlock",
+        "four_skills_generic_exactly_once",
+        "local_v1_exe"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Not Claiming",
+      "type": "array"
+    }
+  },
+  "required": [
+    "change_set_id"
+  ],
+  "title": "GatePipelineResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/gate-pipeline-response.schema.json"
+}

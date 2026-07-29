@@ -1,0 +1,18 @@
+{
+  "additionalProperties": false,
+  "description": "Author-triggered original-compatible chapter/ops usage bridge after call_usage export.",
+  "properties": {
+    "expected_nlcl_original_call_usage_export_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Nlcl Original Call Usage Export Receipt Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "expected_nlcl_original_call_usage_export_receipt_hash"
+  ],
+  "title": "NlclOriginalChapterOpsUsageExportRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/nlcl-original-chapter-ops-usage-export-request.schema.json"
+}

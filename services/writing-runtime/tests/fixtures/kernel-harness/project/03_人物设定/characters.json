@@ -1,0 +1,15 @@
+{
+  "schema": "kernel-harness.characters.v1",
+  "characters": [
+    {
+      "id": "lin-che",
+      "name": "林澈",
+      "goal": "保住旧书店并找到父亲",
+      "current_state": "尚未决定是否相信陌生女孩",
+      "known_facts": [
+        "借书卡上的字迹属于父亲",
+        "债主会在午夜后收走店铺"
+      ]
+    }
+  ]
+}

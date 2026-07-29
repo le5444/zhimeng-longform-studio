@@ -1,0 +1,18 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.project-search-rebuild-request.v1",
+      "default": "zhimeng.project-search-rebuild-request.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "force": {
+      "default": false,
+      "title": "Force",
+      "type": "boolean"
+    }
+  },
+  "title": "SearchRebuildRequest",
+  "type": "object"
+}

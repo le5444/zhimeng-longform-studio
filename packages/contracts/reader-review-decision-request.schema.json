@@ -1,0 +1,74 @@
+{
+  "$defs": {
+    "ReaderFindingDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "finding_id": {
+          "pattern": "^reader-finding-[0-9a-f]{16}$",
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "adopted",
+            "rejected",
+            "deferred"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "finding_id",
+        "decision"
+      ],
+      "title": "ReaderFindingDecision",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Author decisions over a cold-read Reader review receipt.",
+  "properties": {
+    "expected_reader_review_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Reader Review Receipt Hash",
+      "type": "string"
+    },
+    "decisions": {
+      "items": {
+        "$ref": "#/$defs/ReaderFindingDecision"
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "title": "Decisions",
+      "type": "array"
+    },
+    "finalize": {
+      "default": true,
+      "title": "Finalize",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "expected_reader_review_receipt_hash",
+    "decisions"
+  ],
+  "title": "ReaderReviewDecisionRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/reader-review-decision-request.schema.json"
+}

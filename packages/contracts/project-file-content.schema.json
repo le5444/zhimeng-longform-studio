@@ -1,0 +1,151 @@
+{
+  "$defs": {
+    "ProjectFile": {
+      "additionalProperties": false,
+      "properties": {
+        "file_id": {
+          "pattern": "^file-[0-9a-f]{32}$",
+          "title": "File Id",
+          "type": "string"
+        },
+        "relative_path": {
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "absolute_path": {
+          "title": "Absolute Path",
+          "type": "string"
+        },
+        "section_index": {
+          "anyOf": [
+            {
+              "maximum": 9,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section Index"
+        },
+        "chapter_id": {
+          "anyOf": [
+            {
+              "pattern": "^(?:VOL\\d{3,}-)?CH\\d{3,}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chapter Id"
+        },
+        "volume_id": {
+          "anyOf": [
+            {
+              "pattern": "^VOL\\d{3,}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Volume Id"
+        },
+        "kind": {
+          "enum": [
+            "prose",
+            "document",
+            "control",
+            "handoff",
+            "context",
+            "review",
+            "status",
+            "structured_state",
+            "asset"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file_id",
+        "relative_path",
+        "absolute_path",
+        "kind",
+        "size_bytes",
+        "sha256"
+      ],
+      "title": "ProjectFile",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.project-file-content.v1",
+      "default": "zhimeng.project-file-content.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "read_only": {
+      "const": true,
+      "title": "Read Only",
+      "type": "boolean"
+    },
+    "project_id": {
+      "pattern": "^project-[0-9a-f]{24}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "snapshot_revision": {
+      "minimum": 1,
+      "title": "Snapshot Revision",
+      "type": "integer"
+    },
+    "project_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Project Fingerprint",
+      "type": "string"
+    },
+    "file": {
+      "$ref": "#/$defs/ProjectFile"
+    },
+    "etag": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Etag",
+      "type": "string"
+    },
+    "content": {
+      "title": "Content",
+      "type": "string"
+    }
+  },
+  "required": [
+    "read_only",
+    "project_id",
+    "snapshot_revision",
+    "project_fingerprint",
+    "file",
+    "etag",
+    "content"
+  ],
+  "title": "ProjectFileContentResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/project-file-content.schema.json"
+}

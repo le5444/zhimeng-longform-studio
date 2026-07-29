@@ -1,0 +1,213 @@
+{
+  "$defs": {
+    "WriterTargetFile": {
+      "additionalProperties": false,
+      "properties": {
+        "content_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "content_role": {
+          "const": "prose_body",
+          "default": "prose_body",
+          "title": "Content Role",
+          "type": "string"
+        },
+        "file_id": {
+          "pattern": "^file-[0-9a-f]{32}$",
+          "title": "File Id",
+          "type": "string"
+        },
+        "relative_path": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+\\.(?:json|jsonl|md|txt|yaml|yml)$",
+          "title": "Relative Path",
+          "type": "string",
+          "x-zhimeng-invariants": [
+            "path segments cannot use Windows device names",
+            "path segments are at most 255 characters"
+          ]
+        }
+      },
+      "required": [
+        "file_id",
+        "relative_path",
+        "content_hash"
+      ],
+      "title": "WriterTargetFile",
+      "type": "object"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/writer-candidate-result.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "candidate_kind": {
+      "enum": [
+        "repair_plan",
+        "change_proposal"
+      ],
+      "title": "Candidate Kind",
+      "type": "string"
+    },
+    "candidate_output_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Candidate Output Hash",
+      "type": "string"
+    },
+    "candidate_output_id": {
+      "pattern": "^agent-candidate-[0-9a-f]{32}$",
+      "title": "Candidate Output Id",
+      "type": "string"
+    },
+    "change_set_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Change Set Hash"
+    },
+    "change_set_id": {
+      "anyOf": [
+        {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Change Set Id"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "formal_draft_allowed": {
+      "const": false,
+      "default": false,
+      "title": "Formal Draft Allowed",
+      "type": "boolean"
+    },
+    "mode": {
+      "enum": [
+        "repair_only",
+        "author_review_change_proposal"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "project_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Project Fingerprint",
+      "type": "string"
+    },
+    "project_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "project_revision": {
+      "minimum": 1,
+      "title": "Project Revision",
+      "type": "integer"
+    },
+    "requires_author_review": {
+      "const": true,
+      "default": true,
+      "title": "Requires Author Review",
+      "type": "boolean"
+    },
+    "result_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Result Hash",
+      "type": "string"
+    },
+    "run_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "schema": {
+      "const": "zhimeng.writer-candidate-result.v1",
+      "default": "zhimeng.writer-candidate-result.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "target_files": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/WriterTargetFile"
+      },
+      "maxItems": 32,
+      "title": "Target Files",
+      "type": "array"
+    },
+    "target_files_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Target Files Hash",
+      "type": "string"
+    },
+    "writer_candidate_result_id": {
+      "pattern": "^writer-candidate-result-[0-9a-f]{32}$",
+      "title": "Writer Candidate Result Id",
+      "type": "string"
+    },
+    "writer_task_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Writer Task Hash",
+      "type": "string"
+    },
+    "writer_task_id": {
+      "pattern": "^writer-task-[0-9a-f]{32}$",
+      "title": "Writer Task Id",
+      "type": "string"
+    },
+    "writes_project_truth": {
+      "const": false,
+      "default": false,
+      "title": "Writes Project Truth",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "writer_candidate_result_id",
+    "mode",
+    "run_id",
+    "project_id",
+    "project_revision",
+    "project_fingerprint",
+    "writer_task_id",
+    "writer_task_hash",
+    "candidate_output_id",
+    "candidate_output_hash",
+    "candidate_kind",
+    "target_files_hash",
+    "created_at",
+    "result_hash"
+  ],
+  "title": "WriterCandidateResult",
+  "type": "object",
+  "x-zhimeng-invariants": [
+    "the result binds one immutable Writer task and Agent candidate by identity and hash",
+    "author_review_change_proposal requires exactly one same-Run Agent ChangeSet",
+    "the ChangeSet updates exactly the task's prose targets from their bound hashes",
+    "repair_only permits only repair_plan and forbids every ChangeSet identity",
+    "formal_draft_allowed and writes_project_truth remain false",
+    "result_hash hashes every field except result_hash"
+  ]
+}

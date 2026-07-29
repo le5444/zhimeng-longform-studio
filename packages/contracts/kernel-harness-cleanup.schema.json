@@ -1,0 +1,223 @@
+{
+  "$defs": {
+    "CleanupStatus": {
+      "enum": [
+        "not_run",
+        "not_measured",
+        "partial",
+        "clean",
+        "dirty",
+        "failed"
+      ],
+      "title": "CleanupStatus",
+      "type": "string"
+    },
+    "JsonValue": {}
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.kernel-harness-cleanup.v3",
+      "default": "zhimeng.kernel-harness-cleanup.v3",
+      "title": "Schema",
+      "type": "string"
+    },
+    "overall_status": {
+      "$ref": "#/$defs/CleanupStatus"
+    },
+    "source_fixture_unchanged": {
+      "title": "Source Fixture Unchanged",
+      "type": "boolean"
+    },
+    "disposable_project_snapshot_unchanged": {
+      "title": "Disposable Project Snapshot Unchanged",
+      "type": "boolean"
+    },
+    "write_denial_exercised": {
+      "title": "Write Denial Exercised",
+      "type": "boolean"
+    },
+    "provider_used": {
+      "title": "Provider Used",
+      "type": "boolean"
+    },
+    "user_root_snapshot_measured": {
+      "title": "User Root Snapshot Measured",
+      "type": "boolean"
+    },
+    "root_process_close_status": {
+      "enum": [
+        "pass",
+        "fail"
+      ],
+      "title": "Root Process Close Status",
+      "type": "string"
+    },
+    "process_tree_cleanup_status": {
+      "enum": [
+        "pass",
+        "fail",
+        "not_measured"
+      ],
+      "title": "Process Tree Cleanup Status",
+      "type": "string"
+    },
+    "process_cleanup_error": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Process Cleanup Error"
+    },
+    "timed_step_deadlines": {
+      "patternProperties": {
+        "^[A-Za-z0-9][A-Za-z0-9._:-]*$": {
+          "type": "integer"
+        }
+      },
+      "propertyNames": {
+        "maxLength": 128,
+        "minLength": 8
+      },
+      "title": "Timed Step Deadlines",
+      "type": "object"
+    },
+    "execution_contract": {
+      "$ref": "#/$defs/JsonValue"
+    },
+    "unmeasured_cleanup_dimensions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Unmeasured Cleanup Dimensions",
+      "type": "array",
+      "uniqueItems": true
+    },
+    "resource_limits_passed": {
+      "title": "Resource Limits Passed",
+      "type": "boolean"
+    },
+    "adapter_resource_limits": {
+      "$ref": "#/$defs/JsonValue"
+    },
+    "evidence_root_byte_limit": {
+      "minimum": 1,
+      "title": "Evidence Root Byte Limit",
+      "type": "integer",
+      "const": 16777216
+    },
+    "evidence_root_bytes_after_adapter_close": {
+      "minimum": 0,
+      "title": "Evidence Root Bytes After Adapter Close",
+      "type": "integer",
+      "maximum": 16777216
+    },
+    "evidence_secret_scan_passed": {
+      "title": "Evidence Secret Scan Passed",
+      "type": "boolean",
+      "const": true
+    },
+    "evidence_secret_value_count": {
+      "minimum": 0,
+      "title": "Evidence Secret Value Count",
+      "type": "integer"
+    },
+    "evidence_secret_redaction_count": {
+      "minimum": 0,
+      "title": "Evidence Secret Redaction Count",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "overall_status",
+    "source_fixture_unchanged",
+    "disposable_project_snapshot_unchanged",
+    "write_denial_exercised",
+    "provider_used",
+    "user_root_snapshot_measured",
+    "root_process_close_status",
+    "process_tree_cleanup_status",
+    "process_cleanup_error",
+    "timed_step_deadlines",
+    "execution_contract",
+    "unmeasured_cleanup_dimensions",
+    "resource_limits_passed",
+    "adapter_resource_limits",
+    "evidence_root_byte_limit",
+    "evidence_root_bytes_after_adapter_close",
+    "evidence_secret_scan_passed",
+    "evidence_secret_value_count",
+    "evidence_secret_redaction_count"
+  ],
+  "title": "CleanupReport",
+  "type": "object",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "root_process_close_status": {
+            "const": "pass"
+          }
+        },
+        "required": [
+          "root_process_close_status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "process_cleanup_error": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "process_cleanup_error": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "overall_status": {
+            "const": "clean"
+          }
+        },
+        "required": [
+          "overall_status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "source_fixture_unchanged": {
+            "const": true
+          },
+          "disposable_project_snapshot_unchanged": {
+            "const": true
+          },
+          "root_process_close_status": {
+            "const": "pass"
+          },
+          "process_tree_cleanup_status": {
+            "const": "pass"
+          },
+          "unmeasured_cleanup_dimensions": {
+            "maxItems": 0
+          },
+          "resource_limits_passed": {
+            "const": true
+          }
+        }
+      }
+    }
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/kernel-harness-cleanup.schema.json"
+}

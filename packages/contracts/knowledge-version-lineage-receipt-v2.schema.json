@@ -1,0 +1,232 @@
+{
+  "$defs": {
+    "KnowledgeCandidateOrigin": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.knowledge-candidate-origin.v1",
+          "default": "zhimeng.knowledge-candidate-origin.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "source_receipt_id": {
+          "pattern": "^source-import-receipt-[0-9a-f]{32}$",
+          "title": "Source Receipt Id",
+          "type": "string"
+        },
+        "source_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Receipt Hash",
+          "type": "string"
+        },
+        "source_packet_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Packet Fingerprint",
+          "type": "string"
+        },
+        "draft_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Draft Fingerprint",
+          "type": "string"
+        },
+        "cards_draft_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Cards Draft Hash",
+          "type": "string"
+        },
+        "source_card_index": {
+          "minimum": 0,
+          "title": "Source Card Index",
+          "type": "integer"
+        },
+        "source_card_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Card Hash",
+          "type": "string"
+        },
+        "origin_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Origin Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_receipt_id",
+        "source_receipt_hash",
+        "source_packet_fingerprint",
+        "draft_fingerprint",
+        "cards_draft_hash",
+        "source_card_index",
+        "source_card_hash",
+        "origin_hash"
+      ],
+      "title": "KnowledgeCandidateOrigin",
+      "type": "object"
+    },
+    "KnowledgeScopeRef": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.knowledge-scope-ref.v1",
+          "default": "zhimeng.knowledge-scope-ref.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "scope_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "scope_type": {
+          "$ref": "#/$defs/KnowledgeScopeType"
+        },
+        "project_binding_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Binding Id"
+        },
+        "state_revision": {
+          "default": 1,
+          "minimum": 1,
+          "title": "State Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "scope_id",
+        "scope_type"
+      ],
+      "title": "KnowledgeScopeRef",
+      "type": "object"
+    },
+    "KnowledgeScopeType": {
+      "description": "The ownership boundary used by the native knowledge store.",
+      "enum": [
+        "application",
+        "project"
+      ],
+      "title": "KnowledgeScopeType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.knowledge-version-lineage-receipt.v2",
+      "default": "zhimeng.knowledge-version-lineage-receipt.v2",
+      "title": "Schema",
+      "type": "string"
+    },
+    "lineage_receipt_id": {
+      "pattern": "^knowledge-lineage-[0-9a-f]{32}$",
+      "title": "Lineage Receipt Id",
+      "type": "string"
+    },
+    "version_id": {
+      "pattern": "^knowledge-version-[0-9a-f]{32}$",
+      "title": "Version Id",
+      "type": "string"
+    },
+    "card_id": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "Card Id",
+      "type": "string"
+    },
+    "version_content_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Version Content Hash",
+      "type": "string"
+    },
+    "candidate_id": {
+      "pattern": "^knowledge-candidate-[0-9a-f]{32}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "approved_candidate_revision": {
+      "minimum": 1,
+      "title": "Approved Candidate Revision",
+      "type": "integer"
+    },
+    "approved_candidate_content_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Approved Candidate Content Hash",
+      "type": "string"
+    },
+    "candidate_origin": {
+      "$ref": "#/$defs/KnowledgeCandidateOrigin"
+    },
+    "source_import_id": {
+      "pattern": "^source-import-[0-9a-f]{32}$",
+      "title": "Source Import Id",
+      "type": "string"
+    },
+    "activation_mode": {
+      "enum": [
+        "initial",
+        "replace"
+      ],
+      "title": "Activation Mode",
+      "type": "string"
+    },
+    "replacement_authorized": {
+      "title": "Replacement Authorized",
+      "type": "boolean"
+    },
+    "activation_expected_version_id": {
+      "pattern": "^knowledge-version-[0-9a-f]{32}$",
+      "title": "Activation Expected Version Id",
+      "type": "string"
+    },
+    "activation_expected_state_revision": {
+      "minimum": 1,
+      "title": "Activation Expected State Revision",
+      "type": "integer"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Receipt Hash",
+      "type": "string"
+    },
+    "scope": {
+      "$ref": "#/$defs/KnowledgeScopeRef"
+    }
+  },
+  "required": [
+    "lineage_receipt_id",
+    "version_id",
+    "card_id",
+    "version_content_hash",
+    "candidate_id",
+    "approved_candidate_revision",
+    "approved_candidate_content_hash",
+    "candidate_origin",
+    "source_import_id",
+    "activation_mode",
+    "replacement_authorized",
+    "activation_expected_version_id",
+    "activation_expected_state_revision",
+    "created_at",
+    "receipt_hash",
+    "scope"
+  ],
+  "title": "KnowledgeVersionLineageReceiptV2",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/knowledge-version-lineage-receipt-v2.schema.json"
+}

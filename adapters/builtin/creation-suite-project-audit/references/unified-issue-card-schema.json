@@ -1,0 +1,306 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.codex/novel-creation-suite/unified-issue-card-schema.json",
+  "title": "Novel creation unified issue card",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "issue_id",
+    "priority",
+    "scope",
+    "evidence",
+    "problem_symptom",
+    "root_cause",
+    "root_file",
+    "affected_files",
+    "fix_route",
+    "layer_id",
+    "layer_confidence",
+    "failure_signature",
+    "rewrite_from",
+    "do_not_rewrite_below",
+    "acceptance_check",
+    "status"
+  ],
+  "properties": {
+    "issue_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["P0", "P1", "P2"]
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "project",
+        "file",
+        "chapter",
+        "scene",
+        "line",
+        "state",
+        "script",
+        "material",
+        "packaging",
+        "distillation",
+        "style"
+      ]
+    },
+    "evidence": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "object"
+              }
+            ]
+          }
+        },
+        {
+          "type": "object"
+        }
+      ]
+    },
+    "problem_symptom": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Concise human-readable symptom used by distillation problem-guidance. Use a stable phrase rather than a long diagnosis."
+    },
+    "problem_symptoms": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "root_cause": {
+      "type": "string",
+      "enum": [
+        "上游合同",
+        "包装承诺",
+        "世界规则",
+        "人物动机",
+        "因果桥",
+        "知情边界",
+        "资源账本",
+        "结构体验",
+        "表达质感",
+        "平台风险",
+        "状态污染",
+        "素材污染",
+        "蒸馏误召回",
+        "蒸馏污染",
+        "审稿证据不足",
+        "脚本体检",
+        "下载蒸馏同步",
+        "其他"
+      ]
+    },
+    "root_file": {
+      "type": "string",
+      "minLength": 1
+    },
+    "affected_files": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "fix_route": {
+      "type": "string",
+      "enum": [
+        "patch",
+        "scene_rewrite",
+        "chapter_rewrite",
+        "upstream_replan",
+        "deai_only",
+        "manual_decision",
+        "replace_cards",
+        "requery",
+        "redistill",
+        "reviewer_recheck",
+        "writeback_fix",
+        "packaging_triage",
+        "evidence_collection"
+      ]
+    },
+    "layer_id": {
+      "$ref": "#/$defs/layer_id"
+    },
+    "layer_confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "failure_signature": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rewrite_from": {
+      "$ref": "#/$defs/layer_id"
+    },
+    "do_not_rewrite_below": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/layer_id"
+      },
+      "uniqueItems": true
+    },
+    "acceptance_check": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["open", "fixed", "deferred", "rejected", "needs_user"]
+    },
+    "status_evidence": {
+      "type": "string",
+      "description": "Required when status is fixed or rejected. Summarize the review evidence, user decision, or rerun result that closes the issue."
+    },
+    "status_note": {
+      "type": "string",
+      "description": "Optional status decision note."
+    },
+    "status_history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["from", "to", "changed_at", "actor", "evidence", "note"],
+        "properties": {
+          "from": {
+            "type": "string",
+            "enum": ["", "open", "fixed", "deferred", "rejected", "needs_user"]
+          },
+          "to": {
+            "type": "string",
+            "enum": ["open", "fixed", "deferred", "rejected", "needs_user"]
+          },
+          "changed_at": {
+            "type": "string",
+            "format": "date-time",
+            "minLength": 1,
+            "description": "ISO 8601 datetime with timezone, e.g. 2026-06-08T10:00:00Z or 2026-06-08T18:00:00+08:00. validate_unified_issue_card.py enforces timezone."
+          },
+          "actor": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidence": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "distillation_repair_guidance": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "review_subcategory",
+        "suggested_layer",
+        "suggested_skills",
+        "repair_note",
+        "accepted_as_route"
+      ],
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "problem_symptom": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "review_subcategory": {
+          "type": "string"
+        },
+        "suggested_layer": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/layer_id"
+            },
+            {
+              "const": ""
+            }
+          ]
+        },
+        "suggested_skills": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "repair_note": {
+          "type": "string"
+        },
+        "accepted_as_route": {
+          "type": "boolean"
+        },
+        "decision_note": {
+          "type": "string"
+        },
+        "rule": {
+          "type": "string"
+        }
+      }
+    },
+    "distillation_repair_guidance_candidates": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "material_gate_result": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "layer_id": {
+      "type": "string",
+      "enum": [
+        "L0_INPUT",
+        "L0_USAGE_CLOSURE",
+        "L1_PROJECT_TRUTH",
+        "L2_CONTROL_CARD",
+        "L3_DISTILLATION_RETRIEVAL",
+        "L4_DRAFT_EXECUTION",
+        "L5_DEAI_STYLE",
+        "L6_REVIEW_ACCEPTANCE",
+        "L7_WRITEBACK"
+      ]
+    }
+  }
+}

@@ -1,0 +1,291 @@
+{
+  "$defs": {
+    "NlclOriginalTruthContentExtractReceipt": {
+      "additionalProperties": false,
+      "description": "Receipt for deterministic 01-09 truth content extraction into state/*.json.\n\nReads project truth markdown under 01-04/06 and merges extracted compact items\ninto existing original-compatible state files. Never rewrites 01-09 files and\nnever authorizes formal prose.",
+      "properties": {
+        "schema": {
+          "const": "zhimeng.nlcl-original-truth-content-extract-receipt.v1",
+          "default": "zhimeng.nlcl-original-truth-content-extract-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "receipt_id": {
+          "pattern": "^nlcl-original-truth-content-extract-[0-9a-f]{32}$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "nlcl_original_novel_state_sync_receipt_id": {
+          "pattern": "^nlcl-original-novel-state-sync-[0-9a-f]{32}$",
+          "title": "Nlcl Original Novel State Sync Receipt Id",
+          "type": "string"
+        },
+        "nlcl_original_novel_state_sync_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Nlcl Original Novel State Sync Receipt Hash",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "applied",
+            "rolled_back"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "chapter_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Chapter Id",
+          "type": "string"
+        },
+        "canonical_chapter_key": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Canonical Chapter Key",
+          "type": "string"
+        },
+        "source_files": {
+          "items": {
+            "$ref": "#/$defs/NlclOriginalTruthContentExtractSourceFile"
+          },
+          "maxItems": 128,
+          "title": "Source Files",
+          "type": "array"
+        },
+        "written_files": {
+          "items": {
+            "$ref": "#/$defs/NlclOriginalTruthContentExtractWrittenFile"
+          },
+          "maxItems": 6,
+          "minItems": 6,
+          "title": "Written Files",
+          "type": "array"
+        },
+        "extracted_character_count": {
+          "maximum": 2048,
+          "minimum": 0,
+          "title": "Extracted Character Count",
+          "type": "integer"
+        },
+        "extracted_foreshadow_count": {
+          "maximum": 2048,
+          "minimum": 0,
+          "title": "Extracted Foreshadow Count",
+          "type": "integer"
+        },
+        "extracted_info_boundary_count": {
+          "maximum": 2048,
+          "minimum": 0,
+          "title": "Extracted Info Boundary Count",
+          "type": "integer"
+        },
+        "record_mode": {
+          "const": "product_bridge_truth_content_extract_from_01_09",
+          "default": "product_bridge_truth_content_extract_from_01_09",
+          "title": "Record Mode",
+          "type": "string"
+        },
+        "original_nlcl_novel_state_synced": {
+          "const": true,
+          "default": true,
+          "title": "Original Nlcl Novel State Synced",
+          "type": "boolean"
+        },
+        "original_nlcl_truth_matrix_synced": {
+          "const": true,
+          "default": true,
+          "title": "Original Nlcl Truth Matrix Synced",
+          "type": "boolean"
+        },
+        "truth_content_extracted": {
+          "const": true,
+          "default": true,
+          "title": "Truth Content Extracted",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "quality_assessed": {
+          "const": false,
+          "default": false,
+          "title": "Quality Assessed",
+          "type": "boolean"
+        },
+        "novel_state_synced": {
+          "const": true,
+          "default": true,
+          "title": "Novel State Synced",
+          "type": "boolean"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "change_set_id",
+        "project_id",
+        "nlcl_original_novel_state_sync_receipt_id",
+        "nlcl_original_novel_state_sync_receipt_hash",
+        "outcome",
+        "chapter_id",
+        "canonical_chapter_key",
+        "written_files",
+        "extracted_character_count",
+        "extracted_foreshadow_count",
+        "extracted_info_boundary_count",
+        "created_at",
+        "receipt_hash"
+      ],
+      "title": "NlclOriginalTruthContentExtractReceipt",
+      "type": "object"
+    },
+    "NlclOriginalTruthContentExtractSourceFile": {
+      "additionalProperties": false,
+      "properties": {
+        "relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?:0[1-9]_[^/]+(?:/[^/]+){0,6})\\.(?:md|markdown|txt)$",
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "source_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Hash",
+          "type": "string"
+        },
+        "section_index": {
+          "maximum": 9,
+          "minimum": 1,
+          "title": "Section Index",
+          "type": "integer"
+        },
+        "extracted_item_count": {
+          "maximum": 512,
+          "minimum": 0,
+          "title": "Extracted Item Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "relative_path",
+        "source_hash",
+        "section_index",
+        "extracted_item_count"
+      ],
+      "title": "NlclOriginalTruthContentExtractSourceFile",
+      "type": "object"
+    },
+    "NlclOriginalTruthContentExtractWrittenFile": {
+      "additionalProperties": false,
+      "properties": {
+        "relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?:state|07_[^/]+/nlcl_state)/(?:character_state|plot_state|foreshadowing_state|truth_character_matrix|truth_foreshadow_lifecycle|truth_info_boundary)\\.json$",
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "source_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Hash",
+          "type": "string"
+        },
+        "domain": {
+          "enum": [
+            "character",
+            "plot",
+            "foreshadowing",
+            "truth_character_matrix",
+            "truth_foreshadow_lifecycle",
+            "truth_info_boundary"
+          ],
+          "title": "Domain",
+          "type": "string"
+        },
+        "created": {
+          "title": "Created",
+          "type": "boolean"
+        },
+        "item_count": {
+          "maximum": 2048,
+          "minimum": 0,
+          "title": "Item Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "relative_path",
+        "source_hash",
+        "domain",
+        "created",
+        "item_count"
+      ],
+      "title": "NlclOriginalTruthContentExtractWrittenFile",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.nlcl-original-truth-content-extract-response.v1",
+      "default": "zhimeng.nlcl-original-truth-content-extract-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "change_set_id": {
+      "pattern": "^changeset-[0-9a-f]{32}$",
+      "title": "Change Set Id",
+      "type": "string"
+    },
+    "receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NlclOriginalTruthContentExtractReceipt"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "history": {
+      "items": {
+        "$ref": "#/$defs/NlclOriginalTruthContentExtractReceipt"
+      },
+      "maxItems": 32,
+      "title": "History",
+      "type": "array"
+    }
+  },
+  "required": [
+    "change_set_id"
+  ],
+  "title": "NlclOriginalTruthContentExtractResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/nlcl-original-truth-content-extract-response.schema.json"
+}

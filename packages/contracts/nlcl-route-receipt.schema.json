@@ -1,0 +1,491 @@
+{
+  "$defs": {
+    "KnowledgeProvenanceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "pattern": "^knowledge-candidate-[0-9a-f]{32}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "candidate_origin_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Candidate Origin Hash",
+          "type": "string"
+        },
+        "card_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Card Id",
+          "type": "string"
+        },
+        "cards_draft_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Cards Draft Hash",
+          "type": "string"
+        },
+        "formalization_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Formalization Receipt Hash",
+          "type": "string"
+        },
+        "formalization_receipt_id": {
+          "pattern": "^knowledge-formalization-[0-9a-f]{32}$",
+          "title": "Formalization Receipt Id",
+          "type": "string"
+        },
+        "schema": {
+          "const": "zhimeng.knowledge-provenance-ref.v1",
+          "default": "zhimeng.knowledge-provenance-ref.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "source_import_id": {
+          "pattern": "^source-import-[0-9a-f]{32}$",
+          "title": "Source Import Id",
+          "type": "string"
+        },
+        "source_packet_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Packet Fingerprint",
+          "type": "string"
+        },
+        "source_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Receipt Hash",
+          "type": "string"
+        },
+        "source_receipt_id": {
+          "pattern": "^source-import-receipt-[0-9a-f]{32}$",
+          "title": "Source Receipt Id",
+          "type": "string"
+        },
+        "version_content_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Version Content Hash",
+          "type": "string"
+        },
+        "version_id": {
+          "pattern": "^knowledge-version-[0-9a-f]{32}$",
+          "title": "Version Id",
+          "type": "string"
+        },
+        "version_lineage_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Version Lineage Receipt Hash",
+          "type": "string"
+        },
+        "version_lineage_receipt_id": {
+          "pattern": "^knowledge-lineage-[0-9a-f]{32}$",
+          "title": "Version Lineage Receipt Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_import_id",
+        "source_receipt_id",
+        "source_receipt_hash",
+        "source_packet_fingerprint",
+        "cards_draft_hash",
+        "candidate_id",
+        "candidate_origin_hash",
+        "card_id",
+        "version_id",
+        "version_content_hash",
+        "version_lineage_receipt_id",
+        "version_lineage_receipt_hash",
+        "formalization_receipt_id",
+        "formalization_receipt_hash"
+      ],
+      "title": "KnowledgeProvenanceRef",
+      "type": "object"
+    },
+    "NlclChapterCall": {
+      "additionalProperties": false,
+      "properties": {
+        "context_pack_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Context Pack Id",
+          "type": "string"
+        },
+        "execution_status": {
+          "const": "requires_runtime_catalog_check",
+          "default": "requires_runtime_catalog_check",
+          "title": "Execution Status",
+          "type": "string"
+        },
+        "input_contract": {
+          "maxLength": 256,
+          "minLength": 3,
+          "title": "Input Contract",
+          "type": "string"
+        },
+        "ordinal": {
+          "maximum": 64,
+          "minimum": 1,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "purpose": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Purpose",
+          "type": "string"
+        },
+        "selected_card_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 24,
+          "title": "Selected Card Ids",
+          "type": "array"
+        },
+        "skill_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "title": "Skill Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ordinal",
+        "skill_id",
+        "purpose",
+        "input_contract",
+        "context_pack_id"
+      ],
+      "title": "NlclChapterCall",
+      "type": "object"
+    },
+    "NlclRouteSource": {
+      "enum": [
+        "native_knowledge",
+        "external_distillation",
+        "unavailable"
+      ],
+      "title": "NlclRouteSource",
+      "type": "string"
+    },
+    "NlclRouteStatus": {
+      "enum": [
+        "ready",
+        "risk_ready",
+        "unavailable"
+      ],
+      "title": "NlclRouteStatus",
+      "type": "string"
+    },
+    "NlclSelectedCard": {
+      "additionalProperties": false,
+      "properties": {
+        "card_id": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Card Id",
+          "type": "string"
+        },
+        "card_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Card Type",
+          "type": "string"
+        },
+        "content_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "feedback_layer": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Feedback Layer"
+        },
+        "knowledge_provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KnowledgeProvenanceRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "negative_routes": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Negative Routes",
+          "type": "array"
+        },
+        "recommended_profiles": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Recommended Profiles",
+          "type": "array"
+        },
+        "route_terms": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Route Terms",
+          "type": "array"
+        },
+        "safety_summary": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Safety Summary"
+        },
+        "title": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "version_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Version Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "card_id",
+        "card_type",
+        "title",
+        "version_id",
+        "content_hash"
+      ],
+      "title": "NlclSelectedCard",
+      "type": "object"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/nlcl-route-receipt.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "active_chapter_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Active Chapter Id"
+    },
+    "allowed_output": {
+      "const": "context_and_creation_audit_only",
+      "default": "context_and_creation_audit_only",
+      "title": "Allowed Output",
+      "type": "string"
+    },
+    "chapter_call_list": {
+      "items": {
+        "$ref": "#/$defs/NlclChapterCall"
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "title": "Chapter Call List",
+      "type": "array"
+    },
+    "context_pack_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Context Pack Hash",
+      "type": "string"
+    },
+    "context_pack_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Context Pack Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "formal_draft_allowed": {
+      "const": false,
+      "default": false,
+      "title": "Formal Draft Allowed",
+      "type": "boolean"
+    },
+    "knowledge_fingerprint": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Knowledge Fingerprint"
+    },
+    "objective_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Objective Hash",
+      "type": "string"
+    },
+    "profile": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_-]*$",
+      "title": "Profile",
+      "type": "string"
+    },
+    "project_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Project Fingerprint",
+      "type": "string"
+    },
+    "project_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Project Id",
+      "type": "string"
+    },
+    "project_kb_manifest_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Project Kb Manifest Hash"
+    },
+    "project_kb_state_id": {
+      "anyOf": [
+        {
+          "pattern": "^project-kb-state-[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Project Kb State Id"
+    },
+    "project_revision": {
+      "minimum": 1,
+      "title": "Project Revision",
+      "type": "integer"
+    },
+    "project_truth_precedence": {
+      "const": true,
+      "default": true,
+      "title": "Project Truth Precedence",
+      "type": "boolean"
+    },
+    "receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Receipt Hash",
+      "type": "string"
+    },
+    "route_receipt_id": {
+      "pattern": "^nlcl-route-[0-9a-f]{32}$",
+      "title": "Route Receipt Id",
+      "type": "string"
+    },
+    "schema": {
+      "const": "zhimeng.nlcl-route-receipt.v1",
+      "default": "zhimeng.nlcl-route-receipt.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "selected_cards": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/NlclSelectedCard"
+      },
+      "maxItems": 24,
+      "title": "Selected Cards",
+      "type": "array"
+    },
+    "source": {
+      "$ref": "#/$defs/NlclRouteSource"
+    },
+    "status": {
+      "$ref": "#/$defs/NlclRouteStatus"
+    },
+    "strict_failures": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Strict Failures",
+      "type": "array"
+    },
+    "warnings": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Warnings",
+      "type": "array"
+    },
+    "whole_library_load_forbidden": {
+      "const": true,
+      "default": true,
+      "title": "Whole Library Load Forbidden",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "route_receipt_id",
+    "context_pack_id",
+    "context_pack_hash",
+    "project_id",
+    "project_revision",
+    "project_fingerprint",
+    "profile",
+    "objective_hash",
+    "source",
+    "status",
+    "chapter_call_list",
+    "created_at",
+    "receipt_hash"
+  ],
+  "title": "NlclRouteReceipt",
+  "type": "object"
+}

@@ -1,0 +1,148 @@
+{
+  "$defs": {
+    "DistillationValidationLadderDebt": {
+      "additionalProperties": false,
+      "properties": {
+        "risk_ready_cards": {
+          "minimum": 0,
+          "title": "Risk Ready Cards",
+          "type": "integer"
+        },
+        "warn_steps": {
+          "minimum": 0,
+          "title": "Warn Steps",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "risk_ready_cards",
+        "warn_steps"
+      ],
+      "title": "DistillationValidationLadderDebt",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.distillation-health.v1",
+      "default": "zhimeng.distillation-health.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "read_only": {
+      "const": true,
+      "default": true,
+      "title": "Read Only",
+      "type": "boolean"
+    },
+    "health": {
+      "enum": [
+        "healthy",
+        "degraded",
+        "blocked"
+      ],
+      "title": "Health",
+      "type": "string"
+    },
+    "structural_health": {
+      "enum": [
+        "healthy",
+        "degraded",
+        "blocked"
+      ],
+      "title": "Structural Health",
+      "type": "string"
+    },
+    "validation_maturity": {
+      "enum": [
+        "validated",
+        "risk_ready",
+        "degraded"
+      ],
+      "title": "Validation Maturity",
+      "type": "string"
+    },
+    "card_count": {
+      "minimum": 0,
+      "title": "Card Count",
+      "type": "integer"
+    },
+    "counts": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "propertyNames": {
+        "enum": [
+          "work",
+          "author",
+          "genre",
+          "scene",
+          "voice",
+          "trope",
+          "platform",
+          "packaging",
+          "benchmark",
+          "validator"
+        ]
+      },
+      "title": "Counts",
+      "type": "object"
+    },
+    "validation_ladder_debt": {
+      "$ref": "#/$defs/DistillationValidationLadderDebt"
+    },
+    "hard_rule_eligible_counts": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "propertyNames": {
+        "enum": [
+          "work",
+          "author",
+          "genre",
+          "scene",
+          "voice",
+          "trope",
+          "platform",
+          "packaging",
+          "benchmark",
+          "validator"
+        ]
+      },
+      "title": "Hard Rule Eligible Counts",
+      "type": "object"
+    },
+    "library_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Library Fingerprint",
+      "type": "string"
+    },
+    "tool_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Tool Fingerprint",
+      "type": "string"
+    },
+    "observed_at": {
+      "format": "date-time",
+      "title": "Observed At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "health",
+    "structural_health",
+    "validation_maturity",
+    "card_count",
+    "counts",
+    "validation_ladder_debt",
+    "hard_rule_eligible_counts",
+    "library_fingerprint",
+    "tool_fingerprint",
+    "observed_at"
+  ],
+  "title": "DistillationHealthResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/distillation-health.schema.json"
+}

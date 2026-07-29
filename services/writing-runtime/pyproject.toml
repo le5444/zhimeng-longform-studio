@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "zhimeng-writing-runtime"
+version = "0.1.0"
+description = "Local FastAPI runtime for the Zhimeng long-form writing workbench"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Proprietary" }
+dependencies = [
+  "fastapi>=0.115,<1.0",
+  "httpx>=0.28,<1.0",
+  "jsonschema>=4.23,<5.0",
+  "pydantic>=2.10,<3.0",
+  "PyYAML>=6.0,<7.0",
+  "uvicorn[standard]>=0.34,<1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3,<9.0",
+]
+
+[project.scripts]
+zhimeng-runtime = "zhimeng_runtime.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/zhimeng_runtime"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers"
+testpaths = ["tests"]
+pythonpath = ["src", "."]

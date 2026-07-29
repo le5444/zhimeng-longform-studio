@@ -1,0 +1,635 @@
+{
+  "$defs": {
+    "CancelCapability": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "const": "not_measured",
+          "title": "Status",
+          "type": "string"
+        },
+        "reason": {
+          "const": "no_portable_server_cancel_contract",
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "reason"
+      ],
+      "title": "CancelCapability",
+      "type": "object"
+    },
+    "CapabilityStatus": {
+      "enum": [
+        "pass",
+        "fail",
+        "not_measured"
+      ],
+      "title": "CapabilityStatus",
+      "type": "string"
+    },
+    "CredentialHandling": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "const": "environment_variable",
+          "title": "Source",
+          "type": "string"
+        },
+        "key_written_to_report": {
+          "const": false,
+          "title": "Key Written To Report",
+          "type": "boolean"
+        },
+        "key_printed_by_cli": {
+          "const": false,
+          "title": "Key Printed By Cli",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "source",
+        "key_written_to_report",
+        "key_printed_by_cli"
+      ],
+      "title": "CredentialHandling",
+      "type": "object"
+    },
+    "JsonObjectCapability": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/CapabilityStatus"
+        },
+        "http_status": {
+          "anyOf": [
+            {
+              "maximum": 599,
+              "minimum": 100,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Http Status"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProbeErrorCode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "valid_json_object": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Valid Json Object"
+        },
+        "response_model_matches_requested": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Response Model Matches Requested"
+        },
+        "finish_reason_present": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finish Reason Present"
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UsageSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "JsonObjectCapability",
+      "type": "object"
+    },
+    "ModelsCapability": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/CapabilityStatus"
+        },
+        "http_status": {
+          "anyOf": [
+            {
+              "maximum": 599,
+              "minimum": 100,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Http Status"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProbeErrorCode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "model_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Count"
+        },
+        "selected_model_listed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selected Model Listed"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "ModelsCapability",
+      "type": "object"
+    },
+    "NamedFunctionToolChoiceCapability": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/CapabilityStatus"
+        },
+        "http_status": {
+          "anyOf": [
+            {
+              "maximum": 599,
+              "minimum": 100,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Http Status"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProbeErrorCode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "tool_call_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool Call Count"
+        },
+        "selected_named_function": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selected Named Function"
+        },
+        "arguments_valid_json_object": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Arguments Valid Json Object"
+        },
+        "arguments_match_expected_marker": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Arguments Match Expected Marker"
+        },
+        "response_model_matches_requested": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Response Model Matches Requested"
+        },
+        "finish_reason_present": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finish Reason Present"
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UsageSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "NamedFunctionToolChoiceCapability",
+      "type": "object"
+    },
+    "ProbeErrorCode": {
+      "enum": [
+        "http_status",
+        "transport_error",
+        "response_too_large",
+        "invalid_json",
+        "invalid_response",
+        "model_mismatch",
+        "invalid_stream",
+        "stream_limit"
+      ],
+      "title": "ProbeErrorCode",
+      "type": "string"
+    },
+    "ProviderCapabilities": {
+      "additionalProperties": false,
+      "properties": {
+        "models": {
+          "$ref": "#/$defs/ModelsCapability"
+        },
+        "json_object": {
+          "$ref": "#/$defs/JsonObjectCapability"
+        },
+        "named_function_tool_choice": {
+          "$ref": "#/$defs/NamedFunctionToolChoiceCapability"
+        },
+        "streaming": {
+          "$ref": "#/$defs/StreamingCapability"
+        },
+        "cancel": {
+          "$ref": "#/$defs/CancelCapability"
+        }
+      },
+      "required": [
+        "models",
+        "json_object",
+        "named_function_tool_choice",
+        "streaming",
+        "cancel"
+      ],
+      "title": "ProviderCapabilities",
+      "type": "object"
+    },
+    "ProviderTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "base_url": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Base Url",
+          "type": "string"
+        },
+        "model": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "api_key_env": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Api Key Env",
+          "type": "string"
+        },
+        "user_agent": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "User Agent",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_url",
+        "model",
+        "api_key_env",
+        "user_agent"
+      ],
+      "title": "ProviderTarget",
+      "type": "object"
+    },
+    "StreamingCapability": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/CapabilityStatus"
+        },
+        "http_status": {
+          "anyOf": [
+            {
+              "maximum": 599,
+              "minimum": 100,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Http Status"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProbeErrorCode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "sse_event_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sse Event Count"
+        },
+        "done_sentinel_received": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Done Sentinel Received"
+        },
+        "content_delta_received": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Delta Received"
+        },
+        "response_model_matches_requested": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Response Model Matches Requested"
+        },
+        "skipped_by_caller": {
+          "default": false,
+          "title": "Skipped By Caller",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "StreamingCapability",
+      "type": "object"
+    },
+    "UsageSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "prompt_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt Tokens"
+        },
+        "completion_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completion Tokens"
+        },
+        "total_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Total Tokens"
+        }
+      },
+      "title": "UsageSummary",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.provider-capability-probe.v2",
+      "title": "Schema",
+      "type": "string"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "target": {
+      "$ref": "#/$defs/ProviderTarget"
+    },
+    "credential_handling": {
+      "$ref": "#/$defs/CredentialHandling"
+    },
+    "capabilities": {
+      "$ref": "#/$defs/ProviderCapabilities"
+    }
+  },
+  "required": [
+    "schema",
+    "generated_at",
+    "target",
+    "credential_handling",
+    "capabilities"
+  ],
+  "title": "ProviderCapabilityProbeReport",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/provider-capability-probe-v2.schema.json"
+}

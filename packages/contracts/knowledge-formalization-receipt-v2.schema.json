@@ -1,0 +1,242 @@
+{
+  "$defs": {
+    "KnowledgeFormalizationDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "pattern": "^knowledge-candidate-[0-9a-f]{32}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "source_card_index": {
+          "minimum": 0,
+          "title": "Source Card Index",
+          "type": "integer"
+        },
+        "origin_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Origin Hash",
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "promoted",
+            "rejected",
+            "deferred"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "content_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "promoted_version_id": {
+          "anyOf": [
+            {
+              "pattern": "^knowledge-version-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Promoted Version Id"
+        },
+        "version_lineage_receipt_id": {
+          "anyOf": [
+            {
+              "pattern": "^knowledge-lineage-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version Lineage Receipt Id"
+        },
+        "version_lineage_receipt_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version Lineage Receipt Hash"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "source_card_index",
+        "origin_hash",
+        "decision",
+        "revision",
+        "content_hash"
+      ],
+      "title": "KnowledgeFormalizationDecision",
+      "type": "object"
+    },
+    "KnowledgeScopeRef": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.knowledge-scope-ref.v1",
+          "default": "zhimeng.knowledge-scope-ref.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "scope_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "scope_type": {
+          "$ref": "#/$defs/KnowledgeScopeType"
+        },
+        "project_binding_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Binding Id"
+        },
+        "state_revision": {
+          "default": 1,
+          "minimum": 1,
+          "title": "State Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "scope_id",
+        "scope_type"
+      ],
+      "title": "KnowledgeScopeRef",
+      "type": "object"
+    },
+    "KnowledgeScopeType": {
+      "description": "The ownership boundary used by the native knowledge store.",
+      "enum": [
+        "application",
+        "project"
+      ],
+      "title": "KnowledgeScopeType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.knowledge-formalization-receipt.v2",
+      "default": "zhimeng.knowledge-formalization-receipt.v2",
+      "title": "Schema",
+      "type": "string"
+    },
+    "formalization_receipt_id": {
+      "pattern": "^knowledge-formalization-[0-9a-f]{32}$",
+      "title": "Formalization Receipt Id",
+      "type": "string"
+    },
+    "source_import_id": {
+      "pattern": "^source-import-[0-9a-f]{32}$",
+      "title": "Source Import Id",
+      "type": "string"
+    },
+    "source_receipt_id": {
+      "pattern": "^source-import-receipt-[0-9a-f]{32}$",
+      "title": "Source Receipt Id",
+      "type": "string"
+    },
+    "source_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Receipt Hash",
+      "type": "string"
+    },
+    "source_packet_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Packet Fingerprint",
+      "type": "string"
+    },
+    "draft_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Draft Fingerprint",
+      "type": "string"
+    },
+    "cards_draft_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Cards Draft Hash",
+      "type": "string"
+    },
+    "candidate_set_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Candidate Set Hash",
+      "type": "string"
+    },
+    "decisions": {
+      "items": {
+        "$ref": "#/$defs/KnowledgeFormalizationDecision"
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "title": "Decisions",
+      "type": "array"
+    },
+    "knowledge_state_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Knowledge State Hash",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Receipt Hash",
+      "type": "string"
+    },
+    "scope": {
+      "$ref": "#/$defs/KnowledgeScopeRef"
+    }
+  },
+  "required": [
+    "formalization_receipt_id",
+    "source_import_id",
+    "source_receipt_id",
+    "source_receipt_hash",
+    "source_packet_fingerprint",
+    "draft_fingerprint",
+    "cards_draft_hash",
+    "candidate_set_hash",
+    "decisions",
+    "knowledge_state_hash",
+    "created_at",
+    "receipt_hash",
+    "scope"
+  ],
+  "title": "KnowledgeFormalizationReceiptV2",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/knowledge-formalization-receipt-v2.schema.json"
+}

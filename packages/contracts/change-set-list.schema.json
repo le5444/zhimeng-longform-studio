@@ -1,0 +1,162 @@
+{
+  "$defs": {
+    "ChangeSetOrigin": {
+      "enum": [
+        "manual",
+        "agent",
+        "skill_workflow"
+      ],
+      "title": "ChangeSetOrigin",
+      "type": "string"
+    },
+    "ChangeSetStatus": {
+      "enum": [
+        "reviewing",
+        "ready",
+        "applying",
+        "rolling_back",
+        "applied",
+        "rolled_back",
+        "discarded",
+        "conflicted",
+        "failed"
+      ],
+      "title": "ChangeSetStatus",
+      "type": "string"
+    },
+    "ChangeSetSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "origin": {
+          "$ref": "#/$defs/ChangeSetOrigin"
+        },
+        "source_run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Run Id"
+        },
+        "source_tool_call_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Tool Call Id"
+        },
+        "gate_required": {
+          "default": false,
+          "title": "Gate Required",
+          "type": "boolean"
+        },
+        "status": {
+          "$ref": "#/$defs/ChangeSetStatus"
+        },
+        "review_revision": {
+          "minimum": 0,
+          "title": "Review Revision",
+          "type": "integer"
+        },
+        "file_count": {
+          "minimum": 1,
+          "title": "File Count",
+          "type": "integer"
+        },
+        "hunk_count": {
+          "minimum": 1,
+          "title": "Hunk Count",
+          "type": "integer"
+        },
+        "pending_hunk_count": {
+          "minimum": 0,
+          "title": "Pending Hunk Count",
+          "type": "integer"
+        },
+        "accepted_hunk_count": {
+          "minimum": 0,
+          "title": "Accepted Hunk Count",
+          "type": "integer"
+        },
+        "rejected_hunk_count": {
+          "minimum": 0,
+          "title": "Rejected Hunk Count",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "change_set_id",
+        "project_id",
+        "title",
+        "origin",
+        "status",
+        "review_revision",
+        "file_count",
+        "hunk_count",
+        "pending_hunk_count",
+        "accepted_hunk_count",
+        "rejected_hunk_count",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "ChangeSetSummary",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.change-set-list.v1",
+      "default": "zhimeng.change-set-list.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "change_sets": {
+      "items": {
+        "$ref": "#/$defs/ChangeSetSummary"
+      },
+      "title": "Change Sets",
+      "type": "array"
+    }
+  },
+  "required": [
+    "change_sets"
+  ],
+  "title": "ChangeSetListResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/change-set-list.schema.json"
+}

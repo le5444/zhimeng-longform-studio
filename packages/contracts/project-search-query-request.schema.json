@@ -1,0 +1,113 @@
+{
+  "$defs": {
+    "ContextAuthority": {
+      "enum": [
+        "project_truth",
+        "formal_knowledge",
+        "reference",
+        "risk"
+      ],
+      "title": "ContextAuthority",
+      "type": "string"
+    },
+    "SearchSourceType": {
+      "enum": [
+        "project_file",
+        "formal_knowledge",
+        "authorized_source"
+      ],
+      "title": "SearchSourceType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.project-search-query-request.v1",
+      "default": "zhimeng.project-search-query-request.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "query": {
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "Query",
+      "type": "string"
+    },
+    "source_types": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/SearchSourceType"
+          },
+          "maxItems": 8,
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Types"
+    },
+    "authorities": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/ContextAuthority"
+          },
+          "maxItems": 8,
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Authorities"
+    },
+    "updated_after": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Updated After"
+    },
+    "updated_before": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Updated Before"
+    },
+    "limit": {
+      "default": 20,
+      "maximum": 100,
+      "minimum": 1,
+      "title": "Limit",
+      "type": "integer"
+    },
+    "auto_rebuild": {
+      "default": true,
+      "title": "Auto Rebuild",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "query"
+  ],
+  "title": "SearchQueryRequest",
+  "type": "object"
+}

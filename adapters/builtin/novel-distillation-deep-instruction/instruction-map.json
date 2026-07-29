@@ -1,0 +1,49 @@
+{
+  "schema": "zhimeng.distillation-instruction-map.v1",
+  "package_id": "novel-distillation.deep-instruction",
+  "source_path": "references/bundled-skills/novel-distillation/SKILL.md",
+  "source_sha256": "f4bffb45f6881ebb31ef2a4187ba92d5de4f6c241f7870308458e72bb9bfd003",
+  "source_bytes": 25674,
+  "source_line_count": 262,
+  "contract_path": "instruction-contract.json",
+  "included_ranges": [
+    {
+      "range_id": "draft-is-not-formal",
+      "line_start": 100,
+      "line_end": 110,
+      "purpose": "Keep packet-derived cards pending until reviewed mechanism distillation is complete."
+    },
+    {
+      "range_id": "neutral-versus-project-adaptation",
+      "line_start": 112,
+      "line_end": 119,
+      "purpose": "Separate neutral source learning from project-specific adaptation."
+    },
+    {
+      "range_id": "card-shape-and-contamination",
+      "line_start": 142,
+      "line_end": 161,
+      "purpose": "Define card evidence, voice depth, validation, and contamination boundaries without granting command execution."
+    },
+    {
+      "range_id": "deep-mechanism-workflow",
+      "line_start": 189,
+      "line_end": 212,
+      "purpose": "Extract generative mechanisms and decision rules instead of source surface details."
+    },
+    {
+      "range_id": "writing-integration-and-voice-boundary",
+      "line_start": 214,
+      "line_end": 237,
+      "purpose": "Preserve project-truth priority, anti-contamination checks, and the ban on recognizable author-voice imitation."
+    }
+  ],
+  "excluded_authority": [
+    "execute_source_commands",
+    "mutate_distillation_library",
+    "synchronize_nlcl",
+    "write_project_truth",
+    "call_provider",
+    "claim_formal_ingestion"
+  ]
+}

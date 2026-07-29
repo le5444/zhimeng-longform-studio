@@ -1,0 +1,1626 @@
+{
+  "$defs": {
+    "CandidateFileChange": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "const": "create"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "file_id": {
+                "type": "null"
+              },
+              "before_sha256": {
+                "type": "null"
+              },
+              "proposed_after_sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "proposed_after_sha256"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "const": "update"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "file_id": {
+                "pattern": "^file-[0-9a-f]{32}$",
+                "type": "string"
+              },
+              "before_sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "proposed_after_sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "file_id",
+              "before_sha256",
+              "proposed_after_sha256"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "const": "delete"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "file_id": {
+                "pattern": "^file-[0-9a-f]{32}$",
+                "type": "string"
+              },
+              "before_sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "proposed_after_sha256": {
+                "type": "null"
+              },
+              "post_draft_gate_scope": {
+                "const": "none"
+              }
+            },
+            "required": [
+              "file_id",
+              "before_sha256"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "change_id": {
+          "pattern": "^change-[0-9a-f]{32}$",
+          "title": "Change Id",
+          "type": "string"
+        },
+        "operation": {
+          "$ref": "#/$defs/ChangeOperation"
+        },
+        "file_id": {
+          "anyOf": [
+            {
+              "pattern": "^file-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "File Id"
+        },
+        "relative_path": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+\\.(?:json|jsonl|md|txt|yaml|yml)$",
+          "title": "Relative Path",
+          "type": "string",
+          "x-zhimeng-invariants": [
+            "path segments cannot use Windows device names",
+            "path segments are at most 255 characters"
+          ]
+        },
+        "rationale": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "before_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Before Sha256"
+        },
+        "proposed_after_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Proposed After Sha256"
+        },
+        "preserve_utf8_bom": {
+          "default": false,
+          "title": "Preserve Utf8 Bom",
+          "type": "boolean"
+        },
+        "post_draft_gate_scope": {
+          "default": "none",
+          "enum": [
+            "none",
+            "prose_body"
+          ],
+          "title": "Post Draft Gate Scope",
+          "type": "string"
+        },
+        "hunks": {
+          "items": {
+            "$ref": "#/$defs/ChangeHunk"
+          },
+          "maxItems": 4096,
+          "minItems": 1,
+          "title": "Hunks",
+          "type": "array"
+        }
+      },
+      "required": [
+        "change_id",
+        "operation",
+        "relative_path",
+        "rationale",
+        "hunks"
+      ],
+      "title": "CandidateFileChange",
+      "type": "object",
+      "x-zhimeng-invariants": [
+        "update before_sha256 and proposed_after_sha256 differ",
+        "delete post_draft_gate_scope is none",
+        "hunk indexes are contiguous and hunk IDs are unique",
+        "hunk ranges are ordered and non-overlapping"
+      ]
+    },
+    "ChangeHunk": {
+      "additionalProperties": false,
+      "properties": {
+        "hunk_id": {
+          "pattern": "^hunk-[0-9a-f]{32}$",
+          "title": "Hunk Id",
+          "type": "string"
+        },
+        "index": {
+          "minimum": 0,
+          "title": "Index",
+          "type": "integer"
+        },
+        "before_start": {
+          "minimum": 0,
+          "title": "Before Start",
+          "type": "integer"
+        },
+        "before_end": {
+          "minimum": 0,
+          "title": "Before End",
+          "type": "integer"
+        },
+        "after_start": {
+          "minimum": 0,
+          "title": "After Start",
+          "type": "integer"
+        },
+        "after_end": {
+          "minimum": 0,
+          "title": "After End",
+          "type": "integer"
+        },
+        "before_text": {
+          "title": "Before Text",
+          "type": "string"
+        },
+        "after_text": {
+          "title": "After Text",
+          "type": "string"
+        },
+        "before_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Before Sha256",
+          "type": "string"
+        },
+        "after_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "After Sha256",
+          "type": "string"
+        },
+        "decision": {
+          "$ref": "#/$defs/HunkDecision",
+          "default": "pending"
+        }
+      },
+      "required": [
+        "hunk_id",
+        "index",
+        "before_start",
+        "before_end",
+        "after_start",
+        "after_end",
+        "before_text",
+        "after_text",
+        "before_sha256",
+        "after_sha256"
+      ],
+      "title": "ChangeHunk",
+      "type": "object",
+      "x-zhimeng-invariants": [
+        "before_end - before_start equals the before_text line count",
+        "after_end - after_start equals the after_text line count",
+        "before_sha256 and after_sha256 hash their corresponding UTF-8 text"
+      ]
+    },
+    "ChangeOperation": {
+      "enum": [
+        "create",
+        "update",
+        "delete"
+      ],
+      "title": "ChangeOperation",
+      "type": "string"
+    },
+    "ChangeSetOrigin": {
+      "enum": [
+        "manual",
+        "agent",
+        "skill_workflow"
+      ],
+      "title": "ChangeSetOrigin",
+      "type": "string"
+    },
+    "ChangeSetStatus": {
+      "enum": [
+        "reviewing",
+        "ready",
+        "applying",
+        "rolling_back",
+        "applied",
+        "rolled_back",
+        "discarded",
+        "conflicted",
+        "failed"
+      ],
+      "title": "ChangeSetStatus",
+      "type": "string"
+    },
+    "GateCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Code",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "blocked"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 128,
+          "title": "Evidence Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "code",
+        "status",
+        "message",
+        "evidence_refs"
+      ],
+      "title": "GateCheck",
+      "type": "object"
+    },
+    "GateFileResult": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "blocked"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "content_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "byte_length": {
+          "minimum": 0,
+          "title": "Byte Length",
+          "type": "integer"
+        },
+        "body_line_count": {
+          "minimum": 0,
+          "title": "Body Line Count",
+          "type": "integer"
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/GateFinding"
+          },
+          "maxItems": 32,
+          "title": "Findings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "path",
+        "status",
+        "content_hash",
+        "byte_length",
+        "body_line_count",
+        "findings"
+      ],
+      "title": "GateFileResult",
+      "type": "object"
+    },
+    "GateFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Code",
+          "type": "string"
+        },
+        "failure_signature": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Failure Signature",
+          "type": "string"
+        },
+        "severity": {
+          "const": "blocked",
+          "default": "blocked",
+          "title": "Severity",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "evidence": {
+          "maxLength": 256,
+          "title": "Evidence",
+          "type": "string"
+        },
+        "location": {
+          "$ref": "#/$defs/GateLocation"
+        }
+      },
+      "required": [
+        "code",
+        "failure_signature",
+        "message",
+        "evidence",
+        "location"
+      ],
+      "title": "GateFinding",
+      "type": "object"
+    },
+    "GateLocation": {
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "$ref": "#/$defs/GatePoint"
+        },
+        "end": {
+          "$ref": "#/$defs/GatePoint"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "title": "GateLocation",
+      "type": "object"
+    },
+    "GatePoint": {
+      "additionalProperties": false,
+      "properties": {
+        "line": {
+          "minimum": 1,
+          "title": "Line",
+          "type": "integer"
+        },
+        "column": {
+          "minimum": 1,
+          "title": "Column",
+          "type": "integer"
+        },
+        "offset": {
+          "minimum": 0,
+          "title": "Offset",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "line",
+        "column",
+        "offset"
+      ],
+      "title": "GatePoint",
+      "type": "object"
+    },
+    "HunkDecision": {
+      "enum": [
+        "pending",
+        "accepted",
+        "rejected"
+      ],
+      "title": "HunkDecision",
+      "type": "string"
+    },
+    "KnowledgeValidatorExecutionResult": {
+      "additionalProperties": false,
+      "properties": {
+        "card_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Card Id",
+          "type": "string"
+        },
+        "version_id": {
+          "pattern": "^knowledge-version-[0-9a-f]{32}$",
+          "title": "Version Id",
+          "type": "string"
+        },
+        "content_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "rules_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Rules Hash",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "blocked"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "configuration_errors": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 3,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Configuration Errors",
+          "type": "array"
+        },
+        "rule_results": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/KnowledgeValidatorRuleResult"
+          },
+          "maxItems": 16,
+          "title": "Rule Results",
+          "type": "array"
+        },
+        "failure_signatures": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 3,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Failure Signatures",
+          "type": "array"
+        }
+      },
+      "required": [
+        "card_id",
+        "version_id",
+        "content_hash",
+        "rules_hash",
+        "status"
+      ],
+      "title": "KnowledgeValidatorExecutionResult",
+      "type": "object"
+    },
+    "KnowledgeValidatorRuleResult": {
+      "additionalProperties": false,
+      "properties": {
+        "rule_id": {
+          "maxLength": 64,
+          "minLength": 3,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "forbid_terms",
+            "require_any_term"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "failure_signature": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Failure Signature",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "blocked"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "match_count": {
+          "minimum": 0,
+          "title": "Match Count",
+          "type": "integer"
+        },
+        "evidence_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 128,
+          "title": "Evidence Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "rule_id",
+        "kind",
+        "failure_signature",
+        "status",
+        "match_count"
+      ],
+      "title": "KnowledgeValidatorRuleResult",
+      "type": "object"
+    },
+    "PostDraftGateReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.post-draft-gate-receipt.v1",
+          "default": "zhimeng.post-draft-gate-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "gate_receipt_id": {
+          "pattern": "^post-draft-gate-[0-9a-f]{32}$",
+          "title": "Gate Receipt Id",
+          "type": "string"
+        },
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "review_revision": {
+          "minimum": 0,
+          "title": "Review Revision",
+          "type": "integer"
+        },
+        "base_revision": {
+          "minimum": 1,
+          "title": "Base Revision",
+          "type": "integer"
+        },
+        "base_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Base Fingerprint",
+          "type": "string"
+        },
+        "candidate_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Candidate Hash",
+          "type": "string"
+        },
+        "validator_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "title": "Validator Id",
+          "type": "string"
+        },
+        "validator_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Validator Version",
+          "type": "string"
+        },
+        "validator_manifest_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Validator Manifest Fingerprint",
+          "type": "string"
+        },
+        "validator_package_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Validator Package Fingerprint",
+          "type": "string"
+        },
+        "context_pack_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Context Pack Id"
+        },
+        "context_pack_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Context Pack Hash"
+        },
+        "knowledge_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Fingerprint"
+        },
+        "route_receipt_id": {
+          "anyOf": [
+            {
+              "pattern": "^nlcl-route-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Route Receipt Id"
+        },
+        "route_receipt_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Route Receipt Hash"
+        },
+        "knowledge_validator_bundle_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Validator Bundle Hash"
+        },
+        "knowledge_validator_count": {
+          "default": 0,
+          "maximum": 8,
+          "minimum": 0,
+          "title": "Knowledge Validator Count",
+          "type": "integer"
+        },
+        "knowledge_validator_card_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Knowledge Validator Card Ids",
+          "type": "array"
+        },
+        "candidate_file_count": {
+          "minimum": 1,
+          "title": "Candidate File Count",
+          "type": "integer"
+        },
+        "skill_receipt_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skill Receipt Id"
+        },
+        "skill_receipt_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skill Receipt Hash"
+        },
+        "skill_output_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skill Output Hash"
+        },
+        "execution_status": {
+          "enum": [
+            "succeeded",
+            "failed"
+          ],
+          "title": "Execution Status",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "blocked",
+            "failed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PostDraftGateResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 2,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "error_message": {
+          "anyOf": [
+            {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Message"
+        },
+        "quality_assessed": {
+          "const": false,
+          "default": false,
+          "title": "Quality Assessed",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "gate_receipt_id",
+        "change_set_id",
+        "project_id",
+        "review_revision",
+        "base_revision",
+        "base_fingerprint",
+        "candidate_hash",
+        "validator_id",
+        "validator_version",
+        "validator_manifest_fingerprint",
+        "validator_package_fingerprint",
+        "candidate_file_count",
+        "execution_status",
+        "status",
+        "created_at",
+        "receipt_hash"
+      ],
+      "title": "PostDraftGateReceipt",
+      "type": "object"
+    },
+    "PostDraftGateResult": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.creation-draft-gate-result.v1",
+          "default": "zhimeng.creation-draft-gate-result.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "blocked"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "candidate_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "candidate_manifest_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Candidate Manifest Hash"
+        },
+        "knowledge_validator_bundle_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Validator Bundle Hash"
+        },
+        "knowledge_validator_results": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/KnowledgeValidatorExecutionResult"
+          },
+          "maxItems": 8,
+          "title": "Knowledge Validator Results",
+          "type": "array"
+        },
+        "quality_assessed": {
+          "const": false,
+          "default": false,
+          "title": "Quality Assessed",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "global_findings": {
+          "items": {
+            "$ref": "#/$defs/GateFinding"
+          },
+          "maxItems": 64,
+          "title": "Global Findings",
+          "type": "array"
+        },
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/GateCheck"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Checks",
+          "type": "array"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/GateFileResult"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "title": "Files",
+          "type": "array"
+        },
+        "failure_signatures": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Failure Signatures",
+          "type": "array"
+        }
+      },
+      "required": [
+        "status",
+        "summary",
+        "candidate_id",
+        "global_findings",
+        "checks",
+        "files",
+        "failure_signatures"
+      ],
+      "title": "PostDraftGateResult",
+      "type": "object"
+    },
+    "WritebackFileResult": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "const": "create"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "before_sha256": {
+                "type": "null"
+              },
+              "after_sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "result_file_id": {
+                "pattern": "^file-[0-9a-f]{32}$",
+                "type": "string"
+              },
+              "backup_ref": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "after_sha256",
+              "result_file_id"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "const": "update"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "before_sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "after_sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "result_file_id": {
+                "pattern": "^file-[0-9a-f]{32}$",
+                "type": "string"
+              },
+              "backup_ref": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "before_sha256",
+              "after_sha256",
+              "result_file_id",
+              "backup_ref"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "const": "delete"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "before_sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "after_sha256": {
+                "type": "null"
+              },
+              "result_file_id": {
+                "type": "null"
+              },
+              "backup_ref": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "before_sha256",
+              "backup_ref"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "change_id": {
+          "pattern": "^change-[0-9a-f]{32}$",
+          "title": "Change Id",
+          "type": "string"
+        },
+        "operation": {
+          "$ref": "#/$defs/ChangeOperation"
+        },
+        "relative_path": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+\\.(?:json|jsonl|md|txt|yaml|yml)$",
+          "title": "Relative Path",
+          "type": "string",
+          "x-zhimeng-invariants": [
+            "path segments cannot use Windows device names",
+            "path segments are at most 255 characters"
+          ]
+        },
+        "before_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Before Sha256"
+        },
+        "after_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "After Sha256"
+        },
+        "result_file_id": {
+          "anyOf": [
+            {
+              "pattern": "^file-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result File Id"
+        },
+        "accepted_hunk_ids": {
+          "items": {
+            "pattern": "^hunk-[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "title": "Accepted Hunk Ids",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "rejected_hunk_ids": {
+          "items": {
+            "pattern": "^hunk-[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "title": "Rejected Hunk Ids",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "backup_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Backup Ref"
+        }
+      },
+      "required": [
+        "change_id",
+        "operation",
+        "relative_path",
+        "accepted_hunk_ids",
+        "rejected_hunk_ids"
+      ],
+      "title": "WritebackFileResult",
+      "type": "object",
+      "x-zhimeng-invariants": [
+        "update before_sha256 and after_sha256 differ",
+        "accepted_hunk_ids and rejected_hunk_ids are disjoint"
+      ]
+    },
+    "WritebackManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.writeback-manifest.v1",
+          "default": "zhimeng.writeback-manifest.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "base_revision": {
+          "minimum": 1,
+          "title": "Base Revision",
+          "type": "integer"
+        },
+        "base_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Base Fingerprint",
+          "type": "string"
+        },
+        "result_revision": {
+          "minimum": 1,
+          "title": "Result Revision",
+          "type": "integer"
+        },
+        "result_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Result Fingerprint",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "applied",
+            "rolled_back"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/WritebackFileResult"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Files",
+          "type": "array"
+        },
+        "created_directories": {
+          "items": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+$",
+            "type": "string",
+            "x-zhimeng-invariants": [
+              "path segments cannot use Windows device names",
+              "path segments are at most 255 characters"
+            ]
+          },
+          "title": "Created Directories",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "change_set_id",
+        "project_id",
+        "base_revision",
+        "base_fingerprint",
+        "result_revision",
+        "result_fingerprint",
+        "outcome",
+        "files",
+        "created_at"
+      ],
+      "title": "WritebackManifest",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "applied"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "writeback": {
+            "properties": {
+              "outcome": {
+                "const": "applied"
+              }
+            },
+            "required": [
+              "outcome"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "writeback"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "rolled_back"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "writeback": {
+            "properties": {
+              "outcome": {
+                "const": "applied"
+              }
+            },
+            "required": [
+              "outcome"
+            ],
+            "type": "object"
+          },
+          "rollback": {
+            "properties": {
+              "outcome": {
+                "const": "rolled_back"
+              }
+            },
+            "required": [
+              "outcome"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "writeback",
+          "rollback"
+        ]
+      }
+    }
+  ],
+  "properties": {
+    "schema": {
+      "const": "zhimeng.change-set.v1",
+      "default": "zhimeng.change-set.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "change_set_id": {
+      "pattern": "^changeset-[0-9a-f]{32}$",
+      "title": "Change Set Id",
+      "type": "string"
+    },
+    "project_id": {
+      "pattern": "^project-[0-9a-f]{24}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "base_revision": {
+      "minimum": 1,
+      "title": "Base Revision",
+      "type": "integer"
+    },
+    "base_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Base Fingerprint",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 240,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "summary": {
+      "maxLength": 8000,
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    },
+    "origin": {
+      "$ref": "#/$defs/ChangeSetOrigin"
+    },
+    "source_run_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Run Id"
+    },
+    "source_tool_call_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Tool Call Id"
+    },
+    "source_request_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Request Hash"
+    },
+    "source_skill_ids": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Source Skill Ids",
+      "type": "array",
+      "uniqueItems": true
+    },
+    "gate_required": {
+      "default": false,
+      "title": "Gate Required",
+      "type": "boolean"
+    },
+    "status": {
+      "$ref": "#/$defs/ChangeSetStatus"
+    },
+    "review_revision": {
+      "minimum": 0,
+      "title": "Review Revision",
+      "type": "integer"
+    },
+    "changes": {
+      "items": {
+        "$ref": "#/$defs/CandidateFileChange"
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "title": "Changes",
+      "type": "array"
+    },
+    "post_draft_gate": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PostDraftGateReceipt"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "writeback": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WritebackManifest"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "rollback": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WritebackManifest"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "error": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "change_set_id",
+    "project_id",
+    "base_revision",
+    "base_fingerprint",
+    "title",
+    "summary",
+    "origin",
+    "source_skill_ids",
+    "status",
+    "review_revision",
+    "changes",
+    "created_at",
+    "updated_at"
+  ],
+  "title": "ChangeSetResponse",
+  "type": "object",
+  "x-zhimeng-invariants": [
+    "reviewing has at least one pending hunk and every other status has none",
+    "source_skill_ids, change IDs, paths, and hunk IDs are unique",
+    "skill_workflow origin requires at least one source_skill_id",
+    "writeback and rollback identities match the containing change set",
+    "hunk text hashes match before_text and after_text"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/change-set.schema.json"
+}

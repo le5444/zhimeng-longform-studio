@@ -1,0 +1,382 @@
+{
+  "$defs": {
+    "DistillationSelectedCard": {
+      "additionalProperties": false,
+      "properties": {
+        "card_id": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Card Id",
+          "type": "string"
+        },
+        "card_type": {
+          "enum": [
+            "work",
+            "author",
+            "genre",
+            "scene",
+            "voice",
+            "trope",
+            "platform",
+            "packaging",
+            "benchmark",
+            "validator"
+          ],
+          "title": "Card Type",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 1200,
+          "title": "Summary",
+          "type": "string"
+        },
+        "usage_mode": {
+          "enum": [
+            "hard_rule",
+            "risk_ready"
+          ],
+          "title": "Usage Mode",
+          "type": "string"
+        },
+        "hard_rule_eligible": {
+          "title": "Hard Rule Eligible",
+          "type": "boolean"
+        },
+        "safety_risk": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Safety Risk",
+          "type": "number"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 24,
+          "title": "Tags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "card_id",
+        "card_type",
+        "title",
+        "summary",
+        "usage_mode",
+        "hard_rule_eligible",
+        "safety_risk",
+        "tags"
+      ],
+      "title": "DistillationSelectedCard",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.distillation-coverage.v1",
+      "default": "zhimeng.distillation-coverage.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "read_only": {
+      "const": true,
+      "default": true,
+      "title": "Read Only",
+      "type": "boolean"
+    },
+    "query": {
+      "maxLength": 1000,
+      "minLength": 1,
+      "title": "Query",
+      "type": "string"
+    },
+    "profile": {
+      "enum": [
+        "scene",
+        "chapter",
+        "draft_assist",
+        "mechanism_transfer",
+        "review",
+        "rewrite",
+        "volume",
+        "deai",
+        "style_calibration",
+        "story_unit",
+        "debt_recall",
+        "packaging",
+        "benchmark"
+      ],
+      "title": "Profile",
+      "type": "string"
+    },
+    "target_health": {
+      "enum": [
+        "healthy",
+        "degraded",
+        "blocked"
+      ],
+      "title": "Target Health",
+      "type": "string"
+    },
+    "writing_gate": {
+      "enum": [
+        "proceed_with_distillation_context",
+        "pause_and_request_benchmark_sources",
+        "validate_existing_cards_or_risk_draft",
+        "pause_and_request_sources",
+        "proceed_with_risk_only",
+        "ask_user_or_proceed_with_risk"
+      ],
+      "title": "Writing Gate",
+      "type": "string"
+    },
+    "recommended_next_step": {
+      "enum": [
+        "run_context_and_write",
+        "validate_existing_cards_or_run_risk_context",
+        "run_risk_context_only",
+        "ask_user_for_same_type_sources",
+        "ask_user_or_run_context_with_risk"
+      ],
+      "title": "Recommended Next Step",
+      "type": "string"
+    },
+    "risk_preview_allowed": {
+      "title": "Risk Preview Allowed",
+      "type": "boolean"
+    },
+    "formal_injection_allowed": {
+      "title": "Formal Injection Allowed",
+      "type": "boolean"
+    },
+    "source_coverage_ratio": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Source Coverage Ratio",
+      "type": "number"
+    },
+    "formal_coverage_ratio": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Formal Coverage Ratio",
+      "type": "number"
+    },
+    "matched_cards": {
+      "minimum": 0,
+      "title": "Matched Cards",
+      "type": "integer"
+    },
+    "available_matched_cards": {
+      "minimum": 0,
+      "title": "Available Matched Cards",
+      "type": "integer"
+    },
+    "selected_type_counts": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "propertyNames": {
+        "enum": [
+          "work",
+          "author",
+          "genre",
+          "scene",
+          "voice",
+          "trope",
+          "platform",
+          "packaging",
+          "benchmark",
+          "validator"
+        ]
+      },
+      "title": "Selected Type Counts",
+      "type": "object"
+    },
+    "selected_hard_rule_type_counts": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "propertyNames": {
+        "enum": [
+          "work",
+          "author",
+          "genre",
+          "scene",
+          "voice",
+          "trope",
+          "platform",
+          "packaging",
+          "benchmark",
+          "validator"
+        ]
+      },
+      "title": "Selected Hard Rule Type Counts",
+      "type": "object"
+    },
+    "selected_risk_ready_type_counts": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "propertyNames": {
+        "enum": [
+          "work",
+          "author",
+          "genre",
+          "scene",
+          "voice",
+          "trope",
+          "platform",
+          "packaging",
+          "benchmark",
+          "validator"
+        ]
+      },
+      "title": "Selected Risk Ready Type Counts",
+      "type": "object"
+    },
+    "source_quota_gaps": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "propertyNames": {
+        "enum": [
+          "work",
+          "author",
+          "genre",
+          "scene",
+          "voice",
+          "trope",
+          "platform",
+          "packaging",
+          "benchmark",
+          "validator"
+        ]
+      },
+      "title": "Source Quota Gaps",
+      "type": "object"
+    },
+    "formal_quota_gaps": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "propertyNames": {
+        "enum": [
+          "work",
+          "author",
+          "genre",
+          "scene",
+          "voice",
+          "trope",
+          "platform",
+          "packaging",
+          "benchmark",
+          "validator"
+        ]
+      },
+      "title": "Formal Quota Gaps",
+      "type": "object"
+    },
+    "missing_types": {
+      "items": {
+        "enum": [
+          "work",
+          "author",
+          "genre",
+          "scene",
+          "voice",
+          "trope",
+          "platform",
+          "packaging",
+          "benchmark",
+          "validator"
+        ],
+        "type": "string"
+      },
+      "title": "Missing Types",
+      "type": "array"
+    },
+    "formal_missing_types": {
+      "items": {
+        "enum": [
+          "work",
+          "author",
+          "genre",
+          "scene",
+          "voice",
+          "trope",
+          "platform",
+          "packaging",
+          "benchmark",
+          "validator"
+        ],
+        "type": "string"
+      },
+      "title": "Formal Missing Types",
+      "type": "array"
+    },
+    "selected_cards": {
+      "items": {
+        "$ref": "#/$defs/DistillationSelectedCard"
+      },
+      "maxItems": 24,
+      "title": "Selected Cards",
+      "type": "array"
+    },
+    "feed_request": {
+      "maxLength": 2400,
+      "title": "Feed Request",
+      "type": "string"
+    },
+    "library_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Library Fingerprint",
+      "type": "string"
+    },
+    "tool_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Tool Fingerprint",
+      "type": "string"
+    },
+    "observed_at": {
+      "format": "date-time",
+      "title": "Observed At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "query",
+    "profile",
+    "target_health",
+    "writing_gate",
+    "recommended_next_step",
+    "risk_preview_allowed",
+    "formal_injection_allowed",
+    "source_coverage_ratio",
+    "formal_coverage_ratio",
+    "matched_cards",
+    "available_matched_cards",
+    "selected_type_counts",
+    "selected_hard_rule_type_counts",
+    "selected_risk_ready_type_counts",
+    "source_quota_gaps",
+    "formal_quota_gaps",
+    "missing_types",
+    "formal_missing_types",
+    "selected_cards",
+    "feed_request",
+    "library_fingerprint",
+    "tool_fingerprint",
+    "observed_at"
+  ],
+  "title": "DistillationCoverageResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/distillation-coverage.schema.json"
+}

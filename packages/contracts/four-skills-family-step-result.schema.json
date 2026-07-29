@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/four-skills-family-step-result.schema.json",
+  "title": "FourSkillsFamilyStepResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "family",
+    "batch_id",
+    "probe_id",
+    "executed",
+    "writes_project_truth"
+  ],
+  "properties": {
+    "schema": {
+      "const": "zhimeng.four-skills-family-step-result.v1",
+      "type": "string"
+    },
+    "family": {
+      "enum": [
+        "source_ingest",
+        "distillation",
+        "knowledge_context",
+        "creation_suite"
+      ],
+      "type": "string"
+    },
+    "batch_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 160
+    },
+    "probe_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 160
+    },
+    "executed": {
+      "const": true
+    },
+    "writes_project_truth": {
+      "const": false
+    }
+  }
+}

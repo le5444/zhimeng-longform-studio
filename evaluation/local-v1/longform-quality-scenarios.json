@@ -1,0 +1,62 @@
+{
+  "schema": "zhimeng.evaluation-scenario-pack.v1",
+  "pack_id": "local-v1-longform-quality-scenarios",
+  "title": "Local v1 long-form quality scenario pack",
+  "policy_version": "local-v1-evaluation-scenarios-1",
+  "quality_assessed": false,
+  "training_ready": false,
+  "formal_draft_allowed": false,
+  "not_claiming": [
+    "quality_assessed",
+    "training_dataset_ready",
+    "literary_quality_score",
+    "formal_draft_authorization_unlock",
+    "local_v1_exe"
+  ],
+  "scenarios": [
+    {
+      "scenario_id": "LFQ-001",
+      "title": "Opening three chapters pressure continuity",
+      "kind": "longform_continuity",
+      "required_chapters": ["CH001", "CH002", "CH003"],
+      "required_artifacts": ["gate_pipeline", "reader_review", "writeback_evidence"],
+      "rubric_dimensions": ["hook_strength", "continuity", "character_pressure", "cliffhanger"],
+      "min_member_count": 2,
+      "requires_provider_fingerprint": true,
+      "requires_blind_review": true
+    },
+    {
+      "scenario_id": "LFQ-002",
+      "title": "Mid-arc secret cost reveal",
+      "kind": "longform_plot_turn",
+      "required_chapters": ["CH010", "CH011", "CH012"],
+      "required_artifacts": ["literary_quality_gate", "hard_fact_gate", "reader_review_decision"],
+      "rubric_dimensions": ["payoff_clarity", "fact_consistency", "emotional_cost", "forward_pull"],
+      "min_member_count": 2,
+      "requires_provider_fingerprint": true,
+      "requires_blind_review": true
+    },
+    {
+      "scenario_id": "LFQ-003",
+      "title": "Voice stability across rewrite candidates",
+      "kind": "voice_stability",
+      "required_chapters": ["CH001"],
+      "required_artifacts": ["feedback_candidate_bundle", "eval_corpus_export"],
+      "rubric_dimensions": ["voice_consistency", "register_control", "de_ai_texture", "dialogue_naturalness"],
+      "min_member_count": 2,
+      "requires_provider_fingerprint": true,
+      "requires_blind_review": true
+    },
+    {
+      "scenario_id": "LFQ-004",
+      "title": "Non-regression after skill-rule evolution",
+      "kind": "non_regression",
+      "required_chapters": ["CH001", "CH002"],
+      "required_artifacts": ["eval_corpus_baseline", "eval_corpus_regression", "skill_rule_evolution"],
+      "rubric_dimensions": ["baseline_stability", "no_silent_degrade", "author_control"],
+      "min_member_count": 2,
+      "requires_provider_fingerprint": false,
+      "requires_blind_review": true
+    }
+  ]
+}

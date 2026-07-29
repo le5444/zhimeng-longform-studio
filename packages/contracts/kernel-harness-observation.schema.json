@@ -1,0 +1,90 @@
+{
+  "$defs": {
+    "JsonValue": {},
+    "ObservationKind": {
+      "enum": [
+        "transition",
+        "process",
+        "policy",
+        "snapshot",
+        "metric",
+        "raw_event_ref"
+      ],
+      "title": "ObservationKind",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.kernel-harness-observation.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "observation_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Observation Id",
+      "type": "string"
+    },
+    "sequence": {
+      "minimum": 1,
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "step_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Step Id",
+      "type": "string"
+    },
+    "recorded_at": {
+      "format": "date-time",
+      "title": "Recorded At",
+      "type": "string"
+    },
+    "kind": {
+      "$ref": "#/$defs/ObservationKind"
+    },
+    "normalized_activity_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Normalized Activity Id"
+    },
+    "evidence_ref": {
+      "maxLength": 2048,
+      "minLength": 1,
+      "title": "Evidence Ref",
+      "type": "string"
+    },
+    "payload": {
+      "$ref": "#/$defs/JsonValue"
+    }
+  },
+  "required": [
+    "schema",
+    "observation_id",
+    "sequence",
+    "step_id",
+    "recorded_at",
+    "kind",
+    "normalized_activity_id",
+    "evidence_ref",
+    "payload"
+  ],
+  "title": "HarnessObservation",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/kernel-harness-observation.schema.json"
+}

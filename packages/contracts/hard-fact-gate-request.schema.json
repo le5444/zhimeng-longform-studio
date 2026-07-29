@@ -1,0 +1,41 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.hard-fact-gate-request.v1",
+      "default": "zhimeng.hard-fact-gate-request.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "expected_result_fingerprint": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Result Fingerprint"
+    },
+    "expected_review_revision": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Review Revision"
+    }
+  },
+  "title": "HardFactEvaluateRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/hard-fact-gate-request.schema.json"
+}

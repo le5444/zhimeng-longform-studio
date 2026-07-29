@@ -1,0 +1,129 @@
+{
+  "$defs": {
+    "CreationPrewriteGateCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Code",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "warning",
+            "blocked"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Evidence Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "code",
+        "status",
+        "message",
+        "evidence_refs"
+      ],
+      "title": "CreationPrewriteGateCheck",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.creation-prewrite-gate-result.v1",
+      "default": "zhimeng.creation-prewrite-gate-result.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "gate_status": {
+      "enum": [
+        "blocked",
+        "risk_draft_only"
+      ],
+      "title": "Gate Status",
+      "type": "string"
+    },
+    "formal_draft_allowed": {
+      "const": false,
+      "default": false,
+      "title": "Formal Draft Allowed",
+      "type": "boolean"
+    },
+    "allowed_output": {
+      "const": "repair_plan_or_risk_draft_only",
+      "default": "repair_plan_or_risk_draft_only",
+      "title": "Allowed Output",
+      "type": "string"
+    },
+    "operation_package_id": {
+      "pattern": "^prewrite-package-[0-9a-f]{32}$",
+      "title": "Operation Package Id",
+      "type": "string"
+    },
+    "operation_package_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Operation Package Hash",
+      "type": "string"
+    },
+    "project_audit_execution_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Project Audit Execution Receipt Hash",
+      "type": "string"
+    },
+    "checks": {
+      "items": {
+        "$ref": "#/$defs/CreationPrewriteGateCheck"
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "title": "Checks",
+      "type": "array"
+    },
+    "failure_signatures": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Failure Signatures",
+      "type": "array"
+    },
+    "next_actions": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Next Actions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "gate_status",
+    "operation_package_id",
+    "operation_package_hash",
+    "project_audit_execution_receipt_hash",
+    "checks",
+    "failure_signatures",
+    "next_actions"
+  ],
+  "title": "CreationPrewriteGateResult",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/creation-prewrite-gate-result.schema.json"
+}

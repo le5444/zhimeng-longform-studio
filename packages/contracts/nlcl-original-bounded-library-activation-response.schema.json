@@ -1,0 +1,380 @@
+{
+  "$defs": {
+    "NlclOriginalBoundedLibraryActivationReceipt": {
+      "additionalProperties": false,
+      "description": "Bounded activation of present library slots.\n\nNever authorizes whole-library load or formal draft.",
+      "properties": {
+        "schema": {
+          "const": "zhimeng.nlcl-original-bounded-library-activation-receipt.v1",
+          "default": "zhimeng.nlcl-original-bounded-library-activation-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "receipt_id": {
+          "pattern": "^nlcl-original-bounded-library-activation-[0-9a-f]{32}$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "nlcl_original_library_layout_completeness_receipt_id": {
+          "pattern": "^nlcl-original-library-layout-completeness-[0-9a-f]{32}$",
+          "title": "Nlcl Original Library Layout Completeness Receipt Id",
+          "type": "string"
+        },
+        "nlcl_original_library_layout_completeness_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Nlcl Original Library Layout Completeness Receipt Hash",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "applied",
+            "rolled_back"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "chapter_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Chapter Id",
+          "type": "string"
+        },
+        "canonical_chapter_key": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Canonical Chapter Key",
+          "type": "string"
+        },
+        "activated_sources": {
+          "items": {
+            "$ref": "#/$defs/NlclOriginalBoundedLibraryActivationSource"
+          },
+          "maxItems": 64,
+          "minItems": 0,
+          "title": "Activated Sources",
+          "type": "array"
+        },
+        "activated_source_ids": {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 64,
+          "minItems": 0,
+          "title": "Activated Source Ids",
+          "type": "array"
+        },
+        "max_sources": {
+          "maximum": 64,
+          "minimum": 1,
+          "title": "Max Sources",
+          "type": "integer"
+        },
+        "activated_count": {
+          "maximum": 64,
+          "minimum": 0,
+          "title": "Activated Count",
+          "type": "integer"
+        },
+        "candidate_present_count": {
+          "maximum": 128,
+          "minimum": 0,
+          "title": "Candidate Present Count",
+          "type": "integer"
+        },
+        "max_characters": {
+          "maximum": 50000000,
+          "minimum": 1,
+          "title": "Max Characters",
+          "type": "integer"
+        },
+        "used_characters": {
+          "maximum": 50000000,
+          "minimum": 0,
+          "title": "Used Characters",
+          "type": "integer"
+        },
+        "max_tokens": {
+          "maximum": 50000000,
+          "minimum": 1,
+          "title": "Max Tokens",
+          "type": "integer"
+        },
+        "used_tokens": {
+          "maximum": 50000000,
+          "minimum": 0,
+          "title": "Used Tokens",
+          "type": "integer"
+        },
+        "written_files": {
+          "items": {
+            "$ref": "#/$defs/NlclOriginalBoundedLibraryActivationWrittenFile"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Written Files",
+          "type": "array"
+        },
+        "activation_relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?:chapter_context|07_[^/]+/nlcl_state/chapter_context)/[A-Za-z0-9._-]+_bounded_library_activation_latest\\.json$",
+          "title": "Activation Relative Path",
+          "type": "string"
+        },
+        "record_mode": {
+          "const": "product_bridge_bounded_library_activation",
+          "default": "product_bridge_bounded_library_activation",
+          "title": "Record Mode",
+          "type": "string"
+        },
+        "library_layout_inventoried": {
+          "const": true,
+          "default": true,
+          "title": "Library Layout Inventoried",
+          "type": "boolean"
+        },
+        "library_layout_assessed": {
+          "const": true,
+          "default": true,
+          "title": "Library Layout Assessed",
+          "type": "boolean"
+        },
+        "library_layout_complete": {
+          "title": "Library Layout Complete",
+          "type": "boolean"
+        },
+        "bounded_library_activated": {
+          "const": true,
+          "default": true,
+          "title": "Bounded Library Activated",
+          "type": "boolean"
+        },
+        "whole_library_load": {
+          "const": false,
+          "default": false,
+          "title": "Whole Library Load",
+          "type": "boolean"
+        },
+        "whole_library_load_forbidden": {
+          "const": true,
+          "default": true,
+          "title": "Whole Library Load Forbidden",
+          "type": "boolean"
+        },
+        "route_validated": {
+          "const": false,
+          "default": false,
+          "title": "Route Validated",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "quality_assessed": {
+          "const": false,
+          "default": false,
+          "title": "Quality Assessed",
+          "type": "boolean"
+        },
+        "novel_state_synced": {
+          "const": true,
+          "default": true,
+          "title": "Novel State Synced",
+          "type": "boolean"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "change_set_id",
+        "project_id",
+        "nlcl_original_library_layout_completeness_receipt_id",
+        "nlcl_original_library_layout_completeness_receipt_hash",
+        "outcome",
+        "chapter_id",
+        "canonical_chapter_key",
+        "activated_sources",
+        "activated_source_ids",
+        "max_sources",
+        "activated_count",
+        "candidate_present_count",
+        "max_characters",
+        "used_characters",
+        "max_tokens",
+        "used_tokens",
+        "written_files",
+        "activation_relative_path",
+        "library_layout_complete",
+        "created_at",
+        "receipt_hash"
+      ],
+      "title": "NlclOriginalBoundedLibraryActivationReceipt",
+      "type": "object"
+    },
+    "NlclOriginalBoundedLibraryActivationSource": {
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "slot_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Slot Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "section_01",
+            "section_02",
+            "section_03",
+            "section_04",
+            "section_05",
+            "section_06",
+            "section_07",
+            "section_08",
+            "section_09",
+            "state_file",
+            "chapter_context"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "character_count": {
+          "maximum": 10000000,
+          "minimum": 0,
+          "title": "Character Count",
+          "type": "integer"
+        },
+        "token_estimate": {
+          "maximum": 10000000,
+          "minimum": 0,
+          "title": "Token Estimate",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source_id",
+        "slot_id",
+        "kind",
+        "relative_path",
+        "character_count",
+        "token_estimate"
+      ],
+      "title": "NlclOriginalBoundedLibraryActivationSource",
+      "type": "object"
+    },
+    "NlclOriginalBoundedLibraryActivationWrittenFile": {
+      "additionalProperties": false,
+      "properties": {
+        "relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?:chapter_context|07_[^/]+/nlcl_state/chapter_context)/[A-Za-z0-9._-]+_bounded_library_activation_(?:latest|post_writeback)\\.(?:json|md)$",
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "source_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Hash",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "json_latest",
+            "md_latest",
+            "json_stage",
+            "md_stage"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "created": {
+          "title": "Created",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "relative_path",
+        "source_hash",
+        "kind",
+        "created"
+      ],
+      "title": "NlclOriginalBoundedLibraryActivationWrittenFile",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.nlcl-original-bounded-library-activation-response.v1",
+      "default": "zhimeng.nlcl-original-bounded-library-activation-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "change_set_id": {
+      "pattern": "^changeset-[0-9a-f]{32}$",
+      "title": "Change Set Id",
+      "type": "string"
+    },
+    "receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NlclOriginalBoundedLibraryActivationReceipt"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "history": {
+      "items": {
+        "$ref": "#/$defs/NlclOriginalBoundedLibraryActivationReceipt"
+      },
+      "maxItems": 32,
+      "title": "History",
+      "type": "array"
+    }
+  },
+  "required": [
+    "change_set_id"
+  ],
+  "title": "NlclOriginalBoundedLibraryActivationResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/nlcl-original-bounded-library-activation-response.schema.json"
+}

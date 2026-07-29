@@ -1,0 +1,317 @@
+{
+  "$defs": {
+    "NlclRouteExecutionReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "call_ordinal": {
+          "maximum": 64,
+          "minimum": 1,
+          "title": "Call Ordinal",
+          "type": "integer"
+        },
+        "context_pack_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Context Pack Hash",
+          "type": "string"
+        },
+        "context_pack_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Context Pack Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "domain_status": {
+          "anyOf": [
+            {
+              "enum": [
+                "healthy",
+                "degraded",
+                "blocked"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Domain Status"
+        },
+        "execution_receipt_id": {
+          "pattern": "^nlcl-route-exec-[0-9a-f]{32}$",
+          "title": "Execution Receipt Id",
+          "type": "string"
+        },
+        "execution_status": {
+          "enum": [
+            "succeeded",
+            "failed",
+            "cancelled"
+          ],
+          "title": "Execution Status",
+          "type": "string"
+        },
+        "input_contract": {
+          "maxLength": 256,
+          "minLength": 3,
+          "title": "Input Contract",
+          "type": "string"
+        },
+        "output_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Output Hash",
+          "type": "string"
+        },
+        "project_kb_manifest_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Kb Manifest Hash"
+        },
+        "project_kb_state_id": {
+          "anyOf": [
+            {
+              "pattern": "^project-kb-state-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Kb State Id"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        },
+        "route_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Route Receipt Hash",
+          "type": "string"
+        },
+        "route_receipt_id": {
+          "pattern": "^nlcl-route-[0-9a-f]{32}$",
+          "title": "Route Receipt Id",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "schema": {
+          "const": "zhimeng.nlcl-route-execution-receipt.v1",
+          "default": "zhimeng.nlcl-route-execution-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "skill_call_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skill Call Id"
+        },
+        "skill_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "title": "Skill Id",
+          "type": "string"
+        },
+        "skill_receipt_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skill Receipt Hash"
+        },
+        "skill_receipt_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skill Receipt Id"
+        },
+        "tool_call_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Tool Call Id",
+          "type": "string"
+        },
+        "tool_result_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Tool Result Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "execution_receipt_id",
+        "route_receipt_id",
+        "route_receipt_hash",
+        "context_pack_id",
+        "context_pack_hash",
+        "call_ordinal",
+        "skill_id",
+        "input_contract",
+        "run_id",
+        "tool_call_id",
+        "execution_status",
+        "output_hash",
+        "tool_result_hash",
+        "created_at",
+        "receipt_hash"
+      ],
+      "title": "NlclRouteExecutionReceipt",
+      "type": "object"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/nlcl-route-execution-state.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "call_ordinal": {
+      "maximum": 64,
+      "minimum": 1,
+      "title": "Call Ordinal",
+      "type": "integer"
+    },
+    "context_pack_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Context Pack Id",
+      "type": "string"
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error Code"
+    },
+    "error_message": {
+      "anyOf": [
+        {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error Message"
+    },
+    "receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NlclRouteExecutionReceipt"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "route_receipt_id": {
+      "pattern": "^nlcl-route-[0-9a-f]{32}$",
+      "title": "Route Receipt Id",
+      "type": "string"
+    },
+    "run_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Run Id"
+    },
+    "schema": {
+      "const": "zhimeng.nlcl-route-execution-state.v1",
+      "default": "zhimeng.nlcl-route-execution-state.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "awaiting_execution",
+        "running",
+        "succeeded",
+        "failed",
+        "cancelled"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "tool_call_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tool Call Id"
+    }
+  },
+  "required": [
+    "route_receipt_id",
+    "context_pack_id",
+    "call_ordinal",
+    "status"
+  ],
+  "title": "NlclRouteExecutionState",
+  "type": "object"
+}

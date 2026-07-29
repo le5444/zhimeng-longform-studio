@@ -1,0 +1,175 @@
+{
+  "$comment": "Canonical hashes and the completed predecessor chain MUST also pass ProviderIoBoundary.model_validate_json and validate_workflow_checkpoint_chain.",
+  "$defs": {
+    "ExecutorIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "executor_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Executor Id",
+          "type": "string"
+        },
+        "implementation": {
+          "minLength": 1,
+          "title": "Implementation",
+          "type": "string"
+        },
+        "instance_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Instance Id"
+        },
+        "kind": {
+          "$ref": "#/$defs/ExecutorKind"
+        },
+        "protocol_version": {
+          "minLength": 1,
+          "title": "Protocol Version",
+          "type": "string"
+        },
+        "version": {
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "executor_id",
+        "kind",
+        "implementation",
+        "version",
+        "protocol_version",
+        "instance_id"
+      ],
+      "title": "ExecutorIdentity",
+      "type": "object"
+    },
+    "ExecutorKind": {
+      "enum": [
+        "embedded",
+        "process",
+        "remote"
+      ],
+      "title": "ExecutorKind",
+      "type": "string"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/provider-io-boundary.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "boundary_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Boundary Hash",
+      "type": "string"
+    },
+    "boundary_id": {
+      "pattern": "^provider-io-[0-9a-f]{32}$",
+      "title": "Boundary Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "executor": {
+      "$ref": "#/$defs/ExecutorIdentity"
+    },
+    "formal_draft_allowed": {
+      "const": false,
+      "title": "Formal Draft Allowed",
+      "type": "boolean"
+    },
+    "last_step_checkpoint_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Last Step Checkpoint Hash",
+      "type": "string"
+    },
+    "last_step_checkpoint_id": {
+      "pattern": "^workflow-checkpoint-[0-9a-f]{32}$",
+      "title": "Last Step Checkpoint Id",
+      "type": "string"
+    },
+    "plan_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Plan Hash",
+      "type": "string"
+    },
+    "provider_dispatch_config_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Provider Dispatch Config Fingerprint",
+      "type": "string"
+    },
+    "provider_model": {
+      "anyOf": [
+        {
+          "maxLength": 512,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Provider Model"
+    },
+    "request_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Request Hash",
+      "type": "string"
+    },
+    "run_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "schema": {
+      "const": "zhimeng.provider-io-boundary.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "status": {
+      "const": "dispatching",
+      "title": "Status",
+      "type": "string"
+    },
+    "workflow_plan_id": {
+      "pattern": "^workflow-plan-[0-9a-f]{32}$",
+      "title": "Workflow Plan Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "boundary_id",
+    "workflow_plan_id",
+    "plan_hash",
+    "run_id",
+    "request_hash",
+    "provider_model",
+    "provider_dispatch_config_fingerprint",
+    "executor",
+    "last_step_checkpoint_id",
+    "last_step_checkpoint_hash",
+    "status",
+    "formal_draft_allowed",
+    "created_at",
+    "boundary_hash"
+  ],
+  "title": "ProviderIoBoundary",
+  "type": "object"
+}

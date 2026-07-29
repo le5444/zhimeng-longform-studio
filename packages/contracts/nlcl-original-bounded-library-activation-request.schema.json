@@ -1,0 +1,25 @@
+{
+  "additionalProperties": false,
+  "description": "Author-triggered bounded library activation after layout completeness.",
+  "properties": {
+    "expected_nlcl_original_library_layout_completeness_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Nlcl Original Library Layout Completeness Receipt Hash",
+      "type": "string"
+    },
+    "max_sources": {
+      "default": 16,
+      "maximum": 64,
+      "minimum": 1,
+      "title": "Max Sources",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "expected_nlcl_original_library_layout_completeness_receipt_hash"
+  ],
+  "title": "NlclOriginalBoundedLibraryActivationRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/nlcl-original-bounded-library-activation-request.schema.json"
+}

@@ -1,0 +1,41 @@
+{
+  "schema": "zhimeng.skill-manifest.v1",
+  "id": "novel-creation-suite.draft-gate",
+  "display_name": "Creation Suite Post-Draft Gate",
+  "description": "Deterministic post-draft delivery-contract and bounded formal-knowledge validator check over inline accepted prose bytes; it never assesses prose quality or authorizes a formal draft.",
+  "kind": "deterministic_tool",
+  "version": "2026.07.23-draft-gate.2",
+  "source": {
+    "type": "builtin_managed",
+    "reference": "PROVENANCE.md",
+    "license": null,
+    "source_url": null,
+    "source_version": null,
+    "modified": true
+  },
+  "entrypoint": "run_draft_gate.py",
+  "approval": "none",
+  "permissions": {
+    "read": [
+      "bound_project_snapshot"
+    ],
+    "write": [
+      "run_staging"
+    ],
+    "network": false,
+    "secrets": []
+  },
+  "timeout_seconds": 60,
+  "exit_codes": {
+    "0": "success",
+    "1": "domain_blocked"
+  },
+  "artifacts": [
+    "draft_gate"
+  ],
+  "capabilities": [
+    "knowledge_validator_bundle.v1"
+  ],
+  "input_schema": "https://zhimeng.local/contracts/creation-draft-gate-request.schema.json",
+  "output_schema": "https://zhimeng.local/contracts/creation-draft-gate-result.schema.json"
+}

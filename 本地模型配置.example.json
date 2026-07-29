@@ -1,0 +1,9 @@
+{
+  "_说明": "把这个文件复制一份改名成「本地模型配置.json」，填上你自己的信息即可。该文件不会进版本管理。",
+  "_project说明": "project 填你的小说文件夹路径；留空则用仓库自带的样例小说做演示。",
+
+  "base_url": "https://api.example.com/v1",
+  "model": "your-model-name",
+  "api_key": "在这里填你的 key",
+  "project": ""
+}

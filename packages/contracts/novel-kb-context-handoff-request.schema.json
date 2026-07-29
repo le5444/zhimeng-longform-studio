@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/novel-kb-context-handoff-request.schema.json",
+  "title": "Novel KB assemble-context handoff request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "context_handoff_id",
+    "handoff_key",
+    "project",
+    "workflow",
+    "upstream",
+    "distillation_index",
+    "downstream",
+    "route",
+    "activation",
+    "approval",
+    "permissions",
+    "constraints",
+    "formal_draft_allowed"
+  ],
+  "properties": {
+    "schema": { "const": "zhimeng.novel-kb-context-handoff-request.v1" },
+    "context_handoff_id": { "type": "string", "pattern": "^context-handoff-[0-9a-f]{32}$" },
+    "handoff_key": { "const": "novel-kb-import-index-to-assemble-context" },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project_id", "revision", "fingerprint"],
+      "properties": {
+        "project_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workflow_plan_id", "checkpoint_id", "tool_call_id", "skill_call_id", "plan_hash", "checkpoint_hash"],
+      "properties": {
+        "workflow_plan_id": { "type": "string", "pattern": "^workflow-plan-[0-9a-f]{32}$" },
+        "checkpoint_id": { "type": "string", "pattern": "^workflow-checkpoint-[0-9a-f]{32}$" },
+        "tool_call_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "skill_call_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "plan_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "checkpoint_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "upstream": { "type": "object" },
+    "distillation_index": {
+      "type": "object",
+      "required": ["schema", "handoff_id", "entries", "no_full_card_text_copied"],
+      "properties": {
+        "schema": { "const": "zhimeng.nlcl-distillation-index-handoff.v1" },
+        "handoff_id": { "type": "string", "pattern": "^skill-handoff-[0-9a-f]{32}$" },
+        "entries": { "type": "array", "minItems": 3, "maxItems": 3 },
+        "no_full_card_text_copied": { "const": true }
+      }
+    },
+    "downstream": { "type": "object" },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "stage", "chapter_id", "task_intent", "route_terms"],
+      "properties": {
+        "profile": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" },
+        "stage": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" },
+        "chapter_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "task_intent": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "route_terms": { "type": "array", "items": { "type": "string", "maxLength": 160 }, "maxItems": 64 }
+      }
+    },
+    "activation": { "type": "object" },
+    "approval": {
+      "type": "object",
+      "required": ["approved", "approved_by", "approved_at", "risk_acknowledged"],
+      "properties": {
+        "approved": { "const": true },
+        "approved_by": { "const": "author" },
+        "approved_at": { "type": "string", "format": "date-time" },
+        "risk_acknowledged": { "const": true }
+      }
+    },
+    "permissions": { "type": "object" },
+    "constraints": {
+      "type": "object",
+      "required": ["no_full_card_text_copied", "formal_draft_allowed", "project_truth_not_written", "route_health_ready_is_not_validated", "writes_formal_prose"],
+      "properties": {
+        "no_full_card_text_copied": { "const": true },
+        "formal_draft_allowed": { "const": false },
+        "project_truth_not_written": { "const": true },
+        "route_health_ready_is_not_validated": { "const": true },
+        "writes_formal_prose": { "const": false }
+      }
+    },
+    "formal_draft_allowed": { "const": false }
+  }
+}

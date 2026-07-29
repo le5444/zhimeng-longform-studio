@@ -1,0 +1,55 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "enum": [
+        "enable",
+        "disable",
+        "upgrade",
+        "rollback",
+        "inherit"
+      ],
+      "title": "Action",
+      "type": "string"
+    },
+    "skill_version_id": {
+      "anyOf": [
+        {
+          "pattern": "^skill-version-[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Skill Version Id"
+    },
+    "expected_state_revision": {
+      "minimum": 0,
+      "title": "Expected State Revision",
+      "type": "integer"
+    },
+    "expected_version_id": {
+      "anyOf": [
+        {
+          "pattern": "^skill-version-[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Version Id"
+    }
+  },
+  "required": [
+    "action",
+    "expected_state_revision"
+  ],
+  "title": "ManagedSkillActivationRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/managed-skill-activation-request.schema.json"
+}

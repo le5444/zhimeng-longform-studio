@@ -1,0 +1,29 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "expected_source_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Source Receipt Hash",
+      "type": "string"
+    },
+    "expected_draft_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Draft Hash",
+      "type": "string"
+    },
+    "expected_candidate_set_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Candidate Set Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "expected_source_receipt_hash",
+    "expected_draft_hash",
+    "expected_candidate_set_hash"
+  ],
+  "title": "KnowledgeFormalizationRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/knowledge-formalization-request.schema.json"
+}

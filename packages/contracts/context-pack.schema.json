@@ -1,0 +1,796 @@
+{
+  "$defs": {
+    "ContextAuthority": {
+      "enum": [
+        "project_truth",
+        "formal_knowledge",
+        "reference",
+        "risk"
+      ],
+      "title": "ContextAuthority",
+      "type": "string"
+    },
+    "ContextBudget": {
+      "additionalProperties": false,
+      "properties": {
+        "character_estimator": {
+          "const": "unicode_codepoints_v1",
+          "default": "unicode_codepoints_v1",
+          "title": "Character Estimator",
+          "type": "string"
+        },
+        "max_characters": {
+          "minimum": 1,
+          "title": "Max Characters",
+          "type": "integer"
+        },
+        "max_tokens": {
+          "minimum": 1,
+          "title": "Max Tokens",
+          "type": "integer"
+        },
+        "overflow_characters": {
+          "minimum": 0,
+          "title": "Overflow Characters",
+          "type": "integer"
+        },
+        "overflow_tokens": {
+          "minimum": 0,
+          "title": "Overflow Tokens",
+          "type": "integer"
+        },
+        "remaining_characters": {
+          "minimum": 0,
+          "title": "Remaining Characters",
+          "type": "integer"
+        },
+        "remaining_tokens": {
+          "minimum": 0,
+          "title": "Remaining Tokens",
+          "type": "integer"
+        },
+        "token_estimator": {
+          "const": "conservative_utf8_bytes_div3_v1",
+          "default": "conservative_utf8_bytes_div3_v1",
+          "title": "Token Estimator",
+          "type": "string"
+        },
+        "used_characters": {
+          "minimum": 0,
+          "title": "Used Characters",
+          "type": "integer"
+        },
+        "used_tokens": {
+          "minimum": 0,
+          "title": "Used Tokens",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_characters",
+        "used_characters",
+        "remaining_characters",
+        "overflow_characters",
+        "max_tokens",
+        "used_tokens",
+        "remaining_tokens",
+        "overflow_tokens"
+      ],
+      "title": "ContextBudget",
+      "type": "object"
+    },
+    "ContextExcludedFragment": {
+      "additionalProperties": false,
+      "properties": {
+        "authority": {
+          "$ref": "#/$defs/ContextAuthority"
+        },
+        "candidate_exclusion_reason": {
+          "anyOf": [
+            {
+              "maxLength": 1024,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Candidate Exclusion Reason"
+        },
+        "eligible": {
+          "title": "Eligible",
+          "type": "boolean"
+        },
+        "estimated_characters": {
+          "maximum": 2000000,
+          "minimum": 1,
+          "title": "Estimated Characters",
+          "type": "integer"
+        },
+        "estimated_tokens": {
+          "maximum": 1000000,
+          "minimum": 1,
+          "title": "Estimated Tokens",
+          "type": "integer"
+        },
+        "exclusion_reason": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Exclusion Reason",
+          "type": "string"
+        },
+        "fragment_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fragment Hash",
+          "type": "string"
+        },
+        "knowledge_provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KnowledgeProvenanceRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "mandatory": {
+          "title": "Mandatory",
+          "type": "boolean"
+        },
+        "priority": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "title": "Priority",
+          "type": "integer"
+        },
+        "source_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Hash",
+          "type": "string"
+        },
+        "source_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Source Type",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "source_type",
+        "title",
+        "authority",
+        "version",
+        "source_hash",
+        "priority",
+        "mandatory",
+        "eligible",
+        "fragment_hash",
+        "estimated_characters",
+        "estimated_tokens",
+        "exclusion_reason"
+      ],
+      "title": "ContextExcludedFragment",
+      "type": "object"
+    },
+    "ContextGate": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/ContextGateSeverity"
+        },
+        "source_id": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Id"
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "message"
+      ],
+      "title": "ContextGate",
+      "type": "object"
+    },
+    "ContextGateSeverity": {
+      "enum": [
+        "warning",
+        "blocking"
+      ],
+      "title": "ContextGateSeverity",
+      "type": "string"
+    },
+    "ContextIncludedFragment": {
+      "additionalProperties": false,
+      "properties": {
+        "authority": {
+          "$ref": "#/$defs/ContextAuthority"
+        },
+        "content": {
+          "maxLength": 500000,
+          "minLength": 1,
+          "title": "Content",
+          "type": "string"
+        },
+        "estimated_characters": {
+          "maximum": 2000000,
+          "minimum": 1,
+          "title": "Estimated Characters",
+          "type": "integer"
+        },
+        "estimated_tokens": {
+          "maximum": 1000000,
+          "minimum": 1,
+          "title": "Estimated Tokens",
+          "type": "integer"
+        },
+        "fragment_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fragment Hash",
+          "type": "string"
+        },
+        "knowledge_provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KnowledgeProvenanceRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "mandatory": {
+          "title": "Mandatory",
+          "type": "boolean"
+        },
+        "priority": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "title": "Priority",
+          "type": "integer"
+        },
+        "selection_reason": {
+          "enum": [
+            "mandatory",
+            "priority"
+          ],
+          "title": "Selection Reason",
+          "type": "string"
+        },
+        "source_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Hash",
+          "type": "string"
+        },
+        "source_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Source Type",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "source_type",
+        "title",
+        "authority",
+        "version",
+        "source_hash",
+        "priority",
+        "mandatory",
+        "content",
+        "fragment_hash",
+        "estimated_characters",
+        "estimated_tokens",
+        "selection_reason"
+      ],
+      "title": "ContextIncludedFragment",
+      "type": "object"
+    },
+    "ContextProviderMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "maxLength": 4000000,
+          "minLength": 1,
+          "title": "Content",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "system",
+            "user",
+            "assistant"
+          ],
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "content"
+      ],
+      "title": "ContextProviderMessage",
+      "type": "object"
+    },
+    "ContextReadiness": {
+      "enum": [
+        "ready",
+        "degraded",
+        "blocked"
+      ],
+      "title": "ContextReadiness",
+      "type": "string"
+    },
+    "FormalKnowledgeCardSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "card_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Card Id",
+          "type": "string"
+        },
+        "content_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "version_id": {
+          "pattern": "^knowledge-version-[0-9a-f]{32}$",
+          "title": "Version Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "card_id",
+        "version_id",
+        "content_hash"
+      ],
+      "title": "FormalKnowledgeCardSelector",
+      "type": "object"
+    },
+    "FormalKnowledgeSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "cards": {
+          "items": {
+            "$ref": "#/$defs/FormalKnowledgeCardSelector"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Cards",
+          "type": "array"
+        },
+        "expected_knowledge_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Expected Knowledge Fingerprint",
+          "type": "string"
+        },
+        "formalization_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Formalization Receipt Hash",
+          "type": "string"
+        },
+        "formalization_receipt_id": {
+          "pattern": "^knowledge-formalization-[0-9a-f]{32}$",
+          "title": "Formalization Receipt Id",
+          "type": "string"
+        },
+        "schema": {
+          "const": "zhimeng.formal-knowledge-selector.v1",
+          "default": "zhimeng.formal-knowledge-selector.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "source_import_id": {
+          "pattern": "^source-import-[0-9a-f]{32}$",
+          "title": "Source Import Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_import_id",
+        "formalization_receipt_id",
+        "formalization_receipt_hash",
+        "expected_knowledge_fingerprint",
+        "cards"
+      ],
+      "title": "FormalKnowledgeSelector",
+      "type": "object"
+    },
+    "KnowledgeProvenanceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "pattern": "^knowledge-candidate-[0-9a-f]{32}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "candidate_origin_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Candidate Origin Hash",
+          "type": "string"
+        },
+        "card_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Card Id",
+          "type": "string"
+        },
+        "cards_draft_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Cards Draft Hash",
+          "type": "string"
+        },
+        "formalization_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Formalization Receipt Hash",
+          "type": "string"
+        },
+        "formalization_receipt_id": {
+          "pattern": "^knowledge-formalization-[0-9a-f]{32}$",
+          "title": "Formalization Receipt Id",
+          "type": "string"
+        },
+        "schema": {
+          "const": "zhimeng.knowledge-provenance-ref.v1",
+          "default": "zhimeng.knowledge-provenance-ref.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "source_import_id": {
+          "pattern": "^source-import-[0-9a-f]{32}$",
+          "title": "Source Import Id",
+          "type": "string"
+        },
+        "source_packet_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Packet Fingerprint",
+          "type": "string"
+        },
+        "source_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Receipt Hash",
+          "type": "string"
+        },
+        "source_receipt_id": {
+          "pattern": "^source-import-receipt-[0-9a-f]{32}$",
+          "title": "Source Receipt Id",
+          "type": "string"
+        },
+        "version_content_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Version Content Hash",
+          "type": "string"
+        },
+        "version_id": {
+          "pattern": "^knowledge-version-[0-9a-f]{32}$",
+          "title": "Version Id",
+          "type": "string"
+        },
+        "version_lineage_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Version Lineage Receipt Hash",
+          "type": "string"
+        },
+        "version_lineage_receipt_id": {
+          "pattern": "^knowledge-lineage-[0-9a-f]{32}$",
+          "title": "Version Lineage Receipt Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_import_id",
+        "source_receipt_id",
+        "source_receipt_hash",
+        "source_packet_fingerprint",
+        "cards_draft_hash",
+        "candidate_id",
+        "candidate_origin_hash",
+        "card_id",
+        "version_id",
+        "version_content_hash",
+        "version_lineage_receipt_id",
+        "version_lineage_receipt_hash",
+        "formalization_receipt_id",
+        "formalization_receipt_hash"
+      ],
+      "title": "KnowledgeProvenanceRef",
+      "type": "object"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/context-pack.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "active_chapter_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Active Chapter Id"
+    },
+    "budget": {
+      "$ref": "#/$defs/ContextBudget"
+    },
+    "compiler_version": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Compiler Version",
+      "type": "string"
+    },
+    "context_pack_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Context Pack Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "exact_provider_messages": {
+      "items": {
+        "$ref": "#/$defs/ContextProviderMessage"
+      },
+      "minItems": 2,
+      "title": "Exact Provider Messages",
+      "type": "array"
+    },
+    "excluded": {
+      "items": {
+        "$ref": "#/$defs/ContextExcludedFragment"
+      },
+      "title": "Excluded",
+      "type": "array"
+    },
+    "formal_knowledge_selector": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FormalKnowledgeSelector"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "gates": {
+      "items": {
+        "$ref": "#/$defs/ContextGate"
+      },
+      "title": "Gates",
+      "type": "array"
+    },
+    "history_message_count": {
+      "minimum": 0,
+      "title": "History Message Count",
+      "type": "integer"
+    },
+    "history_through_ordinal": {
+      "minimum": 0,
+      "title": "History Through Ordinal",
+      "type": "integer"
+    },
+    "included": {
+      "items": {
+        "$ref": "#/$defs/ContextIncludedFragment"
+      },
+      "title": "Included",
+      "type": "array"
+    },
+    "injection_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Injection Hash",
+      "type": "string"
+    },
+    "knowledge_fingerprint": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Knowledge Fingerprint"
+    },
+    "manual_file_ids": {
+      "default": [],
+      "items": {
+        "maxLength": 512,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Manual File Ids",
+      "type": "array"
+    },
+    "objective": {
+      "maxLength": 100000,
+      "minLength": 1,
+      "title": "Objective",
+      "type": "string"
+    },
+    "pack_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Pack Hash",
+      "type": "string"
+    },
+    "policy_version": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Policy Version",
+      "type": "string"
+    },
+    "profile": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_-]*$",
+      "title": "Profile",
+      "type": "string"
+    },
+    "project_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Project Fingerprint",
+      "type": "string"
+    },
+    "project_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Project Id",
+      "type": "string"
+    },
+    "project_kb_manifest_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Project Kb Manifest Hash"
+    },
+    "project_kb_state_id": {
+      "anyOf": [
+        {
+          "pattern": "^project-kb-state-[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Project Kb State Id"
+    },
+    "project_revision": {
+      "minimum": 1,
+      "title": "Project Revision",
+      "type": "integer"
+    },
+    "provider_messages_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Provider Messages Hash",
+      "type": "string"
+    },
+    "readiness": {
+      "$ref": "#/$defs/ContextReadiness"
+    },
+    "schema": {
+      "const": "zhimeng.context-pack.v1",
+      "default": "zhimeng.context-pack.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "session_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Session Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "context_pack_id",
+    "session_id",
+    "project_id",
+    "history_through_ordinal",
+    "history_message_count",
+    "objective",
+    "profile",
+    "project_revision",
+    "project_fingerprint",
+    "compiler_version",
+    "policy_version",
+    "budget",
+    "included",
+    "excluded",
+    "gates",
+    "exact_provider_messages",
+    "pack_hash",
+    "injection_hash",
+    "provider_messages_hash",
+    "readiness",
+    "created_at"
+  ],
+  "title": "ContextPack",
+  "type": "object"
+}

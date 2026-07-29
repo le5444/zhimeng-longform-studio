@@ -1,0 +1,220 @@
+{
+  "$defs": {
+    "FormalDraftProvenanceCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/FormalDraftProvenanceCheckCode"
+        },
+        "required": {
+          "title": "Required",
+          "type": "boolean"
+        },
+        "present": {
+          "title": "Present",
+          "type": "boolean"
+        },
+        "detail": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "required",
+        "present",
+        "detail"
+      ],
+      "title": "FormalDraftProvenanceCheck",
+      "type": "object"
+    },
+    "FormalDraftProvenanceCheckCode": {
+      "enum": [
+        "project_bound",
+        "change_set_bound",
+        "writeback_evidence",
+        "formal_draft_auth_on_writeback",
+        "hard_fact_gate_receipt",
+        "literary_quality_gate_receipt",
+        "gate_pipeline_receipt",
+        "author_decision_receipt",
+        "agent_change_set_provenance"
+      ],
+      "title": "FormalDraftProvenanceCheckCode",
+      "type": "string"
+    },
+    "FormalDraftProvenanceReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.formal-draft-provenance-receipt.v1",
+          "default": "zhimeng.formal-draft-provenance-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "receipt_id": {
+          "pattern": "^formal-draft-provenance-[0-9a-f]{32}$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "project_revision": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Revision"
+        },
+        "project_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Fingerprint"
+        },
+        "change_set_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Change Set Id"
+        },
+        "status": {
+          "$ref": "#/$defs/FormalDraftProvenanceStatus"
+        },
+        "authorization_input_ready": {
+          "title": "Authorization Input Ready",
+          "type": "boolean"
+        },
+        "authorization_unlock": {
+          "const": false,
+          "default": false,
+          "title": "Authorization Unlock",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "writes_project_truth": {
+          "const": false,
+          "default": false,
+          "title": "Writes Project Truth",
+          "type": "boolean"
+        },
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/FormalDraftProvenanceCheck"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Checks",
+          "type": "array"
+        },
+        "missing_required": {
+          "items": {
+            "$ref": "#/$defs/FormalDraftProvenanceCheckCode"
+          },
+          "maxItems": 32,
+          "title": "Missing Required",
+          "type": "array"
+        },
+        "policy_version": {
+          "const": "local-v1-provenance-1",
+          "default": "local-v1-provenance-1",
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "evaluated_at": {
+          "format": "date-time",
+          "title": "Evaluated At",
+          "type": "string"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "project_id",
+        "status",
+        "authorization_input_ready",
+        "checks",
+        "evaluated_at",
+        "receipt_hash"
+      ],
+      "title": "FormalDraftProvenanceReceipt",
+      "type": "object"
+    },
+    "FormalDraftProvenanceStatus": {
+      "enum": [
+        "complete",
+        "incomplete",
+        "scope_limited"
+      ],
+      "title": "FormalDraftProvenanceStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.formal-draft-provenance-response.v1",
+      "default": "zhimeng.formal-draft-provenance-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "receipt": {
+      "$ref": "#/$defs/FormalDraftProvenanceReceipt"
+    },
+    "not_claiming": {
+      "default": [
+        "formal_prose_writeback",
+        "formal_draft_authorization_unlock",
+        "four_skills_generic_exactly_once",
+        "literary_quality_gate_complete",
+        "local_v1_exe"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Not Claiming",
+      "type": "array"
+    }
+  },
+  "required": [
+    "receipt"
+  ],
+  "title": "FormalDraftProvenanceResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/formal-draft-provenance-response.schema.json"
+}

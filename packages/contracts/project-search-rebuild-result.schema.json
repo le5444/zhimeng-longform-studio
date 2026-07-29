@@ -1,0 +1,128 @@
+{
+  "$defs": {
+    "SearchIndexManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.project-search-index.v1",
+          "default": "zhimeng.project-search-index.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "builder_id": {
+          "const": "zhimeng.project-search",
+          "default": "zhimeng.project-search",
+          "title": "Builder Id",
+          "type": "string"
+        },
+        "builder_version": {
+          "const": "1",
+          "default": "1",
+          "title": "Builder Version",
+          "type": "string"
+        },
+        "source_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Fingerprint",
+          "type": "string"
+        },
+        "project_revision": {
+          "minimum": 1,
+          "title": "Project Revision",
+          "type": "integer"
+        },
+        "project_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Project Fingerprint",
+          "type": "string"
+        },
+        "knowledge_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Knowledge Fingerprint",
+          "type": "string"
+        },
+        "document_count": {
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Document Count",
+          "type": "integer"
+        },
+        "full_text_indexed": {
+          "default": true,
+          "title": "Full Text Indexed",
+          "type": "boolean"
+        },
+        "vector_index_ready": {
+          "const": false,
+          "default": false,
+          "title": "Vector Index Ready",
+          "type": "boolean"
+        },
+        "rebuilt_at": {
+          "format": "date-time",
+          "title": "Rebuilt At",
+          "type": "string"
+        },
+        "index_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Index Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "source_fingerprint",
+        "project_revision",
+        "project_fingerprint",
+        "knowledge_fingerprint",
+        "document_count",
+        "rebuilt_at",
+        "index_hash"
+      ],
+      "title": "SearchIndexManifest",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.project-search-rebuild-result.v1",
+      "default": "zhimeng.project-search-rebuild-result.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "project_id": {
+      "pattern": "^project-[0-9a-f]{24}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "rebuilt": {
+      "title": "Rebuilt",
+      "type": "boolean"
+    },
+    "status": {
+      "enum": [
+        "current",
+        "rebuilt"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "manifest": {
+      "$ref": "#/$defs/SearchIndexManifest"
+    }
+  },
+  "required": [
+    "project_id",
+    "rebuilt",
+    "status",
+    "manifest"
+  ],
+  "title": "SearchRebuildResult",
+  "type": "object"
+}

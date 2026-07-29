@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/novel-kb-handoff-request.schema.json",
+  "title": "Novel distillation to KB manager handoff request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "handoff_id",
+    "handoff_key",
+    "project",
+    "workflow",
+    "upstream",
+    "downstream",
+    "activation",
+    "approval",
+    "permissions",
+    "formal_draft_allowed"
+  ],
+  "properties": {
+    "schema": { "const": "zhimeng.novel-kb-handoff-request.v1" },
+    "handoff_id": { "type": "string", "pattern": "^skill-handoff-[0-9a-f]{32}$" },
+    "handoff_key": { "const": "novel-distillation-to-kb-manager" },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project_id", "revision", "fingerprint"],
+      "properties": {
+        "project_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workflow_plan_id", "checkpoint_id", "tool_call_id", "skill_call_id", "plan_hash", "checkpoint_hash"],
+      "properties": {
+        "workflow_plan_id": { "type": "string", "pattern": "^workflow-plan-[0-9a-f]{32}$" },
+        "checkpoint_id": { "type": "string", "pattern": "^workflow-checkpoint-[0-9a-f]{32}$" },
+        "tool_call_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "skill_call_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "plan_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "checkpoint_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "upstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_skill_id", "source_import_id", "formalization_receipt_id", "formalization_receipt_hash", "knowledge_fingerprint", "cards_hash", "cards"],
+      "properties": {
+        "source_skill_id": { "const": "novel-distillation" },
+        "source_import_id": { "type": "string", "pattern": "^source-import-[0-9a-f]{32}$" },
+        "formalization_receipt_id": { "type": "string", "pattern": "^knowledge-formalization-[0-9a-f]{32}$" },
+        "formalization_receipt_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "knowledge_fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "cards_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "cards": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["card_id", "card_type", "version_id", "content_hash", "title", "summary", "route_terms", "tags", "safety_summary"],
+            "properties": {
+              "card_id": { "type": "string", "minLength": 1, "maxLength": 160 },
+              "card_type": { "enum": ["work", "voice", "validator"] },
+              "version_id": { "type": "string", "pattern": "^knowledge-version-[0-9a-f]{32}$" },
+              "content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+              "title": { "type": "string", "minLength": 1, "maxLength": 512 },
+              "summary": { "type": "string", "minLength": 1, "maxLength": 2000 },
+              "route_terms": { "type": "array", "items": { "type": "string", "maxLength": 160 }, "maxItems": 32 },
+              "tags": { "type": "array", "items": { "type": "string", "maxLength": 160 }, "maxItems": 32 },
+              "safety_summary": { "type": "string", "maxLength": 2000 }
+            }
+          }
+        }
+      }
+    },
+    "downstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_skill_id", "capability", "contract"],
+      "properties": {
+        "target_skill_id": { "const": "novel-kb-manager" },
+        "capability": { "const": "import-distillation-index" },
+        "contract": { "const": "distillation_index active-card entries only; no full card text copied" }
+      }
+    },
+    "activation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["managed_skill_id", "skill_version_id", "skill_version", "manifest_fingerprint", "package_fingerprint", "effective_scope"],
+      "properties": {
+        "managed_skill_id": { "const": "novel-distillation.kb-handoff" },
+        "skill_version_id": { "type": "string", "pattern": "^skill-version-[0-9a-f]{32}$" },
+        "skill_version": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "manifest_fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "package_fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "effective_scope": { "enum": ["application", "project"] }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approved", "approved_by", "approved_at", "risk_acknowledged"],
+      "properties": {
+        "approved": { "const": true },
+        "approved_by": { "const": "author" },
+        "approved_at": { "type": "string", "format": "date-time" },
+        "risk_acknowledged": { "const": true }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["read", "write", "network", "secrets"],
+      "properties": {
+        "read": { "type": "array", "items": { "const": "bound_project_snapshot" }, "minItems": 1, "maxItems": 1 },
+        "write": { "type": "array", "items": { "const": "run_staging" }, "minItems": 1, "maxItems": 1 },
+        "network": { "const": false },
+        "secrets": { "type": "array", "maxItems": 0 }
+      }
+    },
+    "formal_draft_allowed": { "const": false }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "additionalProperties": false,
+  "description": "Resolve a Tomato candidate by explicit book_id or URL.\n\nThis is separate from name-search. Title/author are author-supplied metadata\nbound into the candidate used by create/prepare.",
+  "properties": {
+    "book_id": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9]{1,32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Book Id"
+    },
+    "url": {
+      "anyOf": [
+        {
+          "maxLength": 2048,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Url"
+    },
+    "title": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "author": {
+      "maxLength": 300,
+      "minLength": 1,
+      "title": "Author",
+      "type": "string"
+    }
+  },
+  "required": [
+    "title",
+    "author"
+  ],
+  "title": "TomatoResolveRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/tomato-resolve-request.schema.json"
+}

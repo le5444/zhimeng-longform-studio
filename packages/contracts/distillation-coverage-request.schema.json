@@ -1,0 +1,39 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "query": {
+      "maxLength": 1000,
+      "minLength": 1,
+      "pattern": "^[^-]",
+      "title": "Query",
+      "type": "string"
+    },
+    "profile": {
+      "enum": [
+        "scene",
+        "chapter",
+        "draft_assist",
+        "mechanism_transfer",
+        "review",
+        "rewrite",
+        "volume",
+        "deai",
+        "style_calibration",
+        "story_unit",
+        "debt_recall",
+        "packaging",
+        "benchmark"
+      ],
+      "title": "Profile",
+      "type": "string"
+    }
+  },
+  "required": [
+    "query",
+    "profile"
+  ],
+  "title": "DistillationCoverageRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/distillation-coverage-request.schema.json"
+}

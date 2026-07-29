@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/health.schema.json",
+  "title": "HealthResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "status", "service", "version", "timestamp"],
+  "properties": {
+    "schema": {"const": "zhimeng.health.v1"},
+    "status": {"enum": ["live", "ready"]},
+    "service": {"type": "string", "minLength": 1},
+    "version": {"type": "string", "minLength": 1},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "database_schema_version": {"type": "integer", "minimum": 0}
+  }
+}

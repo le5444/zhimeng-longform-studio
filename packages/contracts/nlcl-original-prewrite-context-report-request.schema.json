@@ -1,0 +1,18 @@
+{
+  "additionalProperties": false,
+  "description": "Author-triggered original-compatible prewrite context report export.",
+  "properties": {
+    "expected_nlcl_original_novel_state_sync_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Nlcl Original Novel State Sync Receipt Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "expected_nlcl_original_novel_state_sync_receipt_hash"
+  ],
+  "title": "NlclOriginalPrewriteContextReportRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/nlcl-original-prewrite-context-report-request.schema.json"
+}

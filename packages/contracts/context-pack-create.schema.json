@@ -1,0 +1,165 @@
+{
+  "$defs": {
+    "FormalKnowledgeCardSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "card_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Card Id",
+          "type": "string"
+        },
+        "content_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "version_id": {
+          "pattern": "^knowledge-version-[0-9a-f]{32}$",
+          "title": "Version Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "card_id",
+        "version_id",
+        "content_hash"
+      ],
+      "title": "FormalKnowledgeCardSelector",
+      "type": "object"
+    },
+    "FormalKnowledgeSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "cards": {
+          "items": {
+            "$ref": "#/$defs/FormalKnowledgeCardSelector"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Cards",
+          "type": "array"
+        },
+        "expected_knowledge_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Expected Knowledge Fingerprint",
+          "type": "string"
+        },
+        "formalization_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Formalization Receipt Hash",
+          "type": "string"
+        },
+        "formalization_receipt_id": {
+          "pattern": "^knowledge-formalization-[0-9a-f]{32}$",
+          "title": "Formalization Receipt Id",
+          "type": "string"
+        },
+        "schema": {
+          "const": "zhimeng.formal-knowledge-selector.v1",
+          "default": "zhimeng.formal-knowledge-selector.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "source_import_id": {
+          "pattern": "^source-import-[0-9a-f]{32}$",
+          "title": "Source Import Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_import_id",
+        "formalization_receipt_id",
+        "formalization_receipt_hash",
+        "expected_knowledge_fingerprint",
+        "cards"
+      ],
+      "title": "FormalKnowledgeSelector",
+      "type": "object"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/context-pack-create.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "active_chapter_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Active Chapter Id"
+    },
+    "expected_project_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Project Fingerprint",
+      "type": "string"
+    },
+    "expected_project_revision": {
+      "minimum": 1,
+      "title": "Expected Project Revision",
+      "type": "integer"
+    },
+    "formal_knowledge_selector": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FormalKnowledgeSelector"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "manual_file_ids": {
+      "default": [],
+      "items": {
+        "maxLength": 512,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Manual File Ids",
+      "type": "array"
+    },
+    "objective": {
+      "maxLength": 100000,
+      "minLength": 1,
+      "title": "Objective",
+      "type": "string"
+    },
+    "profile": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_-]*$",
+      "title": "Profile",
+      "type": "string"
+    },
+    "project_kb_manifest_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Project Kb Manifest Hash",
+      "type": "string"
+    },
+    "project_kb_state_id": {
+      "pattern": "^project-kb-state-[0-9a-f]{32}$",
+      "title": "Project Kb State Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "objective",
+    "profile",
+    "expected_project_revision",
+    "expected_project_fingerprint",
+    "project_kb_state_id",
+    "project_kb_manifest_hash"
+  ],
+  "title": "ContextCreateRequest",
+  "type": "object"
+}

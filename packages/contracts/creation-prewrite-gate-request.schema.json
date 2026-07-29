@@ -1,0 +1,642 @@
+{
+  "$defs": {
+    "ContextAuthority": {
+      "enum": [
+        "project_truth",
+        "formal_knowledge",
+        "reference",
+        "risk"
+      ],
+      "title": "ContextAuthority",
+      "type": "string"
+    },
+    "KnowledgeProvenanceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.knowledge-provenance-ref.v1",
+          "default": "zhimeng.knowledge-provenance-ref.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "source_import_id": {
+          "pattern": "^source-import-[0-9a-f]{32}$",
+          "title": "Source Import Id",
+          "type": "string"
+        },
+        "source_receipt_id": {
+          "pattern": "^source-import-receipt-[0-9a-f]{32}$",
+          "title": "Source Receipt Id",
+          "type": "string"
+        },
+        "source_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Receipt Hash",
+          "type": "string"
+        },
+        "source_packet_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Packet Fingerprint",
+          "type": "string"
+        },
+        "cards_draft_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Cards Draft Hash",
+          "type": "string"
+        },
+        "candidate_id": {
+          "pattern": "^knowledge-candidate-[0-9a-f]{32}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "candidate_origin_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Candidate Origin Hash",
+          "type": "string"
+        },
+        "card_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Card Id",
+          "type": "string"
+        },
+        "version_id": {
+          "pattern": "^knowledge-version-[0-9a-f]{32}$",
+          "title": "Version Id",
+          "type": "string"
+        },
+        "version_content_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Version Content Hash",
+          "type": "string"
+        },
+        "version_lineage_receipt_id": {
+          "pattern": "^knowledge-lineage-[0-9a-f]{32}$",
+          "title": "Version Lineage Receipt Id",
+          "type": "string"
+        },
+        "version_lineage_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Version Lineage Receipt Hash",
+          "type": "string"
+        },
+        "formalization_receipt_id": {
+          "pattern": "^knowledge-formalization-[0-9a-f]{32}$",
+          "title": "Formalization Receipt Id",
+          "type": "string"
+        },
+        "formalization_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Formalization Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_import_id",
+        "source_receipt_id",
+        "source_receipt_hash",
+        "source_packet_fingerprint",
+        "cards_draft_hash",
+        "candidate_id",
+        "candidate_origin_hash",
+        "card_id",
+        "version_id",
+        "version_content_hash",
+        "version_lineage_receipt_id",
+        "version_lineage_receipt_hash",
+        "formalization_receipt_id",
+        "formalization_receipt_hash"
+      ],
+      "title": "KnowledgeProvenanceRef",
+      "type": "object"
+    },
+    "PrewriteAcceptanceGate": {
+      "additionalProperties": false,
+      "properties": {
+        "required_checks": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Required Checks",
+          "type": "array"
+        },
+        "minimum_review_score": {
+          "default": 80,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Minimum Review Score",
+          "type": "integer"
+        },
+        "author_approval_required": {
+          "const": true,
+          "default": true,
+          "title": "Author Approval Required",
+          "type": "boolean"
+        },
+        "writeback_receipt_required": {
+          "const": true,
+          "default": true,
+          "title": "Writeback Receipt Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "required_checks"
+      ],
+      "title": "PrewriteAcceptanceGate",
+      "type": "object"
+    },
+    "PrewriteEvidenceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Source Type",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "authority": {
+          "$ref": "#/$defs/ContextAuthority"
+        },
+        "version": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "source_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Hash",
+          "type": "string"
+        },
+        "fragment_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fragment Hash",
+          "type": "string"
+        },
+        "content_excerpt": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Content Excerpt",
+          "type": "string"
+        },
+        "knowledge_provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KnowledgeProvenanceRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "source_id",
+        "source_type",
+        "title",
+        "authority",
+        "version",
+        "source_hash",
+        "fragment_hash",
+        "content_excerpt"
+      ],
+      "title": "PrewriteEvidenceRef",
+      "type": "object"
+    },
+    "PrewriteFailureRoute": {
+      "additionalProperties": false,
+      "properties": {
+        "failure_signature": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Failure Signature",
+          "type": "string"
+        },
+        "rewrite_from": {
+          "maxLength": 128,
+          "minLength": 2,
+          "title": "Rewrite From",
+          "type": "string"
+        }
+      },
+      "required": [
+        "failure_signature",
+        "rewrite_from"
+      ],
+      "title": "PrewriteFailureRoute",
+      "type": "object"
+    },
+    "PrewriteLibraryBudget": {
+      "additionalProperties": false,
+      "properties": {
+        "max_characters": {
+          "minimum": 1,
+          "title": "Max Characters",
+          "type": "integer"
+        },
+        "used_characters": {
+          "minimum": 0,
+          "title": "Used Characters",
+          "type": "integer"
+        },
+        "max_tokens": {
+          "minimum": 1,
+          "title": "Max Tokens",
+          "type": "integer"
+        },
+        "used_tokens": {
+          "minimum": 0,
+          "title": "Used Tokens",
+          "type": "integer"
+        },
+        "activated_source_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 256,
+          "title": "Activated Source Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "max_characters",
+        "used_characters",
+        "max_tokens",
+        "used_tokens"
+      ],
+      "title": "PrewriteLibraryBudget",
+      "type": "object"
+    },
+    "PrewriteOperationPackage": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.prewrite-operation-package.v1",
+          "default": "zhimeng.prewrite-operation-package.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "operation_package_id": {
+          "pattern": "^prewrite-package-[0-9a-f]{32}$",
+          "title": "Operation Package Id",
+          "type": "string"
+        },
+        "context_pack_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Context Pack Id",
+          "type": "string"
+        },
+        "context_pack_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Context Pack Hash",
+          "type": "string"
+        },
+        "route_receipt_id": {
+          "pattern": "^nlcl-route-[0-9a-f]{32}$",
+          "title": "Route Receipt Id",
+          "type": "string"
+        },
+        "route_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Route Receipt Hash",
+          "type": "string"
+        },
+        "project_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "project_revision": {
+          "minimum": 1,
+          "title": "Project Revision",
+          "type": "integer"
+        },
+        "project_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Project Fingerprint",
+          "type": "string"
+        },
+        "active_chapter_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Active Chapter Id"
+        },
+        "task_goal": {
+          "maxLength": 100000,
+          "minLength": 1,
+          "title": "Task Goal",
+          "type": "string"
+        },
+        "must_obey_truth": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PrewriteEvidenceRef"
+          },
+          "maxItems": 256,
+          "title": "Must Obey Truth",
+          "type": "array"
+        },
+        "current_character_state": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PrewriteEvidenceRef"
+          },
+          "maxItems": 256,
+          "title": "Current Character State",
+          "type": "array"
+        },
+        "relevant_evidence_refs": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PrewriteEvidenceRef"
+          },
+          "maxItems": 256,
+          "title": "Relevant Evidence Refs",
+          "type": "array"
+        },
+        "constraints_and_taboos": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Constraints And Taboos",
+          "type": "array"
+        },
+        "scene_contract": {
+          "$ref": "#/$defs/PrewriteSceneContract"
+        },
+        "style_output_contract": {
+          "$ref": "#/$defs/PrewriteStyleOutputContract"
+        },
+        "acceptance_gate": {
+          "$ref": "#/$defs/PrewriteAcceptanceGate"
+        },
+        "failure_routing": {
+          "items": {
+            "$ref": "#/$defs/PrewriteFailureRoute"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Failure Routing",
+          "type": "array"
+        },
+        "library_activation_budget": {
+          "$ref": "#/$defs/PrewriteLibraryBudget"
+        },
+        "whole_library_load_forbidden": {
+          "const": true,
+          "default": true,
+          "title": "Whole Library Load Forbidden",
+          "type": "boolean"
+        },
+        "readiness": {
+          "enum": [
+            "blocked",
+            "risk_draft_only"
+          ],
+          "title": "Readiness",
+          "type": "string"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "missing_requirements": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Missing Requirements",
+          "type": "array"
+        },
+        "warnings": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Warnings",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "package_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Package Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation_package_id",
+        "context_pack_id",
+        "context_pack_hash",
+        "route_receipt_id",
+        "route_receipt_hash",
+        "project_id",
+        "project_revision",
+        "project_fingerprint",
+        "task_goal",
+        "constraints_and_taboos",
+        "scene_contract",
+        "style_output_contract",
+        "acceptance_gate",
+        "failure_routing",
+        "library_activation_budget",
+        "readiness",
+        "created_at",
+        "package_hash"
+      ],
+      "title": "PrewriteOperationPackage",
+      "type": "object"
+    },
+    "PrewriteSceneContract": {
+      "additionalProperties": false,
+      "properties": {
+        "active_chapter_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Active Chapter Id"
+        },
+        "task_goal": {
+          "maxLength": 100000,
+          "minLength": 1,
+          "title": "Task Goal",
+          "type": "string"
+        },
+        "evidence_source_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Evidence Source Ids",
+          "type": "array"
+        },
+        "status": {
+          "enum": [
+            "bound",
+            "unbound"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_goal",
+        "status"
+      ],
+      "title": "PrewriteSceneContract",
+      "type": "object"
+    },
+    "PrewriteStyleOutputContract": {
+      "additionalProperties": false,
+      "properties": {
+        "selected_card_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 24,
+          "title": "Selected Card Ids",
+          "type": "array"
+        },
+        "selected_card_hashes": {
+          "default": [],
+          "items": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "maxItems": 24,
+          "title": "Selected Card Hashes",
+          "type": "array"
+        },
+        "selected_card_provenance": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/KnowledgeProvenanceRef"
+          },
+          "maxItems": 24,
+          "title": "Selected Card Provenance",
+          "type": "array"
+        },
+        "whole_library_load_forbidden": {
+          "const": true,
+          "default": true,
+          "title": "Whole Library Load Forbidden",
+          "type": "boolean"
+        },
+        "status": {
+          "enum": [
+            "bound",
+            "unbound"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "PrewriteStyleOutputContract",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.creation-prewrite-gate-request.v1",
+      "default": "zhimeng.creation-prewrite-gate-request.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "operation_package": {
+      "$ref": "#/$defs/PrewriteOperationPackage"
+    },
+    "project_audit_execution_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Project Audit Execution Receipt Hash",
+      "type": "string"
+    },
+    "project_audit_skill_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Project Audit Skill Receipt Hash",
+      "type": "string"
+    },
+    "project_audit_tool_result_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Project Audit Tool Result Hash",
+      "type": "string"
+    },
+    "project_audit_domain_status": {
+      "enum": [
+        "healthy",
+        "degraded",
+        "blocked"
+      ],
+      "title": "Project Audit Domain Status",
+      "type": "string"
+    },
+    "project_audit_finding_count": {
+      "minimum": 0,
+      "title": "Project Audit Finding Count",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "operation_package",
+    "project_audit_execution_receipt_hash",
+    "project_audit_skill_receipt_hash",
+    "project_audit_tool_result_hash",
+    "project_audit_domain_status",
+    "project_audit_finding_count"
+  ],
+  "title": "CreationPrewriteGateRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/creation-prewrite-gate-request.schema.json"
+}

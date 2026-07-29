@@ -1,0 +1,18 @@
+{
+  "additionalProperties": false,
+  "description": "Author-triggered library layout inventory after operation_package_like.",
+  "properties": {
+    "expected_nlcl_original_operation_package_like_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Nlcl Original Operation Package Like Receipt Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "expected_nlcl_original_operation_package_like_receipt_hash"
+  ],
+  "title": "NlclOriginalLibraryLayoutInventoryRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/nlcl-original-library-layout-inventory-request.schema.json"
+}

@@ -1,0 +1,89 @@
+{
+  "$defs": {
+    "TomatoSearchCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "minimum": 1,
+          "title": "Index",
+          "type": "integer"
+        },
+        "book_id": {
+          "pattern": "^[0-9]{1,32}$",
+          "title": "Book Id",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "author": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Author",
+          "type": "string"
+        }
+      },
+      "required": [
+        "index",
+        "book_id",
+        "title",
+        "author"
+      ],
+      "title": "TomatoSearchCandidate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.tomato-search.v1",
+      "default": "zhimeng.tomato-search.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "query": {
+      "title": "Query",
+      "type": "string"
+    },
+    "resolution": {
+      "enum": [
+        "auto_selected",
+        "selection_required",
+        "not_found"
+      ],
+      "title": "Resolution",
+      "type": "string"
+    },
+    "candidates": {
+      "items": {
+        "$ref": "#/$defs/TomatoSearchCandidate"
+      },
+      "maxItems": 100,
+      "title": "Candidates",
+      "type": "array"
+    },
+    "selected_candidate": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TomatoSearchCandidate"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "query",
+    "resolution",
+    "candidates"
+  ],
+  "title": "TomatoSearchResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/tomato-search.schema.json"
+}

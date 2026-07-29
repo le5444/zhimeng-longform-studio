@@ -1,0 +1,773 @@
+{
+  "$defs": {
+    "ManagedSkillActivationRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "$ref": "#/$defs/ManagedSkillScope"
+        },
+        "skill_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[a-z0-9][a-z0-9._-]*[a-z0-9]$",
+          "title": "Skill Id",
+          "type": "string"
+        },
+        "configured_state": {
+          "enum": [
+            "unconfigured",
+            "inherited",
+            "enabled",
+            "disabled"
+          ],
+          "title": "Configured State",
+          "type": "string"
+        },
+        "configured_version_id": {
+          "anyOf": [
+            {
+              "pattern": "^skill-version-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Configured Version Id"
+        },
+        "state_revision": {
+          "minimum": 0,
+          "title": "State Revision",
+          "type": "integer"
+        },
+        "effective_state": {
+          "enum": [
+            "enabled",
+            "disabled"
+          ],
+          "title": "Effective State",
+          "type": "string"
+        },
+        "effective_version_id": {
+          "anyOf": [
+            {
+              "pattern": "^skill-version-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effective Version Id"
+        },
+        "effective_scope": {
+          "enum": [
+            "application",
+            "project",
+            "none"
+          ],
+          "title": "Effective Scope",
+          "type": "string"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Updated At"
+        }
+      },
+      "required": [
+        "scope",
+        "skill_id",
+        "configured_state",
+        "state_revision",
+        "effective_state",
+        "effective_scope"
+      ],
+      "title": "ManagedSkillActivationRecord",
+      "type": "object"
+    },
+    "ManagedSkillAdaptationRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "adapter_id": {
+          "const": "zhimeng.managed-package",
+          "title": "Adapter Id",
+          "type": "string"
+        },
+        "adapter_version": {
+          "const": "1",
+          "title": "Adapter Version",
+          "type": "string"
+        },
+        "adapter_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Adapter Fingerprint",
+          "type": "string"
+        },
+        "status": {
+          "const": "validated",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "adapter_id",
+        "adapter_version",
+        "adapter_fingerprint",
+        "status"
+      ],
+      "title": "ManagedSkillAdaptationRecord",
+      "type": "object"
+    },
+    "ManagedSkillScope": {
+      "additionalProperties": false,
+      "properties": {
+        "scope_type": {
+          "enum": [
+            "application",
+            "project"
+          ],
+          "title": "Scope Type",
+          "type": "string"
+        },
+        "project_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Id"
+        }
+      },
+      "required": [
+        "scope_type"
+      ],
+      "title": "ManagedSkillScope",
+      "type": "object"
+    },
+    "ManagedSkillSourceRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "builtin_bundle",
+            "trusted_import"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "reference": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Reference",
+          "type": "string"
+        },
+        "locator_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Locator Hash",
+          "type": "string"
+        },
+        "package_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Package Fingerprint",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "reference",
+        "locator_hash",
+        "package_fingerprint"
+      ],
+      "title": "ManagedSkillSourceRecord",
+      "type": "object"
+    },
+    "ManagedSkillValidationRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "const": "passed",
+          "title": "Status",
+          "type": "string"
+        },
+        "contract_status": {
+          "enum": [
+            "passed",
+            "not_applicable"
+          ],
+          "title": "Contract Status",
+          "type": "string"
+        },
+        "isolation_status": {
+          "const": "passed",
+          "title": "Isolation Status",
+          "type": "string"
+        },
+        "input_contract_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Contract Fingerprint"
+        },
+        "output_contract_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Contract Fingerprint"
+        },
+        "contract_bundle_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contract Bundle Fingerprint"
+        },
+        "permissions": {
+          "$ref": "#/$defs/SkillPermissions"
+        }
+      },
+      "required": [
+        "status",
+        "contract_status",
+        "isolation_status",
+        "permissions"
+      ],
+      "title": "ManagedSkillValidationRecord",
+      "type": "object"
+    },
+    "ManagedSkillVersionRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "skill_version_id": {
+          "pattern": "^skill-version-[0-9a-f]{32}$",
+          "title": "Skill Version Id",
+          "type": "string"
+        },
+        "manifest": {
+          "$ref": "#/$defs/SkillManifest"
+        },
+        "manifest_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifest Fingerprint",
+          "type": "string"
+        },
+        "package_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Package Fingerprint",
+          "type": "string"
+        },
+        "file_count": {
+          "minimum": 1,
+          "title": "File Count",
+          "type": "integer"
+        },
+        "total_bytes": {
+          "minimum": 1,
+          "title": "Total Bytes",
+          "type": "integer"
+        },
+        "source": {
+          "$ref": "#/$defs/ManagedSkillSourceRecord"
+        },
+        "adaptation": {
+          "$ref": "#/$defs/ManagedSkillAdaptationRecord"
+        },
+        "validation": {
+          "$ref": "#/$defs/ManagedSkillValidationRecord"
+        },
+        "imported_at": {
+          "format": "date-time",
+          "title": "Imported At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "skill_version_id",
+        "manifest",
+        "manifest_fingerprint",
+        "package_fingerprint",
+        "file_count",
+        "total_bytes",
+        "source",
+        "adaptation",
+        "validation",
+        "imported_at"
+      ],
+      "title": "ManagedSkillVersionRecord",
+      "type": "object"
+    },
+    "SkillExitCodes": {
+      "additionalProperties": false,
+      "properties": {
+        "0": {
+          "const": "success",
+          "title": "0",
+          "type": "string"
+        },
+        "1": {
+          "const": "domain_blocked",
+          "title": "1",
+          "type": "string"
+        }
+      },
+      "required": [
+        "0",
+        "1"
+      ],
+      "title": "SkillExitCodes",
+      "type": "object"
+    },
+    "SkillManifest": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "deterministic_tool"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "entrypoint": {
+                "type": "string"
+              },
+              "timeout_seconds": {
+                "type": "integer"
+              },
+              "exit_codes": {
+                "type": "object"
+              },
+              "artifacts": {
+                "minItems": 1
+              },
+              "input_schema": {
+                "type": "string"
+              },
+              "output_schema": {
+                "type": "string"
+              },
+              "permissions": {
+                "properties": {
+                  "read": {
+                    "const": [
+                      "bound_project_snapshot"
+                    ]
+                  },
+                  "write": {
+                    "const": [
+                      "run_staging"
+                    ]
+                  }
+                }
+              }
+            },
+            "required": [
+              "entrypoint",
+              "timeout_seconds",
+              "exit_codes",
+              "artifacts",
+              "input_schema",
+              "output_schema"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "instruction_source"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "entrypoint": {
+                "type": "null"
+              },
+              "timeout_seconds": {
+                "type": "null"
+              },
+              "exit_codes": {
+                "type": "null"
+              },
+              "artifacts": {
+                "maxItems": 0
+              },
+              "input_schema": {
+                "type": "null"
+              },
+              "output_schema": {
+                "type": "null"
+              },
+              "resources": {
+                "contains": {
+                  "const": "instruction-map.json"
+                },
+                "minContains": 1,
+                "uniqueItems": true
+              },
+              "permissions": {
+                "properties": {
+                  "read": {
+                    "maxItems": 0
+                  },
+                  "write": {
+                    "maxItems": 0
+                  }
+                }
+              }
+            },
+            "required": [
+              "resources"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "schema": {
+          "const": "zhimeng.skill-manifest.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[a-z0-9][a-z0-9._-]*[a-z0-9]$",
+          "title": "Id",
+          "type": "string"
+        },
+        "display_name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 16384,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "deterministic_tool",
+            "instruction_source"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[0-9A-Za-z][0-9A-Za-z._+-]*$",
+          "title": "Version",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/SkillManifestSource"
+        },
+        "entrypoint": {
+          "anyOf": [
+            {
+              "maxLength": 1024,
+              "minLength": 4,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Entrypoint"
+        },
+        "approval": {
+          "const": "none",
+          "title": "Approval",
+          "type": "string"
+        },
+        "permissions": {
+          "$ref": "#/$defs/SkillPermissions"
+        },
+        "timeout_seconds": {
+          "anyOf": [
+            {
+              "maximum": 900,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout Seconds"
+        },
+        "exit_codes": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SkillExitCodes"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "artifacts": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "resources": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Resources",
+          "type": "array"
+        },
+        "input_schema": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "pattern": "^https://zhimeng\\.local/contracts/[A-Za-z0-9._/-]+\\.schema\\.json$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Schema"
+        },
+        "output_schema": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "pattern": "^https://zhimeng\\.local/contracts/[A-Za-z0-9._/-]+\\.schema\\.json$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Schema"
+        }
+      },
+      "required": [
+        "schema",
+        "id",
+        "display_name",
+        "description",
+        "kind",
+        "version",
+        "source",
+        "approval",
+        "permissions"
+      ],
+      "title": "SkillManifest",
+      "type": "object"
+    },
+    "SkillManifestSource": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "builtin_managed",
+          "title": "Type",
+          "type": "string"
+        },
+        "reference": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Reference",
+          "type": "string"
+        },
+        "license": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "License"
+        },
+        "source_url": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Url"
+        },
+        "source_version": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Version"
+        },
+        "modified": {
+          "title": "Modified",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "reference",
+        "license",
+        "source_url",
+        "source_version",
+        "modified"
+      ],
+      "title": "SkillManifestSource",
+      "type": "object"
+    },
+    "SkillPermissions": {
+      "additionalProperties": false,
+      "properties": {
+        "read": {
+          "items": {
+            "const": "bound_project_snapshot",
+            "type": "string"
+          },
+          "maxItems": 1,
+          "title": "Read",
+          "type": "array"
+        },
+        "write": {
+          "items": {
+            "const": "run_staging",
+            "type": "string"
+          },
+          "maxItems": 1,
+          "title": "Write",
+          "type": "array"
+        },
+        "network": {
+          "const": false,
+          "title": "Network",
+          "type": "boolean"
+        },
+        "secrets": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 0,
+          "title": "Secrets",
+          "type": "array"
+        }
+      },
+      "required": [
+        "read",
+        "write",
+        "network",
+        "secrets"
+      ],
+      "title": "SkillPermissions",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.managed-skill-lifecycle-catalog.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "scope": {
+      "$ref": "#/$defs/ManagedSkillScope"
+    },
+    "versions": {
+      "items": {
+        "$ref": "#/$defs/ManagedSkillVersionRecord"
+      },
+      "title": "Versions",
+      "type": "array"
+    },
+    "activations": {
+      "items": {
+        "$ref": "#/$defs/ManagedSkillActivationRecord"
+      },
+      "title": "Activations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "scope",
+    "versions",
+    "activations"
+  ],
+  "title": "ManagedSkillLifecycleCatalogResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/managed-skill-lifecycle-catalog.schema.json"
+}

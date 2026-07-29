@@ -1,0 +1,291 @@
+{
+  "$defs": {
+    "FourSkillsContinuousReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.four-skills-continuous-receipt.v1",
+          "default": "zhimeng.four-skills-continuous-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "receipt_id": {
+          "pattern": "^four-skills-continuous-[0-9a-f]{32}$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "project_revision": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Revision"
+        },
+        "project_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Fingerprint"
+        },
+        "status": {
+          "$ref": "#/$defs/FourSkillsContinuousStatus"
+        },
+        "authorization_input_ready": {
+          "title": "Authorization Input Ready",
+          "type": "boolean"
+        },
+        "authorization_unlock": {
+          "const": false,
+          "default": false,
+          "title": "Authorization Unlock",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "writes_project_truth": {
+          "const": false,
+          "default": false,
+          "title": "Writes Project Truth",
+          "type": "boolean"
+        },
+        "four_skills_generic_exactly_once": {
+          "const": false,
+          "default": false,
+          "title": "Four Skills Generic Exactly Once",
+          "type": "boolean"
+        },
+        "stages": {
+          "items": {
+            "$ref": "#/$defs/FourSkillsContinuousStage"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Stages",
+          "type": "array"
+        },
+        "missing_required": {
+          "items": {
+            "$ref": "#/$defs/FourSkillsContinuousStageCode"
+          },
+          "maxItems": 8,
+          "title": "Missing Required",
+          "type": "array"
+        },
+        "source_import_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Import Id"
+        },
+        "formalization_receipt_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Formalization Receipt Id"
+        },
+        "adjacent_chain_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Adjacent Chain Id"
+        },
+        "creation_suite_chain_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Creation Suite Chain Id"
+        },
+        "policy_version": {
+          "const": "local-v1-four-skills-continuous-1",
+          "default": "local-v1-four-skills-continuous-1",
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "evaluated_at": {
+          "format": "date-time",
+          "title": "Evaluated At",
+          "type": "string"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "project_id",
+        "status",
+        "authorization_input_ready",
+        "stages",
+        "evaluated_at",
+        "receipt_hash"
+      ],
+      "title": "FourSkillsContinuousReceipt",
+      "type": "object"
+    },
+    "FourSkillsContinuousStage": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/FourSkillsContinuousStageCode"
+        },
+        "ordinal": {
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "required": {
+          "title": "Required",
+          "type": "boolean"
+        },
+        "present": {
+          "title": "Present",
+          "type": "boolean"
+        },
+        "linked": {
+          "title": "Linked",
+          "type": "boolean"
+        },
+        "status": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Status",
+          "type": "string"
+        },
+        "evidence_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Id"
+        },
+        "detail": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "ordinal",
+        "required",
+        "present",
+        "linked",
+        "status",
+        "detail"
+      ],
+      "title": "FourSkillsContinuousStage",
+      "type": "object"
+    },
+    "FourSkillsContinuousStageCode": {
+      "enum": [
+        "source_ingest",
+        "distillation_formalization",
+        "adjacent_o2",
+        "creation_suite"
+      ],
+      "title": "FourSkillsContinuousStageCode",
+      "type": "string"
+    },
+    "FourSkillsContinuousStatus": {
+      "enum": [
+        "complete",
+        "incomplete"
+      ],
+      "title": "FourSkillsContinuousStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.four-skills-continuous-response.v1",
+      "default": "zhimeng.four-skills-continuous-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "receipt": {
+      "$ref": "#/$defs/FourSkillsContinuousReceipt"
+    },
+    "not_claiming": {
+      "default": [
+        "four_skills_generic_exactly_once",
+        "raw_skill_md_execution",
+        "formal_prose_writeback",
+        "formal_draft_authorization_unlock",
+        "local_v1_exe"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Not Claiming",
+      "type": "array"
+    }
+  },
+  "required": [
+    "receipt"
+  ],
+  "title": "FourSkillsContinuousResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/four-skills-continuous-response.schema.json"
+}

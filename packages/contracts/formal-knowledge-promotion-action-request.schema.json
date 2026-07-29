@@ -1,0 +1,68 @@
+{
+  "$defs": {
+    "FormalKnowledgePromotionAction": {
+      "enum": [
+        "stage_for_review",
+        "materialize_for_review",
+        "author_request_formalization",
+        "author_withhold_formalization",
+        "commit_author_attested_formal_knowledge",
+        "rollback_author_attested_formal_knowledge",
+        "reject",
+        "rollback_stage"
+      ],
+      "title": "FormalKnowledgePromotionAction",
+      "type": "string"
+    },
+    "FormalKnowledgePromotionDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "pattern": "^feedback-candidate-[0-9a-f]{32}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "action": {
+          "$ref": "#/$defs/FormalKnowledgePromotionAction"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "action"
+      ],
+      "title": "FormalKnowledgePromotionDecision",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.formal-knowledge-promotion-action-request.v1",
+      "default": "zhimeng.formal-knowledge-promotion-action-request.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "expected_feedback_candidate_bundle_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Feedback Candidate Bundle Hash",
+      "type": "string"
+    },
+    "decisions": {
+      "items": {
+        "$ref": "#/$defs/FormalKnowledgePromotionDecision"
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "title": "Decisions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "expected_feedback_candidate_bundle_hash",
+    "decisions"
+  ],
+  "title": "FormalKnowledgePromotionActionRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/formal-knowledge-promotion-action-request.schema.json"
+}

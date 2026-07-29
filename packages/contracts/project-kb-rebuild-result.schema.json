@@ -1,0 +1,417 @@
+{
+  "$defs": {
+    "KnowledgeScopeRef": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.knowledge-scope-ref.v1",
+          "default": "zhimeng.knowledge-scope-ref.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "scope_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "scope_type": {
+          "$ref": "#/$defs/KnowledgeScopeType"
+        },
+        "project_binding_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Binding Id"
+        },
+        "state_revision": {
+          "default": 1,
+          "minimum": 1,
+          "title": "State Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "scope_id",
+        "scope_type"
+      ],
+      "title": "KnowledgeScopeRef",
+      "type": "object"
+    },
+    "KnowledgeScopeType": {
+      "description": "The ownership boundary used by the native knowledge store.",
+      "enum": [
+        "application",
+        "project"
+      ],
+      "title": "KnowledgeScopeType",
+      "type": "string"
+    },
+    "ProjectKbArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "logical_path": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Logical Path",
+          "type": "string"
+        },
+        "size_bytes": {
+          "maximum": 536870912,
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "logical_path",
+        "size_bytes",
+        "sha256"
+      ],
+      "title": "ProjectKbArtifact",
+      "type": "object"
+    },
+    "ProjectKbCounts": {
+      "additionalProperties": false,
+      "properties": {
+        "candidates": {
+          "minimum": 0,
+          "title": "Candidates",
+          "type": "integer"
+        },
+        "cards": {
+          "minimum": 0,
+          "title": "Cards",
+          "type": "integer"
+        },
+        "active_cards": {
+          "minimum": 0,
+          "title": "Active Cards",
+          "type": "integer"
+        },
+        "formalization_receipts": {
+          "minimum": 0,
+          "title": "Formalization Receipts",
+          "type": "integer"
+        },
+        "active_index_entries": {
+          "minimum": 0,
+          "title": "Active Index Entries",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "candidates",
+        "cards",
+        "active_cards",
+        "formalization_receipts",
+        "active_index_entries"
+      ],
+      "title": "ProjectKbCounts",
+      "type": "object"
+    },
+    "ProjectKbCurrentPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.project-kb-current-pointer.v1",
+          "default": "zhimeng.project-kb-current-pointer.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "state_id": {
+          "pattern": "^project-kb-state-[0-9a-f]{32}$",
+          "title": "State Id",
+          "type": "string"
+        },
+        "state_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "State Hash",
+          "type": "string"
+        },
+        "manifest_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifest Hash",
+          "type": "string"
+        },
+        "manifest_file_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifest File Sha256",
+          "type": "string"
+        },
+        "pointer_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Pointer Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "state_id",
+        "state_hash",
+        "manifest_hash",
+        "manifest_file_sha256",
+        "pointer_hash"
+      ],
+      "title": "ProjectKbCurrentPointer",
+      "type": "object"
+    },
+    "ProjectKbProjectRef": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.project-kb-project-ref.v1",
+          "default": "zhimeng.project-kb-project-ref.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fingerprint",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "revision",
+        "fingerprint"
+      ],
+      "title": "ProjectKbProjectRef",
+      "type": "object"
+    },
+    "ProjectKbSnapshotManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.project-kb-state.v1",
+          "default": "zhimeng.project-kb-state.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "state_id": {
+          "pattern": "^project-kb-state-[0-9a-f]{32}$",
+          "title": "State Id",
+          "type": "string"
+        },
+        "state_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "State Hash",
+          "type": "string"
+        },
+        "project": {
+          "$ref": "#/$defs/ProjectKbProjectRef"
+        },
+        "knowledge_scope": {
+          "$ref": "#/$defs/KnowledgeScopeRef"
+        },
+        "knowledge_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Knowledge Fingerprint",
+          "type": "string"
+        },
+        "inherited_card_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 100000,
+          "title": "Inherited Card Ids",
+          "type": "array"
+        },
+        "source_of_truth": {
+          "$ref": "#/$defs/ProjectKbSourceOfTruth"
+        },
+        "counts": {
+          "$ref": "#/$defs/ProjectKbCounts"
+        },
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/ProjectKbArtifact"
+          },
+          "maxItems": 32,
+          "minItems": 5,
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "manifest_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifest Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "state_id",
+        "state_hash",
+        "project",
+        "knowledge_scope",
+        "knowledge_fingerprint",
+        "source_of_truth",
+        "counts",
+        "artifacts",
+        "manifest_hash"
+      ],
+      "title": "ProjectKbSnapshotManifest",
+      "type": "object"
+    },
+    "ProjectKbSourceOfTruth": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.project-kb-source-of-truth.v1",
+          "default": "zhimeng.project-kb-source-of-truth.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "project_files": {
+          "const": "work_truth",
+          "default": "work_truth",
+          "title": "Project Files",
+          "type": "string"
+        },
+        "runtime_sqlite": {
+          "const": "run_truth",
+          "default": "run_truth",
+          "title": "Runtime Sqlite",
+          "type": "string"
+        },
+        "derived": {
+          "const": true,
+          "default": true,
+          "title": "Derived",
+          "type": "boolean"
+        },
+        "rebuildable": {
+          "const": true,
+          "default": true,
+          "title": "Rebuildable",
+          "type": "boolean"
+        }
+      },
+      "title": "ProjectKbSourceOfTruth",
+      "type": "object"
+    },
+    "ProjectKbStateRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.project-kb-state-record.v1",
+          "default": "zhimeng.project-kb-state-record.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ProjectKbStatus"
+        },
+        "runtime_relative_root": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Runtime Relative Root",
+          "type": "string"
+        },
+        "pointer": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProjectKbCurrentPointer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "manifest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProjectKbSnapshotManifest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "project_id",
+        "status",
+        "runtime_relative_root"
+      ],
+      "title": "ProjectKbStateRecord",
+      "type": "object"
+    },
+    "ProjectKbStatus": {
+      "enum": [
+        "missing",
+        "current",
+        "stale",
+        "tampered"
+      ],
+      "title": "ProjectKbStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.project-kb-rebuild-result.v1",
+      "default": "zhimeng.project-kb-rebuild-result.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "reused_snapshot": {
+      "title": "Reused Snapshot",
+      "type": "boolean"
+    },
+    "record": {
+      "$ref": "#/$defs/ProjectKbStateRecord"
+    }
+  },
+  "required": [
+    "reused_snapshot",
+    "record"
+  ],
+  "title": "ProjectKbRebuildResult",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/project-kb-rebuild-result.schema.json"
+}

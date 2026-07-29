@@ -1,0 +1,189 @@
+{
+  "$defs": {
+    "ContextAuthority": {
+      "enum": [
+        "project_truth",
+        "formal_knowledge",
+        "reference",
+        "risk"
+      ],
+      "title": "ContextAuthority",
+      "type": "string"
+    },
+    "SearchHit": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.project-search-hit.v1",
+          "default": "zhimeng.project-search-hit.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "source_id": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_type": {
+          "$ref": "#/$defs/SearchSourceType"
+        },
+        "authority": {
+          "$ref": "#/$defs/ContextAuthority"
+        },
+        "title": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "relative_path": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Path"
+        },
+        "version": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "source_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Hash",
+          "type": "string"
+        },
+        "snippet": {
+          "maxLength": 1024,
+          "title": "Snippet",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "score": {
+          "minimum": 0.0,
+          "title": "Score",
+          "type": "number"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Updated At"
+        }
+      },
+      "required": [
+        "source_id",
+        "source_type",
+        "authority",
+        "title",
+        "version",
+        "source_hash",
+        "snippet",
+        "reason",
+        "score"
+      ],
+      "title": "SearchHit",
+      "type": "object"
+    },
+    "SearchSourceType": {
+      "enum": [
+        "project_file",
+        "formal_knowledge",
+        "authorized_source"
+      ],
+      "title": "SearchSourceType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.project-search-query-response.v1",
+      "default": "zhimeng.project-search-query-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "project_id": {
+      "pattern": "^project-[0-9a-f]{24}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "query": {
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "Query",
+      "type": "string"
+    },
+    "index_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Index Hash",
+      "type": "string"
+    },
+    "source_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Fingerprint",
+      "type": "string"
+    },
+    "rebuilt_before_search": {
+      "title": "Rebuilt Before Search",
+      "type": "boolean"
+    },
+    "match_mode": {
+      "const": "full_text",
+      "default": "full_text",
+      "title": "Match Mode",
+      "type": "string"
+    },
+    "vector_enhanced": {
+      "const": false,
+      "default": false,
+      "title": "Vector Enhanced",
+      "type": "boolean"
+    },
+    "hit_count": {
+      "maximum": 100,
+      "minimum": 0,
+      "title": "Hit Count",
+      "type": "integer"
+    },
+    "hits": {
+      "items": {
+        "$ref": "#/$defs/SearchHit"
+      },
+      "maxItems": 100,
+      "title": "Hits",
+      "type": "array"
+    }
+  },
+  "required": [
+    "project_id",
+    "query",
+    "index_hash",
+    "source_fingerprint",
+    "rebuilt_before_search",
+    "hit_count",
+    "hits"
+  ],
+  "title": "SearchQueryResponse",
+  "type": "object"
+}

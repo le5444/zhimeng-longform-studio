@@ -1,0 +1,59 @@
+{
+  "$defs": {
+    "FourSkillsRawFamily": {
+      "enum": [
+        "source_ingest",
+        "distillation",
+        "knowledge_context",
+        "creation_suite"
+      ],
+      "title": "FourSkillsRawFamily",
+      "type": "string"
+    },
+    "FourSkillsRawMemberRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "$ref": "#/$defs/FourSkillsRawFamily"
+        },
+        "source_path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Source Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "family",
+        "source_path"
+      ],
+      "title": "FourSkillsRawMemberRequest",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.four-skills-raw-adaptation-plan-request.v1",
+      "default": "zhimeng.four-skills-raw-adaptation-plan-request.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "members": {
+      "items": {
+        "$ref": "#/$defs/FourSkillsRawMemberRequest"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "title": "Members",
+      "type": "array"
+    }
+  },
+  "required": [
+    "members"
+  ],
+  "title": "FourSkillsRawAdaptationPlanRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/four-skills-raw-adaptation-plan-request.schema.json"
+}

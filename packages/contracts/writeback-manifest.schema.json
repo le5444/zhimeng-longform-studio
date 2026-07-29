@@ -1,0 +1,307 @@
+{
+  "$defs": {
+    "ChangeOperation": {
+      "enum": [
+        "create",
+        "update",
+        "delete"
+      ],
+      "title": "ChangeOperation",
+      "type": "string"
+    },
+    "WritebackFileResult": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "const": "create"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "before_sha256": {
+                "type": "null"
+              },
+              "after_sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "result_file_id": {
+                "pattern": "^file-[0-9a-f]{32}$",
+                "type": "string"
+              },
+              "backup_ref": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "after_sha256",
+              "result_file_id"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "const": "update"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "before_sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "after_sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "result_file_id": {
+                "pattern": "^file-[0-9a-f]{32}$",
+                "type": "string"
+              },
+              "backup_ref": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "before_sha256",
+              "after_sha256",
+              "result_file_id",
+              "backup_ref"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "const": "delete"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "before_sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "after_sha256": {
+                "type": "null"
+              },
+              "result_file_id": {
+                "type": "null"
+              },
+              "backup_ref": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "before_sha256",
+              "backup_ref"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "change_id": {
+          "pattern": "^change-[0-9a-f]{32}$",
+          "title": "Change Id",
+          "type": "string"
+        },
+        "operation": {
+          "$ref": "#/$defs/ChangeOperation"
+        },
+        "relative_path": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+\\.(?:json|jsonl|md|txt|yaml|yml)$",
+          "title": "Relative Path",
+          "type": "string",
+          "x-zhimeng-invariants": [
+            "path segments cannot use Windows device names",
+            "path segments are at most 255 characters"
+          ]
+        },
+        "before_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Before Sha256"
+        },
+        "after_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "After Sha256"
+        },
+        "result_file_id": {
+          "anyOf": [
+            {
+              "pattern": "^file-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result File Id"
+        },
+        "accepted_hunk_ids": {
+          "items": {
+            "pattern": "^hunk-[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "title": "Accepted Hunk Ids",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "rejected_hunk_ids": {
+          "items": {
+            "pattern": "^hunk-[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "title": "Rejected Hunk Ids",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "backup_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Backup Ref"
+        }
+      },
+      "required": [
+        "change_id",
+        "operation",
+        "relative_path",
+        "accepted_hunk_ids",
+        "rejected_hunk_ids"
+      ],
+      "title": "WritebackFileResult",
+      "type": "object",
+      "x-zhimeng-invariants": [
+        "update before_sha256 and after_sha256 differ",
+        "accepted_hunk_ids and rejected_hunk_ids are disjoint"
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.writeback-manifest.v1",
+      "default": "zhimeng.writeback-manifest.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "change_set_id": {
+      "pattern": "^changeset-[0-9a-f]{32}$",
+      "title": "Change Set Id",
+      "type": "string"
+    },
+    "project_id": {
+      "pattern": "^project-[0-9a-f]{24}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "base_revision": {
+      "minimum": 1,
+      "title": "Base Revision",
+      "type": "integer"
+    },
+    "base_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Base Fingerprint",
+      "type": "string"
+    },
+    "result_revision": {
+      "minimum": 1,
+      "title": "Result Revision",
+      "type": "integer"
+    },
+    "result_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Result Fingerprint",
+      "type": "string"
+    },
+    "outcome": {
+      "enum": [
+        "applied",
+        "rolled_back"
+      ],
+      "title": "Outcome",
+      "type": "string"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/WritebackFileResult"
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "title": "Files",
+      "type": "array"
+    },
+    "created_directories": {
+      "items": {
+        "maxLength": 1024,
+        "minLength": 1,
+        "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+$",
+        "type": "string",
+        "x-zhimeng-invariants": [
+          "path segments cannot use Windows device names",
+          "path segments are at most 255 characters"
+        ]
+      },
+      "title": "Created Directories",
+      "type": "array",
+      "uniqueItems": true
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "change_set_id",
+    "project_id",
+    "base_revision",
+    "base_fingerprint",
+    "result_revision",
+    "result_fingerprint",
+    "outcome",
+    "files",
+    "created_at"
+  ],
+  "title": "WritebackManifest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/writeback-manifest.schema.json"
+}

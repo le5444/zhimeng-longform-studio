@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.codex/novel-creation-suite/prompt-goal-budget.schema.json",
+  "title": "Novel creation suite prompt goal budget",
+  "type": "object",
+  "required": [
+    "version",
+    "source_prompt_summary",
+    "accepted_goals",
+    "rejected_or_deferred_rules",
+    "conflict_resolution",
+    "acceptance_tests",
+    "failure_signature_if_missing",
+    "rewrite_from_if_missing"
+  ],
+  "properties": {
+    "version": {
+      "const": "v1"
+    },
+    "source_prompt_summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "accepted_goals": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 3,
+      "maxItems": 5,
+      "uniqueItems": true
+    },
+    "rejected_or_deferred_rules": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "conflict_resolution": {
+      "type": "string",
+      "minLength": 1
+    },
+    "acceptance_tests": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 2,
+      "uniqueItems": true
+    },
+    "trigger_terms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "failure_signature_if_missing": {
+      "const": "prompt_list_dead_command_overload"
+    },
+    "rewrite_from_if_missing": {
+      "const": "L2_CONTROL_CARD"
+    },
+    "draft_layer_if_ignored": {
+      "const": "L4_DRAFT_EXECUTION"
+    },
+    "deai_layer_only_if_local_wording": {
+      "const": "L5_DEAI_STYLE"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

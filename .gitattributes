@@ -1,0 +1,24 @@
+* text=auto
+
+*.py text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.ps1 text eol=crlf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary
+
+# Runtime managed snapshots keep byte-level hashes as evidence.
+/adapters/builtin/local-source-acceptance/scripts/prepare_downloaded_sources.ps1 -text
+/adapters/builtin/local-source-acceptance/scripts/distill_source_packet.py -text
+/adapters/builtin/local-source-acceptance/scripts/extract_epub_text.py -text

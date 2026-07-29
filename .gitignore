@@ -1,0 +1,78 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Runtime and local state
+.runtime/
+.codex-runtime/
+adapters/builtin/snapshots/
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+*.log
+*.err
+*.out
+
+# Desktop build
+target/
+src-tauri/target/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+.env.*
+!.env.example
+provider-settings.json
+
+desktop_packaging/.tmp-bundle-*/
+artifacts/
+
+
+# 本地模型配置（含 API key，禁止进版本管理）
+本地模型配置.json
+小说目录.txt
+
+# Local conversations, handoff notes, and machine-only material
+AGENTS.md
+.agents/
+.claude/
+.codex/
+.workbuddy/
+参考项目_github/
+system-repair-backups/
+qq-group-*-raw.jsonl
+群主*.md
+群主*.txt
+进度同步.md
+！！！先读我.md
+_claude*.md
+_extract_*.py
+_m3am_trace.py
+
+# Local live acceptance and debug evidence
+evidence/*live*.json
+evidence/runtime-provider-live-*.json
+evidence/o2b-debug-*.png
+evidence/playwright-full-*/
+evidence/project-kb-e2e-targeted/
+
+# Local instruction extraction
+docs/当前目标详细-*.md
+docs/用户指令要求-*.md

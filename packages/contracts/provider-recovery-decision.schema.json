@@ -1,0 +1,129 @@
+{
+  "$defs": {
+    "RunStatus": {
+      "enum": [
+        "queued",
+        "starting",
+        "running",
+        "awaiting_approval",
+        "paused",
+        "cancelling",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "interrupted"
+      ],
+      "title": "RunStatus",
+      "type": "string"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/provider-recovery-decision.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "enum": [
+        "adopt_persisted_candidate",
+        "abandon_and_recompile"
+      ],
+      "title": "Action",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "decision_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Decision Hash",
+      "type": "string"
+    },
+    "decision_id": {
+      "pattern": "^provider-recovery-decision-[0-9a-f]{32}$",
+      "title": "Decision Id",
+      "type": "string"
+    },
+    "dossier_id": {
+      "pattern": "^provider-recovery-[0-9a-f]{32}$",
+      "title": "Dossier Id",
+      "type": "string"
+    },
+    "instruction_dispatch_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Instruction Dispatch Receipt Hash",
+      "type": "string"
+    },
+    "instruction_dispatch_receipt_id": {
+      "pattern": "^creation-instruction-dispatch-[0-9a-f]{32}$",
+      "title": "Instruction Dispatch Receipt Id",
+      "type": "string"
+    },
+    "new_dossier_revision": {
+      "minimum": 2,
+      "title": "New Dossier Revision",
+      "type": "integer"
+    },
+    "previous_dossier_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Previous Dossier Hash",
+      "type": "string"
+    },
+    "previous_dossier_revision": {
+      "minimum": 1,
+      "title": "Previous Dossier Revision",
+      "type": "integer"
+    },
+    "previous_status": {
+      "enum": [
+        "pending",
+        "adopted",
+        "abandoned"
+      ],
+      "title": "Previous Status",
+      "type": "string"
+    },
+    "resulting_run_status": {
+      "$ref": "#/$defs/RunStatus"
+    },
+    "run_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "schema": {
+      "const": "zhimeng.provider-recovery-decision.v1",
+      "default": "zhimeng.provider-recovery-decision.v1",
+      "title": "Schema",
+      "type": "string"
+    }
+  },
+  "required": [
+    "decision_id",
+    "dossier_id",
+    "run_id",
+    "previous_dossier_hash",
+    "instruction_dispatch_receipt_id",
+    "instruction_dispatch_receipt_hash",
+    "action",
+    "previous_status",
+    "resulting_run_status",
+    "previous_dossier_revision",
+    "new_dossier_revision",
+    "created_at",
+    "decision_hash"
+  ],
+  "title": "ProviderRecoveryDecision",
+  "type": "object",
+  "x-zhimeng-invariants": [
+    "only a pending dossier can be decided",
+    "new_dossier_revision equals previous_dossier_revision plus one",
+    "decision_id is derived from dossier_id, action and previous_dossier_revision",
+    "decision_hash hashes every field except decision_hash",
+    "the decision preserves the dossier hash and instruction dispatch receipt CAS input",
+    "adopt produces a succeeded Run and abandon produces a failed Run",
+    "one decision per dossier is stored append-only"
+  ]
+}

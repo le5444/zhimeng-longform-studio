@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/novel-kb-context-handoff-result.schema.json",
+  "title": "Novel KB assemble-context handoff result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "context_handoff_id",
+    "status",
+    "source_handoff_id",
+    "distillation_index_hash",
+    "downstream_target",
+    "route_health",
+    "route_evidence_status",
+    "context_health",
+    "readiness",
+    "profile",
+    "stage",
+    "chapter_id",
+    "task_intent",
+    "route_terms",
+    "selected_entries",
+    "context_pack_intent_hash",
+    "route_receipt_intent_hash",
+    "constraints",
+    "risk_summary",
+    "next_action"
+  ],
+  "properties": {
+    "schema": { "const": "zhimeng.novel-kb-context-handoff-result.v1" },
+    "context_handoff_id": { "type": "string", "pattern": "^context-handoff-[0-9a-f]{32}$" },
+    "status": { "enum": ["context_ready", "blocked"] },
+    "source_handoff_id": { "type": "string", "pattern": "^skill-handoff-[0-9a-f]{32}$" },
+    "distillation_index_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "downstream_target": { "const": "novel-kb-manager.assemble-context" },
+    "route_health": { "enum": ["ready", "blocked", "risk_ready"] },
+    "route_evidence_status": { "const": "not_validated" },
+    "context_health": { "enum": ["ready", "blocked", "degraded"] },
+    "readiness": { "enum": ["ready", "blocked", "degraded"] },
+    "profile": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "stage": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "chapter_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "task_intent": { "type": "string", "minLength": 1, "maxLength": 4000 },
+    "route_terms": { "type": "array", "items": { "type": "string", "maxLength": 160 }, "maxItems": 64 },
+    "selected_entries": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["card_id", "card_type", "version_id", "content_hash", "title", "route_terms", "tags", "safety_summary"],
+        "properties": {
+          "card_id": { "type": "string", "minLength": 1, "maxLength": 160 },
+          "card_type": { "enum": ["work", "voice", "validator"] },
+          "version_id": { "type": "string", "pattern": "^knowledge-version-[0-9a-f]{32}$" },
+          "content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "title": { "type": "string", "minLength": 1, "maxLength": 512 },
+          "route_terms": { "type": "array", "items": { "type": "string", "maxLength": 160 }, "maxItems": 32 },
+          "tags": { "type": "array", "items": { "type": "string", "maxLength": 160 }, "maxItems": 32 },
+          "safety_summary": { "type": "string", "maxLength": 2000 }
+        }
+      }
+    },
+    "context_pack_intent_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "route_receipt_intent_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "constraints": {
+      "type": "object",
+      "required": ["no_full_card_text_copied", "formal_draft_allowed", "project_truth_not_written", "route_health_ready_is_not_validated", "writes_formal_prose"],
+      "properties": {
+        "no_full_card_text_copied": { "const": true },
+        "formal_draft_allowed": { "const": false },
+        "project_truth_not_written": { "const": true },
+        "route_health_ready_is_not_validated": { "const": true },
+        "writes_formal_prose": { "const": false }
+      }
+    },
+    "risk_summary": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "next_action": { "type": "string", "minLength": 1, "maxLength": 1000 }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "context_ready" } }, "required": ["status"] },
+      "then": { "properties": { "selected_entries": { "minItems": 3, "maxItems": 3 }, "route_health": { "const": "ready" }, "context_health": { "const": "ready" }, "readiness": { "const": "ready" } } }
+    },
+    {
+      "if": { "properties": { "status": { "const": "blocked" } }, "required": ["status"] },
+      "then": { "properties": { "selected_entries": { "maxItems": 0 } } }
+    }
+  ]
+}

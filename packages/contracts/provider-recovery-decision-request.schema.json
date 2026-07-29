@@ -1,0 +1,43 @@
+{
+  "$id": "https://zhimeng.local/contracts/provider-recovery-decision-request.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "enum": [
+        "adopt_persisted_candidate",
+        "abandon_and_recompile"
+      ],
+      "title": "Action",
+      "type": "string"
+    },
+    "expected_dossier_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Dossier Hash",
+      "type": "string"
+    },
+    "expected_dossier_revision": {
+      "minimum": 1,
+      "title": "Expected Dossier Revision",
+      "type": "integer"
+    },
+    "schema": {
+      "const": "zhimeng.provider-recovery-decision-request.v1",
+      "default": "zhimeng.provider-recovery-decision-request.v1",
+      "title": "Schema",
+      "type": "string"
+    }
+  },
+  "required": [
+    "expected_dossier_revision",
+    "expected_dossier_hash",
+    "action"
+  ],
+  "title": "ProviderRecoveryDecisionRequest",
+  "type": "object",
+  "x-zhimeng-invariants": [
+    "expected_dossier_revision and expected_dossier_hash form one CAS precondition",
+    "adopt_persisted_candidate requires a valid persisted candidate",
+    "neither recovery action authorizes Provider replay"
+  ]
+}

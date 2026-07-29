@@ -1,0 +1,178 @@
+{
+  "$defs": {
+    "FormalDraftAuthorDecisionReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.formal-draft-author-decision-receipt.v1",
+          "default": "zhimeng.formal-draft-author-decision-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "receipt_id": {
+          "pattern": "^formal-draft-author-[0-9a-f]{32}$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "project_revision": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Revision"
+        },
+        "project_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Fingerprint"
+        },
+        "change_set_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Change Set Id"
+        },
+        "intent": {
+          "$ref": "#/$defs/FormalDraftAuthorIntent"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "authorization_effective": {
+          "const": false,
+          "default": false,
+          "title": "Authorization Effective",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "writes_project_truth": {
+          "const": false,
+          "default": false,
+          "title": "Writes Project Truth",
+          "type": "boolean"
+        },
+        "policy_version": {
+          "const": "local-v1-locked-1",
+          "default": "local-v1-locked-1",
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "decided_at": {
+          "format": "date-time",
+          "title": "Decided At",
+          "type": "string"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "project_id",
+        "intent",
+        "decided_at",
+        "receipt_hash"
+      ],
+      "title": "FormalDraftAuthorDecisionReceipt",
+      "type": "object"
+    },
+    "FormalDraftAuthorIntent": {
+      "enum": [
+        "request_authorization",
+        "withhold_authorization",
+        "revoke_authorization"
+      ],
+      "title": "FormalDraftAuthorIntent",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.formal-draft-author-decision-response.v1",
+      "default": "zhimeng.formal-draft-author-decision-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FormalDraftAuthorDecisionReceipt"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "history": {
+      "items": {
+        "$ref": "#/$defs/FormalDraftAuthorDecisionReceipt"
+      },
+      "maxItems": 32,
+      "title": "History",
+      "type": "array"
+    },
+    "not_claiming": {
+      "default": [
+        "formal_prose_writeback",
+        "formal_draft_authorization_grant",
+        "four_skills_generic_exactly_once",
+        "literary_quality_gate_complete",
+        "local_v1_exe"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Not Claiming",
+      "type": "array"
+    }
+  },
+  "title": "FormalDraftAuthorDecisionResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/formal-draft-author-decision-response.schema.json"
+}

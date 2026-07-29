@@ -1,0 +1,18 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "source_path": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "title": "Source Path",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_path"
+  ],
+  "title": "LocalSourceInspectRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/local-source-inspect-request.schema.json"
+}

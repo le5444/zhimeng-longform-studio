@@ -1,0 +1,306 @@
+{
+  "$defs": {
+    "SkillArtifactReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]*$",
+          "title": "Artifact Type",
+          "type": "string"
+        },
+        "relative_path": {
+          "anyOf": [
+            {
+              "maxLength": 1024,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Path"
+        },
+        "content_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_type",
+        "content_hash"
+      ],
+      "title": "SkillArtifactReceipt",
+      "type": "object"
+    },
+    "SkillExecutionError": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "maxLength": 64,
+          "minLength": 2,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "retryable": {
+          "title": "Retryable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ],
+      "title": "SkillExecutionError",
+      "type": "object"
+    },
+    "SkillPermissions": {
+      "additionalProperties": false,
+      "properties": {
+        "read": {
+          "items": {
+            "const": "bound_project_snapshot",
+            "type": "string"
+          },
+          "maxItems": 1,
+          "title": "Read",
+          "type": "array"
+        },
+        "write": {
+          "items": {
+            "const": "run_staging",
+            "type": "string"
+          },
+          "maxItems": 1,
+          "title": "Write",
+          "type": "array"
+        },
+        "network": {
+          "const": false,
+          "title": "Network",
+          "type": "boolean"
+        },
+        "secrets": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 0,
+          "title": "Secrets",
+          "type": "array"
+        }
+      },
+      "required": [
+        "read",
+        "write",
+        "network",
+        "secrets"
+      ],
+      "title": "SkillPermissions",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.skill-execution-receipt.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "receipt_id": {
+      "pattern": "^skill-receipt-[0-9a-f]{32}$",
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "run_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Run Id",
+      "type": "string"
+    },
+    "tool_call_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Tool Call Id",
+      "type": "string"
+    },
+    "project_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Project Id",
+      "type": "string"
+    },
+    "project_revision": {
+      "minimum": 1,
+      "title": "Project Revision",
+      "type": "integer"
+    },
+    "project_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Project Fingerprint",
+      "type": "string"
+    },
+    "skill_version_id": {
+      "pattern": "^skill-version-[0-9a-f]{32}$",
+      "title": "Skill Version Id",
+      "type": "string"
+    },
+    "skill_id": {
+      "maxLength": 128,
+      "minLength": 3,
+      "title": "Skill Id",
+      "type": "string"
+    },
+    "skill_version": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Skill Version",
+      "type": "string"
+    },
+    "skill_kind": {
+      "enum": [
+        "deterministic_tool",
+        "instruction_source"
+      ],
+      "title": "Skill Kind",
+      "type": "string"
+    },
+    "manifest_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Manifest Fingerprint",
+      "type": "string"
+    },
+    "package_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Package Fingerprint",
+      "type": "string"
+    },
+    "permissions": {
+      "$ref": "#/$defs/SkillPermissions"
+    },
+    "permissions_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Permissions Hash",
+      "type": "string"
+    },
+    "input_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Input Hash",
+      "type": "string"
+    },
+    "output_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Output Hash",
+      "type": "string"
+    },
+    "execution_status": {
+      "enum": [
+        "succeeded",
+        "failed",
+        "cancelled"
+      ],
+      "title": "Execution Status",
+      "type": "string"
+    },
+    "domain_status": {
+      "anyOf": [
+        {
+          "enum": [
+            "healthy",
+            "degraded",
+            "blocked"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Domain Status"
+    },
+    "exit_code": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Exit Code"
+    },
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "finished_at": {
+      "format": "date-time",
+      "title": "Finished At",
+      "type": "string"
+    },
+    "duration_ms": {
+      "minimum": 0,
+      "title": "Duration Ms",
+      "type": "integer"
+    },
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/SkillArtifactReceipt"
+      },
+      "title": "Artifacts",
+      "type": "array"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SkillExecutionError"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "receipt_id",
+    "run_id",
+    "tool_call_id",
+    "project_id",
+    "project_revision",
+    "project_fingerprint",
+    "skill_version_id",
+    "skill_id",
+    "skill_version",
+    "skill_kind",
+    "manifest_fingerprint",
+    "package_fingerprint",
+    "permissions",
+    "permissions_hash",
+    "input_hash",
+    "output_hash",
+    "execution_status",
+    "domain_status",
+    "exit_code",
+    "started_at",
+    "finished_at",
+    "duration_ms",
+    "artifacts",
+    "error"
+  ],
+  "title": "SkillExecutionReceipt",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/skill-execution-receipt.schema.json"
+}

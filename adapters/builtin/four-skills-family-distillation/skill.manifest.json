@@ -1,0 +1,41 @@
+{
+  "schema": "zhimeng.skill-manifest.v1",
+  "id": "four-skills.family-distillation",
+  "display_name": "Distillation Family Step",
+  "description": "Deterministic four-skills family runner for distillation. Used by generic managed execution after instruction-chain probe.",
+  "kind": "deterministic_tool",
+  "version": "2026.07.26-m3au.1",
+  "source": {
+    "type": "builtin_managed",
+    "reference": "PROVENANCE.md",
+    "license": null,
+    "source_url": null,
+    "source_version": null,
+    "modified": true
+  },
+  "entrypoint": "run_family_step.py",
+  "approval": "none",
+  "permissions": {
+    "read": [
+      "bound_project_snapshot"
+    ],
+    "write": [
+      "run_staging"
+    ],
+    "network": false,
+    "secrets": []
+  },
+  "timeout_seconds": 60,
+  "exit_codes": {
+    "0": "success",
+    "1": "domain_blocked"
+  },
+  "artifacts": [
+    "four_skills_family_step"
+  ],
+  "capabilities": [
+    "four-skills.family.distillation.v1"
+  ],
+  "input_schema": "https://zhimeng.local/contracts/four-skills-family-step-request.schema.json",
+  "output_schema": "https://zhimeng.local/contracts/four-skills-family-step-result.schema.json"
+}

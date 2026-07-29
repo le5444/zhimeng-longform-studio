@@ -1,0 +1,18 @@
+{
+  "additionalProperties": false,
+  "description": "Author-triggered product-native NLCL writeback evidence sync.",
+  "properties": {
+    "expected_writeback_evidence_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Writeback Evidence Receipt Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "expected_writeback_evidence_receipt_hash"
+  ],
+  "title": "NlclWritebackSyncRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/nlcl-writeback-sync-request.schema.json"
+}

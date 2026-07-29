@@ -1,0 +1,68 @@
+{
+  "$defs": {
+    "NlclOriginalMandatoryUsageClosureDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "item_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Item Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "used",
+            "unused",
+            "missed",
+            "suppressed_for_project_truth"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id",
+        "status"
+      ],
+      "title": "NlclOriginalMandatoryUsageClosureDecision",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Author decisions against a mandatory usage plan scaffold.\n\nClosing requires every plan item to receive a non-pending status. Closure\nnever authorizes formal prose and never claims route validated.",
+  "properties": {
+    "expected_nlcl_original_mandatory_usage_plan_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Nlcl Original Mandatory Usage Plan Receipt Hash",
+      "type": "string"
+    },
+    "decisions": {
+      "items": {
+        "$ref": "#/$defs/NlclOriginalMandatoryUsageClosureDecision"
+      },
+      "maxItems": 512,
+      "minItems": 1,
+      "title": "Decisions",
+      "type": "array"
+    },
+    "finalize": {
+      "default": true,
+      "title": "Finalize",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "expected_nlcl_original_mandatory_usage_plan_receipt_hash",
+    "decisions"
+  ],
+  "title": "NlclOriginalMandatoryUsageClosureRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/nlcl-original-mandatory-usage-closure-request.schema.json"
+}

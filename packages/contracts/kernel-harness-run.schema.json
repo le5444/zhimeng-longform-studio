@@ -1,0 +1,610 @@
+{
+  "$defs": {
+    "AssertionOperator": {
+      "enum": [
+        "capability_present",
+        "activity_kind_present",
+        "event_sequence_valid",
+        "status_equals",
+        "snapshot_unchanged",
+        "citation_fields_present",
+        "permission_effect",
+        "artifact_hash_stable",
+        "paths_changed_only",
+        "conflict_rejected",
+        "cleanup_no_diff",
+        "transport_handshake_passed",
+        "isolation_boundary"
+      ],
+      "title": "AssertionOperator",
+      "type": "string"
+    },
+    "AssertionResult": {
+      "additionalProperties": false,
+      "properties": {
+        "assertion_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Assertion Id",
+          "type": "string"
+        },
+        "gate": {
+          "$ref": "#/$defs/HarnessGate"
+        },
+        "operator": {
+          "$ref": "#/$defs/AssertionOperator"
+        },
+        "status": {
+          "$ref": "#/$defs/AssertionStatus"
+        },
+        "expected": {
+          "$ref": "#/$defs/JsonValue"
+        },
+        "observed_ref": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Observed Ref"
+        },
+        "evidence_refs": {
+          "items": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "failure_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Failure Fingerprint"
+        },
+        "message": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "assertion_id",
+        "gate",
+        "operator",
+        "status",
+        "expected",
+        "observed_ref",
+        "evidence_refs",
+        "failure_fingerprint",
+        "message"
+      ],
+      "title": "AssertionResult",
+      "type": "object",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "pass"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "evidence_refs": {
+                "minItems": 1
+              },
+              "failure_fingerprint": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "fail"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "failure_fingerprint": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "blocked",
+                  "not_measured"
+                ]
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "failure_fingerprint": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "AssertionStatus": {
+      "enum": [
+        "pass",
+        "fail",
+        "blocked",
+        "not_measured"
+      ],
+      "title": "AssertionStatus",
+      "type": "string"
+    },
+    "CleanupStatus": {
+      "enum": [
+        "not_run",
+        "not_measured",
+        "partial",
+        "clean",
+        "dirty",
+        "failed"
+      ],
+      "title": "CleanupStatus",
+      "type": "string"
+    },
+    "ExecutorIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "executor_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Executor Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ExecutorKind"
+        },
+        "implementation": {
+          "minLength": 1,
+          "title": "Implementation",
+          "type": "string"
+        },
+        "version": {
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "protocol_version": {
+          "minLength": 1,
+          "title": "Protocol Version",
+          "type": "string"
+        },
+        "instance_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Instance Id"
+        }
+      },
+      "required": [
+        "executor_id",
+        "kind",
+        "implementation",
+        "version",
+        "protocol_version",
+        "instance_id"
+      ],
+      "title": "ExecutorIdentity",
+      "type": "object"
+    },
+    "ExecutorKind": {
+      "enum": [
+        "embedded",
+        "process",
+        "remote"
+      ],
+      "title": "ExecutorKind",
+      "type": "string"
+    },
+    "HarnessGate": {
+      "enum": [
+        "G1",
+        "G2",
+        "G3",
+        "G4",
+        "G5"
+      ],
+      "title": "HarnessGate",
+      "type": "string"
+    },
+    "HarnessState": {
+      "enum": [
+        "planned",
+        "preparing",
+        "starting",
+        "ready",
+        "running",
+        "awaiting_approval",
+        "cancelling",
+        "cancelled",
+        "restarting",
+        "resumed",
+        "verifying",
+        "cleaning",
+        "passed",
+        "failed",
+        "blocked"
+      ],
+      "title": "HarnessState",
+      "type": "string"
+    },
+    "JsonValue": {},
+    "ProviderModelProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "provider_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Provider Id",
+          "type": "string"
+        },
+        "model_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Model Id",
+          "type": "string"
+        },
+        "protocol": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Protocol",
+          "type": "string"
+        },
+        "capability_probe_ref": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Capability Probe Ref",
+          "type": "string"
+        },
+        "capability_probe_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Capability Probe Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider_id",
+        "model_id",
+        "protocol",
+        "capability_probe_ref",
+        "capability_probe_hash"
+      ],
+      "title": "ProviderModelProfile",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.kernel-harness-run.v2",
+      "title": "Schema",
+      "type": "string"
+    },
+    "harness_run_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Harness Run Id",
+      "type": "string"
+    },
+    "case_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Case Id",
+      "type": "string"
+    },
+    "case_version": {
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Case Version",
+      "type": "string"
+    },
+    "case_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Case Fingerprint",
+      "type": "string"
+    },
+    "state": {
+      "$ref": "#/$defs/HarnessState"
+    },
+    "adapter": {
+      "$ref": "#/$defs/ExecutorIdentity"
+    },
+    "binary_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Binary Hash",
+      "type": "string"
+    },
+    "protocol_schema_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Protocol Schema Hash",
+      "type": "string"
+    },
+    "config_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Config Hash",
+      "type": "string"
+    },
+    "provider_model": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ProviderModelProfile"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "normalized_session_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Normalized Session Id"
+    },
+    "normalized_run_ids": {
+      "items": {
+        "maxLength": 128,
+        "minLength": 8,
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        "type": "string"
+      },
+      "title": "Normalized Run Ids",
+      "type": "array",
+      "uniqueItems": true
+    },
+    "case_step_ids": {
+      "items": {
+        "maxLength": 128,
+        "minLength": 8,
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Case Step Ids",
+      "type": "array",
+      "uniqueItems": true
+    },
+    "case_assertion_ids": {
+      "items": {
+        "maxLength": 128,
+        "minLength": 8,
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Case Assertion Ids",
+      "type": "array",
+      "uniqueItems": true
+    },
+    "step_cursor": {
+      "minimum": 0,
+      "title": "Step Cursor",
+      "type": "integer"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "completed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Completed At"
+    },
+    "baseline_snapshot_ref": {
+      "maxLength": 2048,
+      "minLength": 1,
+      "title": "Baseline Snapshot Ref",
+      "type": "string"
+    },
+    "final_snapshot_ref": {
+      "anyOf": [
+        {
+          "maxLength": 2048,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Final Snapshot Ref"
+    },
+    "observation_count": {
+      "minimum": 0,
+      "title": "Observation Count",
+      "type": "integer"
+    },
+    "assertion_results": {
+      "items": {
+        "$ref": "#/$defs/AssertionResult"
+      },
+      "minItems": 1,
+      "title": "Assertion Results",
+      "type": "array"
+    },
+    "cleanup_status": {
+      "$ref": "#/$defs/CleanupStatus"
+    }
+  },
+  "required": [
+    "schema",
+    "harness_run_id",
+    "case_id",
+    "case_version",
+    "case_fingerprint",
+    "state",
+    "adapter",
+    "binary_hash",
+    "protocol_schema_hash",
+    "config_hash",
+    "provider_model",
+    "normalized_session_id",
+    "normalized_run_ids",
+    "case_step_ids",
+    "case_assertion_ids",
+    "step_cursor",
+    "created_at",
+    "updated_at",
+    "completed_at",
+    "baseline_snapshot_ref",
+    "final_snapshot_ref",
+    "observation_count",
+    "assertion_results",
+    "cleanup_status"
+  ],
+  "title": "HarnessRun",
+  "type": "object",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "enum": [
+              "passed",
+              "failed",
+              "blocked"
+            ]
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "completed_at": {
+            "type": "string"
+          },
+          "cleanup_status": {
+            "not": {
+              "const": "not_run"
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "completed_at": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "passed"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "cleanup_status": {
+            "const": "clean"
+          },
+          "final_snapshot_ref": {
+            "type": "string"
+          },
+          "assertion_results": {
+            "items": {
+              "properties": {
+                "status": {
+                  "const": "pass"
+                }
+              },
+              "required": [
+                "status"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "x-zhimeng-invariants": [
+    "case_step_ids and case_assertion_ids must match the case identified by case_fingerprint",
+    "assertion_results must cover case_assertion_ids exactly by assertion_id",
+    "terminal runs must account for every case step",
+    "assertion result metadata and expected values must match the case contract"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/kernel-harness-run.schema.json"
+}

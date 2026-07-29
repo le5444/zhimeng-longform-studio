@@ -1,0 +1,84 @@
+{
+  "$defs": {
+    "FormalDraftAuthorIntent": {
+      "enum": [
+        "request_authorization",
+        "withhold_authorization",
+        "revoke_authorization"
+      ],
+      "title": "FormalDraftAuthorIntent",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.formal-draft-author-decision-request.v1",
+      "default": "zhimeng.formal-draft-author-decision-request.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "intent": {
+      "$ref": "#/$defs/FormalDraftAuthorIntent"
+    },
+    "expected_project_revision": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Project Revision"
+    },
+    "expected_project_fingerprint": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Project Fingerprint"
+    },
+    "change_set_id": {
+      "anyOf": [
+        {
+          "maxLength": 160,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Change Set Id"
+    },
+    "note": {
+      "anyOf": [
+        {
+          "maxLength": 2000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Note"
+    }
+  },
+  "required": [
+    "intent"
+  ],
+  "title": "FormalDraftAuthorDecisionRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/formal-draft-author-decision-request.schema.json"
+}

@@ -1,0 +1,35 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.eval-corpus-export-request.v1",
+      "default": "zhimeng.eval-corpus-export-request.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "include_feedback_experience": {
+      "default": true,
+      "title": "Include Feedback Experience",
+      "type": "boolean"
+    },
+    "include_formal_knowledge_promotion": {
+      "default": true,
+      "title": "Include Formal Knowledge Promotion",
+      "type": "boolean"
+    },
+    "include_gates": {
+      "default": true,
+      "title": "Include Gates",
+      "type": "boolean"
+    },
+    "include_writeback": {
+      "default": true,
+      "title": "Include Writeback",
+      "type": "boolean"
+    }
+  },
+  "title": "EvalCorpusExportRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/eval-corpus-export-request.schema.json"
+}

@@ -1,0 +1,550 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.codex/novel-creation-suite/review-acceptance.schema.json",
+  "title": "Novel chapter review acceptance artifact",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "project",
+    "chapter_id",
+    "artifact_role",
+    "review_status",
+    "score",
+    "threshold",
+    "hard_logic_review",
+    "soft_quality_review",
+    "readability_score_cap",
+    "issue_cards",
+    "accepted_version",
+    "human_judgment_gate",
+    "next_action",
+    "selection_apply_manifest_gate",
+    "ai_output_parse_confidence_gate"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "review_acceptance.v1"
+    },
+    "project": {
+      "type": "string",
+      "minLength": 1
+    },
+    "chapter_id": {
+      "type": "string",
+      "pattern": "^(CH|C)?[0-9]{3,}|short[0-9]{3,}$"
+    },
+    "artifact_role": {
+      "const": "review_acceptance"
+    },
+    "review_status": {
+      "enum": [
+        "approved",
+        "revision_needed",
+        "blocked",
+        "risk_draft_only",
+        "needs_usage_closure"
+      ]
+    },
+    "score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "threshold": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "hard_logic_review": {
+      "$ref": "#/$defs/gateResult"
+    },
+    "soft_quality_review": {
+      "$ref": "#/$defs/gateResult"
+    },
+    "readability_score_cap": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "triggered",
+        "cap_score",
+        "evidence_spans",
+        "layer_id",
+        "rewrite_from"
+      ],
+      "properties": {
+        "triggered": {
+          "type": "boolean"
+        },
+        "cap_score": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "evidence_spans": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "layer_id": {
+          "$ref": "#/$defs/layerId"
+        },
+        "rewrite_from": {
+          "$ref": "#/$defs/layerId"
+        }
+      }
+    },
+    "deep_field_consumption": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/consumptionResult"
+      }
+    },
+    "mandatory_usage_closure": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "issue_cards": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/issueCard"
+      }
+    },
+    "accepted_version": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "version_id",
+      "content_hash",
+      "reviewed_file",
+      "accepted_by",
+        "accepted_at",
+        "polish_skipped"
+      ],
+      "properties": {
+        "version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+    "content_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "reviewed_file": {
+      "type": "string",
+      "minLength": 1
+    },
+        "accepted_by": {
+          "type": "string",
+          "minLength": 1
+        },
+        "accepted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "polish_skipped": {
+          "enum": [
+            "none",
+            "accepted_manual",
+            "needs_review"
+          ]
+        }
+      }
+    },
+    "human_judgment_gate": {
+      "$ref": "#/$defs/humanJudgmentGate"
+    },
+    "next_action": {
+      "enum": [
+        "writeback",
+        "rewrite_from_L1",
+        "rewrite_from_L2",
+        "rewrite_from_L3",
+        "rewrite_from_L4",
+        "rewrite_from_L5",
+        "manual_decision",
+        "usage_closure"
+      ]
+    },
+    "selection_apply_manifest_gate": {
+      "$ref": "#/$defs/selectionApplyManifestGate"
+    },
+    "ai_output_parse_confidence_gate": {
+      "$ref": "#/$defs/aiOutputParseConfidenceGate"
+    }
+  },
+  "$defs": {
+    "layerId": {
+      "enum": [
+        "L0_INPUT",
+        "L0_USAGE_CLOSURE",
+        "L1_PROJECT_TRUTH",
+        "L1_PROJECT_STATE",
+        "L2_CONTROL_CARD",
+        "L3_DISTILLATION_RETRIEVAL",
+        "L4_DRAFT_EXECUTION",
+        "L5_DEAI_STYLE",
+        "L6_REVIEW_ACCEPTANCE",
+        "L7_WRITEBACK"
+      ]
+    },
+    "gateResult": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "evidence",
+        "failure_signatures",
+        "rewrite_from"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "pass",
+            "warning",
+            "failed",
+            "not_applicable"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "failure_signatures": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rewrite_from": {
+          "$ref": "#/$defs/layerId"
+        }
+      }
+    },
+    "consumptionResult": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "evidence",
+        "failure_route"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "present",
+            "partial",
+            "missing",
+            "not_applicable"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "failure_route": {
+          "$ref": "#/$defs/layerId"
+        }
+      }
+    },
+    "issueCard": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "issue_id",
+        "priority",
+        "layer_id",
+        "failure_signature",
+        "evidence",
+        "rewrite_from",
+        "status"
+      ],
+      "properties": {
+        "issue_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "priority": {
+          "enum": [
+            "P0",
+            "P1",
+            "P2"
+          ]
+        },
+        "layer_id": {
+          "$ref": "#/$defs/layerId"
+        },
+        "failure_signature": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rewrite_from": {
+          "$ref": "#/$defs/layerId"
+        },
+        "status": {
+          "enum": [
+            "open",
+            "fixed",
+            "accepted_risk",
+            "rejected"
+          ]
+        }
+      }
+    },
+    "humanJudgmentGate": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "reviewer_mode",
+        "truth_checked",
+        "cold_read_evidence",
+        "ai_suggestions_disposition",
+        "acceptance_owner",
+        "reason",
+        "failure_route"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "pending",
+            "not_applicable"
+          ]
+        },
+        "reviewer_mode": {
+          "enum": [
+            "human",
+            "human_with_ai_assist",
+            "ai_only",
+            "not_applicable"
+          ]
+        },
+        "truth_checked": {
+          "type": "boolean"
+        },
+        "cold_read_evidence": {
+          "type": "string"
+        },
+        "ai_suggestions_disposition": {
+          "enum": [
+            "accepted",
+            "rejected",
+            "mixed",
+            "not_applicable"
+          ]
+        },
+        "acceptance_owner": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "failure_route": {
+          "$ref": "#/$defs/layerId"
+        }
+      }
+    },
+    "selectionApplyManifestGate": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "applies",
+        "target_artifact",
+        "target_span_ref",
+        "target_span_hash_before",
+        "selected_text_char_count",
+        "apply_mode",
+        "source_result_id",
+        "allowed_mutations",
+        "protected_fields",
+        "preview_required",
+        "diff_required",
+        "acceptance_owner",
+        "rollback_ref",
+        "failure_route"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "missing",
+            "not_applicable"
+          ]
+        },
+        "applies": {
+          "type": "boolean"
+        },
+        "target_artifact": {
+          "type": "string"
+        },
+        "target_span_ref": {
+          "type": "string"
+        },
+        "target_span_hash_before": {
+          "type": "string"
+        },
+        "selected_text_char_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "apply_mode": {
+          "enum": [
+            "insert_after",
+            "replace_selection",
+            "append_candidate",
+            "patch_suggestion",
+            "not_applicable"
+          ]
+        },
+        "source_result_id": {
+          "type": "string"
+        },
+        "allowed_mutations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "protected_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "preview_required": {
+          "type": "boolean"
+        },
+        "diff_required": {
+          "type": "boolean"
+        },
+        "acceptance_owner": {
+          "type": "string"
+        },
+        "rollback_ref": {
+          "type": "string"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "failure_route": {
+          "type": "string"
+        }
+      }
+    },
+    "aiOutputParseConfidenceGate": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "applies",
+        "expected_schema",
+        "parse_method",
+        "required_fields",
+        "parsed_field_presence",
+        "parse_confidence",
+        "ambiguous_or_unparsed_blocks",
+        "candidate_status",
+        "manual_review_required",
+        "do_not_promote_to_truth",
+        "failure_route"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "missing",
+            "not_applicable"
+          ]
+        },
+        "applies": {
+          "type": "boolean"
+        },
+        "expected_schema": {
+          "type": "string"
+        },
+        "parse_method": {
+          "type": "string"
+        },
+        "required_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "parsed_field_presence": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean"
+          }
+        },
+        "parse_confidence": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "ambiguous_or_unparsed_blocks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "candidate_status": {
+          "enum": [
+            "parsed_candidate",
+            "blocked_low_confidence",
+            "manual_review_required",
+            "rejected",
+            "adopted_with_author_decision",
+            "not_applicable"
+          ]
+        },
+        "manual_review_required": {
+          "type": "boolean"
+        },
+        "do_not_promote_to_truth": {
+          "type": "boolean"
+        },
+        "author_decision_ref": {
+          "type": "string"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "failure_route": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

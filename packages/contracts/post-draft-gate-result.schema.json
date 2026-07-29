@@ -1,0 +1,451 @@
+{
+  "$defs": {
+    "GateCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Code",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "blocked"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 128,
+          "title": "Evidence Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "code",
+        "status",
+        "message",
+        "evidence_refs"
+      ],
+      "title": "GateCheck",
+      "type": "object"
+    },
+    "GateFileResult": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "blocked"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "content_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "byte_length": {
+          "minimum": 0,
+          "title": "Byte Length",
+          "type": "integer"
+        },
+        "body_line_count": {
+          "minimum": 0,
+          "title": "Body Line Count",
+          "type": "integer"
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/GateFinding"
+          },
+          "maxItems": 32,
+          "title": "Findings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "path",
+        "status",
+        "content_hash",
+        "byte_length",
+        "body_line_count",
+        "findings"
+      ],
+      "title": "GateFileResult",
+      "type": "object"
+    },
+    "GateFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Code",
+          "type": "string"
+        },
+        "failure_signature": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Failure Signature",
+          "type": "string"
+        },
+        "severity": {
+          "const": "blocked",
+          "default": "blocked",
+          "title": "Severity",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "evidence": {
+          "maxLength": 256,
+          "title": "Evidence",
+          "type": "string"
+        },
+        "location": {
+          "$ref": "#/$defs/GateLocation"
+        }
+      },
+      "required": [
+        "code",
+        "failure_signature",
+        "message",
+        "evidence",
+        "location"
+      ],
+      "title": "GateFinding",
+      "type": "object"
+    },
+    "GateLocation": {
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "$ref": "#/$defs/GatePoint"
+        },
+        "end": {
+          "$ref": "#/$defs/GatePoint"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "title": "GateLocation",
+      "type": "object"
+    },
+    "GatePoint": {
+      "additionalProperties": false,
+      "properties": {
+        "line": {
+          "minimum": 1,
+          "title": "Line",
+          "type": "integer"
+        },
+        "column": {
+          "minimum": 1,
+          "title": "Column",
+          "type": "integer"
+        },
+        "offset": {
+          "minimum": 0,
+          "title": "Offset",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "line",
+        "column",
+        "offset"
+      ],
+      "title": "GatePoint",
+      "type": "object"
+    },
+    "KnowledgeValidatorExecutionResult": {
+      "additionalProperties": false,
+      "properties": {
+        "card_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Card Id",
+          "type": "string"
+        },
+        "version_id": {
+          "pattern": "^knowledge-version-[0-9a-f]{32}$",
+          "title": "Version Id",
+          "type": "string"
+        },
+        "content_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "rules_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Rules Hash",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "blocked"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "configuration_errors": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 3,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Configuration Errors",
+          "type": "array"
+        },
+        "rule_results": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/KnowledgeValidatorRuleResult"
+          },
+          "maxItems": 16,
+          "title": "Rule Results",
+          "type": "array"
+        },
+        "failure_signatures": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 3,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Failure Signatures",
+          "type": "array"
+        }
+      },
+      "required": [
+        "card_id",
+        "version_id",
+        "content_hash",
+        "rules_hash",
+        "status"
+      ],
+      "title": "KnowledgeValidatorExecutionResult",
+      "type": "object"
+    },
+    "KnowledgeValidatorRuleResult": {
+      "additionalProperties": false,
+      "properties": {
+        "rule_id": {
+          "maxLength": 64,
+          "minLength": 3,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "forbid_terms",
+            "require_any_term"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "failure_signature": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Failure Signature",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "blocked"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "match_count": {
+          "minimum": 0,
+          "title": "Match Count",
+          "type": "integer"
+        },
+        "evidence_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 128,
+          "title": "Evidence Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "rule_id",
+        "kind",
+        "failure_signature",
+        "status",
+        "match_count"
+      ],
+      "title": "KnowledgeValidatorRuleResult",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.creation-draft-gate-result.v1",
+      "default": "zhimeng.creation-draft-gate-result.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "blocked"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "summary": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    },
+    "candidate_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "candidate_manifest_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Candidate Manifest Hash"
+    },
+    "knowledge_validator_bundle_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Knowledge Validator Bundle Hash"
+    },
+    "knowledge_validator_results": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/KnowledgeValidatorExecutionResult"
+      },
+      "maxItems": 8,
+      "title": "Knowledge Validator Results",
+      "type": "array"
+    },
+    "quality_assessed": {
+      "const": false,
+      "default": false,
+      "title": "Quality Assessed",
+      "type": "boolean"
+    },
+    "formal_draft_allowed": {
+      "const": false,
+      "default": false,
+      "title": "Formal Draft Allowed",
+      "type": "boolean"
+    },
+    "global_findings": {
+      "items": {
+        "$ref": "#/$defs/GateFinding"
+      },
+      "maxItems": 64,
+      "title": "Global Findings",
+      "type": "array"
+    },
+    "checks": {
+      "items": {
+        "$ref": "#/$defs/GateCheck"
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "title": "Checks",
+      "type": "array"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/GateFileResult"
+      },
+      "maxItems": 128,
+      "minItems": 1,
+      "title": "Files",
+      "type": "array"
+    },
+    "failure_signatures": {
+      "items": {
+        "maxLength": 128,
+        "minLength": 1,
+        "pattern": "^[a-z][a-z0-9_]*$",
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Failure Signatures",
+      "type": "array"
+    }
+  },
+  "required": [
+    "status",
+    "summary",
+    "candidate_id",
+    "global_findings",
+    "checks",
+    "files",
+    "failure_signatures"
+  ],
+  "title": "PostDraftGateResult",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/post-draft-gate-result.schema.json"
+}

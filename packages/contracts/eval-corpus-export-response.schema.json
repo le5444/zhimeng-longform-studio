@@ -1,0 +1,247 @@
+{
+  "$defs": {
+    "EvalCorpusArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "hard_fact_gate",
+            "literary_quality_gate",
+            "gate_pipeline",
+            "feedback_candidate_bundle",
+            "feedback_candidate_promotion",
+            "formal_knowledge_promotion",
+            "writeback_evidence",
+            "formal_draft_authorization",
+            "reader_review",
+            "reader_review_decision"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "present": {
+          "title": "Present",
+          "type": "boolean"
+        },
+        "relative_artifact": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Artifact"
+        },
+        "content_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Sha256"
+        },
+        "desensitized": {
+          "const": true,
+          "default": true,
+          "title": "Desensitized",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "present"
+      ],
+      "title": "EvalCorpusArtifactRef",
+      "type": "object"
+    },
+    "EvalCorpusExportReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.eval-corpus-export-receipt.v1",
+          "default": "zhimeng.eval-corpus-export-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "receipt_id": {
+          "pattern": "^eval-corpus-export-[0-9a-f]{32}$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "applied",
+            "rolled_back",
+            "ready_candidate"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "export_relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Export Relative Path",
+          "type": "string"
+        },
+        "export_file_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Export File Sha256",
+          "type": "string"
+        },
+        "artifact_count": {
+          "maximum": 64,
+          "minimum": 0,
+          "title": "Artifact Count",
+          "type": "integer"
+        },
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/EvalCorpusArtifactRef"
+          },
+          "maxItems": 64,
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "redaction_policy": {
+          "const": "local-v1-eval-corpus-redact-1",
+          "default": "local-v1-eval-corpus-redact-1",
+          "title": "Redaction Policy",
+          "type": "string"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "quality_assessed": {
+          "const": false,
+          "default": false,
+          "title": "Quality Assessed",
+          "type": "boolean"
+        },
+        "formal_knowledge_contaminated": {
+          "const": false,
+          "default": false,
+          "title": "Formal Knowledge Contaminated",
+          "type": "boolean"
+        },
+        "training_ready": {
+          "const": false,
+          "default": false,
+          "title": "Training Ready",
+          "type": "boolean"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "change_set_id",
+        "project_id",
+        "outcome",
+        "export_relative_path",
+        "export_file_sha256",
+        "artifact_count",
+        "created_at",
+        "receipt_hash"
+      ],
+      "title": "EvalCorpusExportReceipt",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.eval-corpus-export-response.v1",
+      "default": "zhimeng.eval-corpus-export-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "change_set_id": {
+      "pattern": "^changeset-[0-9a-f]{32}$",
+      "title": "Change Set Id",
+      "type": "string"
+    },
+    "receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EvalCorpusExportReceipt"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "history": {
+      "items": {
+        "$ref": "#/$defs/EvalCorpusExportReceipt"
+      },
+      "maxItems": 32,
+      "title": "History",
+      "type": "array"
+    },
+    "package": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Package"
+    },
+    "not_claiming": {
+      "default": [
+        "training_dataset_ready",
+        "formal_knowledge_auto_activation",
+        "formal_prose_writeback",
+        "formal_draft_authorization_unlock",
+        "local_v1_exe"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Not Claiming",
+      "type": "array"
+    }
+  },
+  "required": [
+    "change_set_id"
+  ],
+  "title": "EvalCorpusExportResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/eval-corpus-export-response.schema.json"
+}

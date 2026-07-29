@@ -1,0 +1,323 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/creation-draft-gate-result.schema.json",
+  "$defs": {
+    "GatePoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "line",
+        "column",
+        "offset"
+      ]
+    },
+    "GateLocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "$ref": "#/$defs/GatePoint"
+        },
+        "end": {
+          "$ref": "#/$defs/GatePoint"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ]
+    },
+    "GateFinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "failure_signature": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "severity": {
+          "const": "blocked"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "evidence": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "location": {
+          "$ref": "#/$defs/GateLocation"
+        }
+      },
+      "required": [
+        "code",
+        "failure_signature",
+        "severity",
+        "message",
+        "evidence",
+        "location"
+      ]
+    },
+    "GateFileResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "blocked"
+          ]
+        },
+        "content_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "byte_length": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "body_line_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "findings": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/GateFinding"
+          }
+        }
+      },
+      "required": [
+        "path",
+        "status",
+        "content_hash",
+        "byte_length",
+        "body_line_count",
+        "findings"
+      ]
+    },
+    "GateCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "blocked"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "evidence_refs": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "type": "string",
+            "maxLength": 512
+          }
+        }
+      },
+      "required": [
+        "code",
+        "status",
+        "message",
+        "evidence_refs"
+      ]
+    },
+    "GateGlobalFinding": {
+      "$ref": "#/$defs/GateFinding"
+    },
+    "KnowledgeValidatorRuleResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rule_id": { "type": "string", "minLength": 3, "maxLength": 64, "pattern": "^[a-z][a-z0-9_]*$" },
+        "kind": { "enum": ["forbid_terms", "require_any_term"] },
+        "failure_signature": { "type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[a-z][a-z0-9_]*$" },
+        "status": { "enum": ["passed", "blocked"] },
+        "match_count": { "type": "integer", "minimum": 0 },
+        "evidence_refs": {
+          "type": "array", "maxItems": 128,
+          "items": { "type": "string", "maxLength": 512 }
+        }
+      },
+      "required": [
+        "rule_id", "kind", "failure_signature", "status", "match_count",
+        "evidence_refs"
+      ]
+    },
+    "KnowledgeValidatorExecutionResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "card_id": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "version_id": { "type": "string", "pattern": "^knowledge-version-[0-9a-f]{32}$" },
+        "content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "rules_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "status": { "enum": ["passed", "blocked"] },
+        "configuration_errors": {
+          "type": "array", "maxItems": 16, "uniqueItems": true,
+          "items": { "type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[a-z][a-z0-9_]*$" }
+        },
+        "rule_results": {
+          "type": "array", "maxItems": 16,
+          "items": { "$ref": "#/$defs/KnowledgeValidatorRuleResult" }
+        },
+        "failure_signatures": {
+          "type": "array", "maxItems": 32, "uniqueItems": true,
+          "items": { "type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[a-z][a-z0-9_]*$" }
+        }
+      },
+      "required": [
+        "card_id", "version_id", "content_hash", "rules_hash", "status",
+        "configuration_errors", "rule_results", "failure_signatures"
+      ]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.creation-draft-gate-result.v1"
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "blocked"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "candidate_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "candidate_manifest_hash": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "knowledge_validator_bundle_hash": {
+      "anyOf": [
+        { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        { "type": "null" }
+      ]
+    },
+    "knowledge_validator_results": {
+      "type": "array",
+      "maxItems": 8,
+      "items": { "$ref": "#/$defs/KnowledgeValidatorExecutionResult" }
+    },
+    "quality_assessed": {
+      "const": false
+    },
+    "formal_draft_allowed": {
+      "const": false
+    },
+    "global_findings": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/GateGlobalFinding"
+      }
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "$ref": "#/$defs/GateCheck"
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {
+        "$ref": "#/$defs/GateFileResult"
+      }
+    },
+    "failure_signatures": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "pattern": "^[a-z][a-z0-9_]*$"
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "status",
+    "summary",
+    "candidate_id",
+    "candidate_manifest_hash",
+    "knowledge_validator_bundle_hash",
+    "knowledge_validator_results",
+    "quality_assessed",
+    "formal_draft_allowed",
+    "global_findings",
+    "checks",
+    "files",
+    "failure_signatures"
+  ],
+  "title": "CreationDraftGateResult",
+  "x-zhimeng-invariants": [
+    "failure_signatures are unique and equal the distinct finding signatures",
+    "status is blocked when any file or manifest finding exists",
+    "knowledge validator failures are represented by Gate findings",
+    "quality_assessed and formal_draft_allowed are always false"
+  ]
+}

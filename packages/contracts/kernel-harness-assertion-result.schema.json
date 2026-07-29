@@ -1,0 +1,188 @@
+{
+  "$defs": {
+    "AssertionOperator": {
+      "enum": [
+        "capability_present",
+        "activity_kind_present",
+        "event_sequence_valid",
+        "status_equals",
+        "snapshot_unchanged",
+        "citation_fields_present",
+        "permission_effect",
+        "artifact_hash_stable",
+        "paths_changed_only",
+        "conflict_rejected",
+        "cleanup_no_diff",
+        "transport_handshake_passed",
+        "isolation_boundary"
+      ],
+      "title": "AssertionOperator",
+      "type": "string"
+    },
+    "AssertionStatus": {
+      "enum": [
+        "pass",
+        "fail",
+        "blocked",
+        "not_measured"
+      ],
+      "title": "AssertionStatus",
+      "type": "string"
+    },
+    "HarnessGate": {
+      "enum": [
+        "G1",
+        "G2",
+        "G3",
+        "G4",
+        "G5"
+      ],
+      "title": "HarnessGate",
+      "type": "string"
+    },
+    "JsonValue": {}
+  },
+  "additionalProperties": false,
+  "properties": {
+    "assertion_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Assertion Id",
+      "type": "string"
+    },
+    "gate": {
+      "$ref": "#/$defs/HarnessGate"
+    },
+    "operator": {
+      "$ref": "#/$defs/AssertionOperator"
+    },
+    "status": {
+      "$ref": "#/$defs/AssertionStatus"
+    },
+    "expected": {
+      "$ref": "#/$defs/JsonValue"
+    },
+    "observed_ref": {
+      "anyOf": [
+        {
+          "maxLength": 2048,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Observed Ref"
+    },
+    "evidence_refs": {
+      "items": {
+        "maxLength": 2048,
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Evidence Refs",
+      "type": "array",
+      "uniqueItems": true
+    },
+    "failure_fingerprint": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Failure Fingerprint"
+    },
+    "message": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "title": "Message",
+      "type": "string"
+    }
+  },
+  "required": [
+    "assertion_id",
+    "gate",
+    "operator",
+    "status",
+    "expected",
+    "observed_ref",
+    "evidence_refs",
+    "failure_fingerprint",
+    "message"
+  ],
+  "title": "AssertionResult",
+  "type": "object",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "pass"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence_refs": {
+            "minItems": 1
+          },
+          "failure_fingerprint": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "fail"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "failure_fingerprint": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "blocked",
+              "not_measured"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "failure_fingerprint": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/kernel-harness-assertion-result.schema.json"
+}

@@ -1,0 +1,79 @@
+{
+  "schema": "zhimeng.local-source-acceptance-fixture.v1",
+  "fixture_id": "archive-night-sample",
+  "fixture_version": "2026.07.23.1",
+  "source": {
+    "relative_path": "archive-night-sample.txt",
+    "format": "txt",
+    "encoding": "utf-8",
+    "size_bytes": 2894,
+    "sha256": "3243349a8675d731a21e1de6d1c2fb96154a2bd9507a357595b815dbff1a5baf",
+    "chapter_marker_count": 3
+  },
+  "managed_snapshot": {
+    "repository_relative_root": "adapters/builtin/local-source-acceptance",
+    "files": {
+      "scripts/prepare_downloaded_sources.ps1": "bdf03a80843834407591ca398121fb882469a91362ca2c90fe76ad8d648c81cf",
+      "scripts/extract_epub_text.py": "0c7224fa3087b3e9f25fba00b9341d74ae1dc8f398e0a29851db0b5604894f99",
+      "scripts/distill_source_packet.py": "71068828f516d28eac081e1c64988e3541c394adcc0fbdf955f5a99e4ef9c132"
+    }
+  },
+  "adjacent_contracts": {
+    "inspect_output": {
+      "source_format": "txt",
+      "source_size_bytes": 2894,
+      "source_sha256": "3243349a8675d731a21e1de6d1c2fb96154a2bd9507a357595b815dbff1a5baf"
+    },
+    "prepare_output": {
+      "source_backend": "generic_local_file",
+      "source_format": "txt",
+      "download_scope": "full",
+      "required_artifact_kinds": [
+        "packet_manifest",
+        "packet_metadata",
+        "packet_source",
+        "packet_text"
+      ],
+      "sha256_binding_fields": [
+        "source_file_sha256",
+        "packet_source_sha256",
+        "text_sha256"
+      ]
+    },
+    "distillation_output": {
+      "envelope_schema": "novel_distillation.source_packet_draft.v1",
+      "status": "draft_ready",
+      "required_artifact_kinds": [
+        "cards_draft_json",
+        "distillation_report_md",
+        "tool_result_envelope_json",
+        "validation_report_md"
+      ],
+      "card_types": [
+        "work",
+        "voice",
+        "validator"
+      ],
+      "draft_candidate": true,
+      "requires_human_distillation": true,
+      "ready_for_formal_ingest": false
+    },
+    "writer_output": {
+      "workflow_skill_ids": [
+        "novel-creation-suite.project-audit",
+        "novel-creation-suite.prewrite-gate",
+        "novel-creation-suite.creation-handoff"
+      ],
+      "candidate_kind": "change_proposal",
+      "formal_draft_allowed": false,
+      "writes_project_truth": false,
+      "requires_author_review": true
+    }
+  },
+  "capability_scope": {
+    "managed_local_txt_vertical_slice": "verified",
+    "external_tomato_downloader_book_id": "not_proven",
+    "complete_runtime_owned_project_kb_state": "not_proven",
+    "generic_creation_skill_workflow": "not_proven"
+  }
+}

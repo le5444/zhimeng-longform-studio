@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/activity-item.schema.json",
+  "title": "ActivityItem",
+  "$ref": "execution-protocol.schema.json#/$defs/activityItem",
+  "examples": [
+    {
+      "schema": "zhimeng.activity-item.v1",
+      "activity_id": "activity_01J000000000000000000001",
+      "session_id": "session_01J000000000000000000001",
+      "run_id": "run_01J00000000000000000000001",
+      "sequence": 1,
+      "created_at": "2026-07-18T04:01:01Z",
+      "project_revision": {
+        "project_id": "project_01J000000000000000000001",
+        "revision": 1,
+        "fingerprint": "8c8b9d0a8c8b9d0a8c8b9d0a8c8b9d0a8c8b9d0a8c8b9d0a8c8b9d0a8c8b9d0a",
+        "observed_at": "2026-07-18T03:59:59Z"
+      },
+      "correlation_id": "correlation_01J0000000000000001",
+      "causation_id": null,
+      "kind": "tool_call",
+      "payload": {
+        "tool_call_id": "toolcall_01J0000000000000000001",
+        "tool_name": "project.read",
+        "arguments": {"path": "04_剧情大纲/全书大框架.md"}
+      }
+    }
+  ]
+}

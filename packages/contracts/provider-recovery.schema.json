@@ -1,0 +1,374 @@
+{
+  "$defs": {
+    "ProviderRecoveryDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "adopt_persisted_candidate",
+            "abandon_and_recompile"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "decision_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Decision Hash",
+          "type": "string"
+        },
+        "decision_id": {
+          "pattern": "^provider-recovery-decision-[0-9a-f]{32}$",
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "dossier_id": {
+          "pattern": "^provider-recovery-[0-9a-f]{32}$",
+          "title": "Dossier Id",
+          "type": "string"
+        },
+        "instruction_dispatch_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Instruction Dispatch Receipt Hash",
+          "type": "string"
+        },
+        "instruction_dispatch_receipt_id": {
+          "pattern": "^creation-instruction-dispatch-[0-9a-f]{32}$",
+          "title": "Instruction Dispatch Receipt Id",
+          "type": "string"
+        },
+        "new_dossier_revision": {
+          "minimum": 2,
+          "title": "New Dossier Revision",
+          "type": "integer"
+        },
+        "previous_dossier_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Previous Dossier Hash",
+          "type": "string"
+        },
+        "previous_dossier_revision": {
+          "minimum": 1,
+          "title": "Previous Dossier Revision",
+          "type": "integer"
+        },
+        "previous_status": {
+          "enum": [
+            "pending",
+            "adopted",
+            "abandoned"
+          ],
+          "title": "Previous Status",
+          "type": "string"
+        },
+        "resulting_run_status": {
+          "$ref": "#/$defs/RunStatus"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "schema": {
+          "const": "zhimeng.provider-recovery-decision.v1",
+          "default": "zhimeng.provider-recovery-decision.v1",
+          "title": "Schema",
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision_id",
+        "dossier_id",
+        "run_id",
+        "previous_dossier_hash",
+        "instruction_dispatch_receipt_id",
+        "instruction_dispatch_receipt_hash",
+        "action",
+        "previous_status",
+        "resulting_run_status",
+        "previous_dossier_revision",
+        "new_dossier_revision",
+        "created_at",
+        "decision_hash"
+      ],
+      "title": "ProviderRecoveryDecision",
+      "type": "object",
+      "x-zhimeng-invariants": [
+        "only a pending dossier can be decided",
+        "new_dossier_revision equals previous_dossier_revision plus one",
+        "decision_id is derived from dossier_id, action and previous_dossier_revision",
+        "decision_hash hashes every field except decision_hash",
+        "the decision preserves the dossier hash and instruction dispatch receipt CAS input",
+        "adopt produces a succeeded Run and abandon produces a failed Run",
+        "one decision per dossier is stored append-only"
+      ]
+    },
+    "ProviderRecoveryDossier": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_output_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Candidate Output Hash"
+        },
+        "candidate_output_id": {
+          "anyOf": [
+            {
+              "pattern": "^agent-candidate-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Candidate Output Id"
+        },
+        "candidate_state": {
+          "enum": [
+            "persisted",
+            "absent",
+            "invalid"
+          ],
+          "title": "Candidate State",
+          "type": "string"
+        },
+        "context_pack_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Context Pack Hash",
+          "type": "string"
+        },
+        "context_pack_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Context Pack Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "dossier_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Dossier Hash",
+          "type": "string"
+        },
+        "dossier_id": {
+          "pattern": "^provider-recovery-[0-9a-f]{32}$",
+          "title": "Dossier Id",
+          "type": "string"
+        },
+        "dossier_revision": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Dossier Revision",
+          "type": "integer"
+        },
+        "final_checkpoint_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Final Checkpoint Hash",
+          "type": "string"
+        },
+        "final_checkpoint_id": {
+          "pattern": "^workflow-checkpoint-[0-9a-f]{32}$",
+          "title": "Final Checkpoint Id",
+          "type": "string"
+        },
+        "instruction_dispatch_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Instruction Dispatch Receipt Hash",
+          "type": "string"
+        },
+        "instruction_dispatch_receipt_id": {
+          "pattern": "^creation-instruction-dispatch-[0-9a-f]{32}$",
+          "title": "Instruction Dispatch Receipt Id",
+          "type": "string"
+        },
+        "operation_package_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Operation Package Hash",
+          "type": "string"
+        },
+        "operation_package_id": {
+          "pattern": "^prewrite-package-[0-9a-f]{32}$",
+          "title": "Operation Package Id",
+          "type": "string"
+        },
+        "project_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Project Fingerprint",
+          "type": "string"
+        },
+        "project_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "project_revision": {
+          "minimum": 1,
+          "title": "Project Revision",
+          "type": "integer"
+        },
+        "provider_boundary_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Provider Boundary Hash",
+          "type": "string"
+        },
+        "provider_boundary_id": {
+          "pattern": "^provider-io-[0-9a-f]{32}$",
+          "title": "Provider Boundary Id",
+          "type": "string"
+        },
+        "provider_replay_count": {
+          "const": 0,
+          "default": 0,
+          "title": "Provider Replay Count",
+          "type": "integer"
+        },
+        "provider_request_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Provider Request Hash",
+          "type": "string"
+        },
+        "remote_result": {
+          "const": "unknown",
+          "default": "unknown",
+          "title": "Remote Result",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "run_status_at_capture": {
+          "$ref": "#/$defs/RunStatus"
+        },
+        "schema": {
+          "const": "zhimeng.provider-recovery-dossier.v1",
+          "default": "zhimeng.provider-recovery-dossier.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "workflow_plan_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Workflow Plan Hash",
+          "type": "string"
+        },
+        "workflow_plan_id": {
+          "pattern": "^workflow-plan-[0-9a-f]{32}$",
+          "title": "Workflow Plan Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dossier_id",
+        "run_id",
+        "workflow_plan_id",
+        "workflow_plan_hash",
+        "final_checkpoint_id",
+        "final_checkpoint_hash",
+        "provider_boundary_id",
+        "provider_boundary_hash",
+        "provider_request_hash",
+        "instruction_dispatch_receipt_id",
+        "instruction_dispatch_receipt_hash",
+        "context_pack_id",
+        "context_pack_hash",
+        "operation_package_id",
+        "operation_package_hash",
+        "project_id",
+        "project_revision",
+        "project_fingerprint",
+        "run_status_at_capture",
+        "candidate_state",
+        "created_at",
+        "dossier_hash"
+      ],
+      "title": "ProviderRecoveryDossier",
+      "type": "object",
+      "x-zhimeng-invariants": [
+        "dossier_id is derived from run_id and provider_boundary_id",
+        "dossier_hash hashes every field except dossier_hash",
+        "persisted candidate_state requires candidate_output_id and candidate_output_hash",
+        "absent or invalid candidate_state forbids candidate identity fields",
+        "workflow, boundary, context, package and project identities bind one persisted Run",
+        "the dossier binds the immutable Creation instruction dispatch receipt",
+        "one dossier per Run is stored append-only",
+        "remote_result remains unknown and provider_replay_count remains zero"
+      ]
+    },
+    "RunStatus": {
+      "enum": [
+        "queued",
+        "starting",
+        "running",
+        "awaiting_approval",
+        "paused",
+        "cancelling",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "interrupted"
+      ],
+      "title": "RunStatus",
+      "type": "string"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/provider-recovery.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "decision": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ProviderRecoveryDecision"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "dossier": {
+      "$ref": "#/$defs/ProviderRecoveryDossier"
+    },
+    "schema": {
+      "const": "zhimeng.provider-recovery.v1",
+      "default": "zhimeng.provider-recovery.v1",
+      "title": "Schema",
+      "type": "string"
+    }
+  },
+  "required": [
+    "dossier"
+  ],
+  "title": "ProviderRecoveryResponse",
+  "type": "object",
+  "x-zhimeng-invariants": [
+    "decision dossier_id and run_id match the enclosed dossier",
+    "decision previous revision matches the enclosed dossier revision",
+    "decision created_at is not earlier than the enclosed dossier created_at",
+    "a null decision represents a pending recovery dossier"
+  ]
+}

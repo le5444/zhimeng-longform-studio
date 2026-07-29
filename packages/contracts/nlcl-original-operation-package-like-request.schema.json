@@ -1,0 +1,18 @@
+{
+  "additionalProperties": false,
+  "description": "Author-triggered operation_package_like scaffold after mandatory usage closure.",
+  "properties": {
+    "expected_nlcl_original_mandatory_usage_closure_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Nlcl Original Mandatory Usage Closure Receipt Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "expected_nlcl_original_mandatory_usage_closure_receipt_hash"
+  ],
+  "title": "NlclOriginalOperationPackageLikeRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/nlcl-original-operation-package-like-request.schema.json"
+}

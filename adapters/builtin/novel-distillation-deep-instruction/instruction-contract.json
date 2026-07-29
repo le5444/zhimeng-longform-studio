@@ -1,0 +1,112 @@
+{
+  "schema": "zhimeng.novel-distillation-deep-instruction-contract.v1",
+  "package_id": "novel-distillation.deep-instruction",
+  "source": {
+    "path": "references/bundled-skills/novel-distillation/SKILL.md",
+    "sha256": "f4bffb45f6881ebb31ef2a4187ba92d5de4f6c241f7870308458e72bb9bfd003",
+    "bytes": 25674,
+    "line_count": 262,
+    "copy_mode": "ordinary_file_byte_for_byte"
+  },
+  "runtime_boundary": {
+    "runtime_owned": true,
+    "package_execution_allowed": false,
+    "provider_call_allowed": false,
+    "project_read_allowed": false,
+    "project_write_allowed": false,
+    "library_mutation_allowed": false,
+    "nlcl_sync_allowed": false,
+    "formalization_allowed": false
+  },
+  "input": {
+    "runtime_supplied_anchor_evidence_required": true,
+    "minimum_anchor_count": 1,
+    "anchor_required_fields": [
+      "anchor_id",
+      "artifact_id",
+      "content_hash",
+      "locator"
+    ],
+    "live_codex_skill_read_allowed": false
+  },
+  "output": {
+    "candidate_state": "pending",
+    "candidate_count_exact": 3,
+    "allowed_candidate_types": [
+      "work",
+      "voice",
+      "validator"
+    ],
+    "candidate_slots": [
+      {
+        "candidate_type": "work",
+        "count_exact": 1
+      },
+      {
+        "candidate_type": "voice",
+        "count_exact": 1
+      },
+      {
+        "candidate_type": "validator",
+        "count_exact": 1
+      }
+    ],
+    "required_flags": {
+      "draft_candidate": true,
+      "requires_author_review": true,
+      "formalization_allowed": false
+    },
+    "anchor_evidence_refs_per_candidate_minimum": 1,
+    "anchor_refs_must_resolve_to_runtime_input": true,
+    "additional_candidate_types_allowed": false,
+    "direct_project_write_allowed": false
+  },
+  "candidate_requirements": {
+    "work": [
+      "abstract_reader_promise",
+      "desire_or_pressure_engine",
+      "portable_decision_rules",
+      "generativity_test"
+    ],
+    "voice": [
+      "abstract_pov_distance",
+      "sentence_rhythm_bands",
+      "dialogue_and_description_pressure",
+      "anti_ai_failure_signatures",
+      "readability_acceptance_tests"
+    ],
+    "validator": [
+      "observable_pass_conditions",
+      "observable_fail_conditions",
+      "contamination_checks",
+      "formulaic_output_check"
+    ]
+  },
+  "anti_contamination": {
+    "forbidden_transfer": [
+      "source_proper_names",
+      "distinctive_setting_shells",
+      "recognizable_scene_order_or_plot_shells",
+      "signature_phrases",
+      "long_source_passages",
+      "recognizable_author_voice_imitation"
+    ],
+    "source_excerpt_policy": {
+      "long_passage_storage_allowed": false,
+      "preferred_evidence": [
+        "artifact_reference",
+        "content_hash",
+        "locator"
+      ],
+      "short_quote_max_characters": 240
+    },
+    "project_truth_override_allowed": false
+  },
+  "forbidden_claims": [
+    "formal_library_ingestion_complete",
+    "formal_card_created",
+    "nlcl_entry_synchronized",
+    "project_truth_updated",
+    "candidate_ready_for_unreviewed_writing"
+  ]
+}

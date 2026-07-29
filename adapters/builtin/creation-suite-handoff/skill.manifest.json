@@ -1,0 +1,38 @@
+{
+  "schema": "zhimeng.skill-manifest.v1",
+  "id": "novel-creation-suite.creation-handoff",
+  "display_name": "Creation Suite Handoff",
+  "description": "Deterministic Creation handoff artifact over immutable Context, Route, Prewrite package and prior execution receipts; v1 never authorizes formal prose.",
+  "kind": "deterministic_tool",
+  "version": "2026.07.21-m3j.1",
+  "source": {
+    "type": "builtin_managed",
+    "reference": "PROVENANCE.md",
+    "license": null,
+    "source_url": null,
+    "source_version": null,
+    "modified": true
+  },
+  "entrypoint": "run_creation_handoff.py",
+  "approval": "none",
+  "permissions": {
+    "read": [
+      "bound_project_snapshot"
+    ],
+    "write": [
+      "run_staging"
+    ],
+    "network": false,
+    "secrets": []
+  },
+  "timeout_seconds": 60,
+  "exit_codes": {
+    "0": "success",
+    "1": "domain_blocked"
+  },
+  "artifacts": [
+    "creation_handoff"
+  ],
+  "input_schema": "https://zhimeng.local/contracts/creation-handoff-request.schema.json",
+  "output_schema": "https://zhimeng.local/contracts/creation-handoff-result.schema.json"
+}

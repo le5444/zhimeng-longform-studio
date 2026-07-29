@@ -1,0 +1,15 @@
+{
+  "schema": "kernel-harness.timeline.v1",
+  "events": [
+    {
+      "id": "event-001",
+      "time": "23:40",
+      "summary": "陌生女孩送来半张借书卡"
+    },
+    {
+      "id": "event-002",
+      "time": "23:50",
+      "summary": "灰色轿车出现，债主提前敲门"
+    }
+  ]
+}

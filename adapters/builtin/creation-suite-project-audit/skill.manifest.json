@@ -1,0 +1,38 @@
+{
+  "schema": "zhimeng.skill-manifest.v1",
+  "id": "novel-creation-suite.project-audit",
+  "display_name": "Creation Suite Project Audit",
+  "description": "Read-only structural and contract audit for a managed novel project snapshot; prose quality and formal readiness are not assessed.",
+  "kind": "deterministic_tool",
+  "version": "2026.07.20-m3a.1",
+  "source": {
+    "type": "builtin_managed",
+    "reference": "PROVENANCE.md",
+    "license": null,
+    "source_url": null,
+    "source_version": null,
+    "modified": true
+  },
+  "entrypoint": "run_project_audit.py",
+  "approval": "none",
+  "permissions": {
+    "read": [
+      "bound_project_snapshot"
+    ],
+    "write": [
+      "run_staging"
+    ],
+    "network": false,
+    "secrets": []
+  },
+  "timeout_seconds": 120,
+  "exit_codes": {
+    "0": "success",
+    "1": "domain_blocked"
+  },
+  "artifacts": [
+    "project_audit"
+  ],
+  "input_schema": "https://zhimeng.local/contracts/creation-project-audit-request.schema.json",
+  "output_schema": "https://zhimeng.local/contracts/creation-project-audit-result.schema.json"
+}

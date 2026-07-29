@@ -1,0 +1,325 @@
+{
+  "$defs": {
+    "CreationInstructionBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]*[a-z0-9]$",
+          "title": "Block Id",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "source_path": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Source Path",
+          "type": "string"
+        },
+        "source_line_start": {
+          "minimum": 1,
+          "title": "Source Line Start",
+          "type": "integer"
+        },
+        "source_line_end": {
+          "minimum": 1,
+          "title": "Source Line End",
+          "type": "integer"
+        },
+        "source_byte_start": {
+          "minimum": 0,
+          "title": "Source Byte Start",
+          "type": "integer"
+        },
+        "source_byte_end": {
+          "minimum": 1,
+          "title": "Source Byte End",
+          "type": "integer"
+        },
+        "utf8_bytes": {
+          "minimum": 1,
+          "title": "Utf8 Bytes",
+          "type": "integer"
+        },
+        "content_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "included": {
+          "title": "Included",
+          "type": "boolean"
+        },
+        "content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content"
+        },
+        "exclusion_reason": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exclusion Reason"
+        }
+      },
+      "required": [
+        "block_id",
+        "title",
+        "source_path",
+        "source_line_start",
+        "source_line_end",
+        "source_byte_start",
+        "source_byte_end",
+        "utf8_bytes",
+        "content_hash",
+        "included"
+      ],
+      "title": "CreationInstructionBlock",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.creation-instruction-materialization.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "materialization_id": {
+      "pattern": "^creation-instruction-materialization-[0-9a-f]{32}$",
+      "title": "Materialization Id",
+      "type": "string"
+    },
+    "run_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "project_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "project_revision": {
+      "minimum": 1,
+      "title": "Project Revision",
+      "type": "integer"
+    },
+    "project_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Project Fingerprint",
+      "type": "string"
+    },
+    "workflow_plan_id": {
+      "pattern": "^workflow-plan-[0-9a-f]{32}$",
+      "title": "Workflow Plan Id",
+      "type": "string"
+    },
+    "workflow_plan_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Workflow Plan Hash",
+      "type": "string"
+    },
+    "final_checkpoint_id": {
+      "pattern": "^workflow-checkpoint-[0-9a-f]{32}$",
+      "title": "Final Checkpoint Id",
+      "type": "string"
+    },
+    "final_checkpoint_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Final Checkpoint Hash",
+      "type": "string"
+    },
+    "writer_task_id": {
+      "pattern": "^writer-task-[0-9a-f]{32}$",
+      "title": "Writer Task Id",
+      "type": "string"
+    },
+    "writer_task_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Writer Task Hash",
+      "type": "string"
+    },
+    "activation_binding_id": {
+      "pattern": "^creation-instruction-activation-[0-9a-f]{32}$",
+      "title": "Activation Binding Id",
+      "type": "string"
+    },
+    "activation_binding_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Activation Binding Hash",
+      "type": "string"
+    },
+    "skill_version_id": {
+      "pattern": "^skill-version-[0-9a-f]{32}$",
+      "title": "Skill Version Id",
+      "type": "string"
+    },
+    "manifest_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Manifest Fingerprint",
+      "type": "string"
+    },
+    "package_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Package Fingerprint",
+      "type": "string"
+    },
+    "instruction_map_path": {
+      "const": "instruction-map.json",
+      "title": "Instruction Map Path",
+      "type": "string"
+    },
+    "instruction_map_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Instruction Map Hash",
+      "type": "string"
+    },
+    "source_path": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "title": "Source Path",
+      "type": "string"
+    },
+    "source_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Hash",
+      "type": "string"
+    },
+    "blocks": {
+      "items": {
+        "$ref": "#/$defs/CreationInstructionBlock"
+      },
+      "maxItems": 64,
+      "minItems": 2,
+      "title": "Blocks",
+      "type": "array"
+    },
+    "blocks_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Blocks Hash",
+      "type": "string"
+    },
+    "included_block_ids": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "title": "Included Block Ids",
+      "type": "array"
+    },
+    "provider_instruction": {
+      "maxLength": 200000,
+      "minLength": 1,
+      "title": "Provider Instruction",
+      "type": "string"
+    },
+    "provider_instruction_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Provider Instruction Hash",
+      "type": "string"
+    },
+    "provider_instruction_utf8_bytes": {
+      "maximum": 200000,
+      "minimum": 1,
+      "title": "Provider Instruction Utf8 Bytes",
+      "type": "integer"
+    },
+    "max_included_utf8_bytes": {
+      "maximum": 200000,
+      "minimum": 1,
+      "title": "Max Included Utf8 Bytes",
+      "type": "integer"
+    },
+    "formal_draft_allowed": {
+      "const": false,
+      "title": "Formal Draft Allowed",
+      "type": "boolean"
+    },
+    "writes_project_truth": {
+      "const": false,
+      "title": "Writes Project Truth",
+      "type": "boolean"
+    },
+    "requires_author_review": {
+      "const": true,
+      "title": "Requires Author Review",
+      "type": "boolean"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "materialization_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Materialization Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "materialization_id",
+    "run_id",
+    "project_id",
+    "project_revision",
+    "project_fingerprint",
+    "workflow_plan_id",
+    "workflow_plan_hash",
+    "final_checkpoint_id",
+    "final_checkpoint_hash",
+    "writer_task_id",
+    "writer_task_hash",
+    "activation_binding_id",
+    "activation_binding_hash",
+    "skill_version_id",
+    "manifest_fingerprint",
+    "package_fingerprint",
+    "instruction_map_path",
+    "instruction_map_hash",
+    "source_path",
+    "source_hash",
+    "blocks",
+    "blocks_hash",
+    "included_block_ids",
+    "provider_instruction",
+    "provider_instruction_hash",
+    "provider_instruction_utf8_bytes",
+    "max_included_utf8_bytes",
+    "formal_draft_allowed",
+    "writes_project_truth",
+    "requires_author_review",
+    "created_at",
+    "materialization_hash"
+  ],
+  "title": "CreationInstructionMaterialization",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/creation-instruction-materialization.schema.json"
+}

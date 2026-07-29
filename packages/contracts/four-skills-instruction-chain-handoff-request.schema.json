@@ -1,0 +1,53 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.four-skills-instruction-chain-handoff-request.v1",
+      "default": "zhimeng.four-skills-instruction-chain-handoff-request.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "expected_batch_id": {
+      "pattern": "^four-skills-raw-adaptation-[0-9a-f]{32}$",
+      "title": "Expected Batch Id",
+      "type": "string"
+    },
+    "expected_batch_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Batch Hash",
+      "type": "string"
+    },
+    "expected_binding_id": {
+      "pattern": "^four-skills-workflow-binding-[0-9a-f]{32}$",
+      "title": "Expected Binding Id",
+      "type": "string"
+    },
+    "expected_binding_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Binding Hash",
+      "type": "string"
+    },
+    "expected_orchestration_id": {
+      "pattern": "^four-skills-workflow-orchestration-[0-9a-f]{32}$",
+      "title": "Expected Orchestration Id",
+      "type": "string"
+    },
+    "expected_orchestration_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Orchestration Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "expected_batch_id",
+    "expected_batch_hash",
+    "expected_binding_id",
+    "expected_binding_hash",
+    "expected_orchestration_id",
+    "expected_orchestration_hash"
+  ],
+  "title": "FourSkillsInstructionChainHandoffRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/four-skills-instruction-chain-handoff-request.schema.json"
+}

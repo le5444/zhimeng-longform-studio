@@ -1,0 +1,277 @@
+{
+  "$defs": {
+    "EvalCorpusRegressionCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/EvalCorpusRegressionCheckCode"
+        },
+        "required": {
+          "title": "Required",
+          "type": "boolean"
+        },
+        "present": {
+          "title": "Present",
+          "type": "boolean"
+        },
+        "detail": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "required",
+        "present",
+        "detail"
+      ],
+      "title": "EvalCorpusRegressionCheck",
+      "type": "object"
+    },
+    "EvalCorpusRegressionCheckCode": {
+      "enum": [
+        "baseline_present",
+        "current_export_present",
+        "package_schema_compatible",
+        "present_kinds_superset",
+        "locks_intact",
+        "hard_fact_block_non_increase",
+        "literary_hard_fact_non_increase",
+        "min_sample_artifacts"
+      ],
+      "title": "EvalCorpusRegressionCheckCode",
+      "type": "string"
+    },
+    "EvalCorpusRegressionReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.eval-corpus-regression-receipt.v1",
+          "default": "zhimeng.eval-corpus-regression-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "receipt_id": {
+          "pattern": "^eval-corpus-regression-[0-9a-f]{32}$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/EvalCorpusRegressionStatus"
+        },
+        "baseline_receipt_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline Receipt Id"
+        },
+        "baseline_version": {
+          "anyOf": [
+            {
+              "maximum": 1000000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline Version"
+        },
+        "baseline_export_file_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline Export File Sha256"
+        },
+        "current_export_receipt_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Current Export Receipt Id"
+        },
+        "current_export_file_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Current Export File Sha256"
+        },
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/EvalCorpusRegressionCheck"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Checks",
+          "type": "array"
+        },
+        "missing_required": {
+          "items": {
+            "$ref": "#/$defs/EvalCorpusRegressionCheckCode"
+          },
+          "maxItems": 32,
+          "title": "Missing Required",
+          "type": "array"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "quality_assessed": {
+          "const": false,
+          "default": false,
+          "title": "Quality Assessed",
+          "type": "boolean"
+        },
+        "formal_knowledge_contaminated": {
+          "const": false,
+          "default": false,
+          "title": "Formal Knowledge Contaminated",
+          "type": "boolean"
+        },
+        "training_ready": {
+          "const": false,
+          "default": false,
+          "title": "Training Ready",
+          "type": "boolean"
+        },
+        "policy_version": {
+          "const": "local-v1-eval-corpus-regression-1",
+          "default": "local-v1-eval-corpus-regression-1",
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "evaluated_at": {
+          "format": "date-time",
+          "title": "Evaluated At",
+          "type": "string"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "change_set_id",
+        "project_id",
+        "status",
+        "checks",
+        "evaluated_at",
+        "receipt_hash"
+      ],
+      "title": "EvalCorpusRegressionReceipt",
+      "type": "object"
+    },
+    "EvalCorpusRegressionStatus": {
+      "enum": [
+        "non_degraded",
+        "degraded",
+        "incomplete"
+      ],
+      "title": "EvalCorpusRegressionStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.eval-corpus-regression-response.v1",
+      "default": "zhimeng.eval-corpus-regression-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "change_set_id": {
+      "pattern": "^changeset-[0-9a-f]{32}$",
+      "title": "Change Set Id",
+      "type": "string"
+    },
+    "receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EvalCorpusRegressionReceipt"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "history": {
+      "items": {
+        "$ref": "#/$defs/EvalCorpusRegressionReceipt"
+      },
+      "maxItems": 32,
+      "title": "History",
+      "type": "array"
+    },
+    "not_claiming": {
+      "default": [
+        "literary_quality_score",
+        "training_dataset_ready",
+        "formal_prose_writeback",
+        "formal_draft_authorization_unlock",
+        "four_skills_generic_exactly_once",
+        "local_v1_exe"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Not Claiming",
+      "type": "array"
+    }
+  },
+  "required": [
+    "change_set_id"
+  ],
+  "title": "EvalCorpusRegressionResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/eval-corpus-regression-response.schema.json"
+}

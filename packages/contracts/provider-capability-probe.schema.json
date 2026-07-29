@@ -1,0 +1,1106 @@
+{
+  "$defs": {
+    "CancelCapability": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "const": "not_measured",
+          "title": "Status",
+          "type": "string"
+        },
+        "reason": {
+          "const": "no_portable_server_cancel_contract",
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "reason"
+      ],
+      "title": "CancelCapability",
+      "type": "object"
+    },
+    "CapabilityStatus": {
+      "enum": [
+        "pass",
+        "fail",
+        "not_measured"
+      ],
+      "title": "CapabilityStatus",
+      "type": "string"
+    },
+    "CredentialHandling": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "const": "environment_variable",
+          "title": "Source",
+          "type": "string"
+        },
+        "key_written_to_report": {
+          "const": false,
+          "title": "Key Written To Report",
+          "type": "boolean"
+        },
+        "key_printed_by_cli": {
+          "const": false,
+          "title": "Key Printed By Cli",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "source",
+        "key_written_to_report",
+        "key_printed_by_cli"
+      ],
+      "title": "CredentialHandling",
+      "type": "object"
+    },
+    "JsonObjectCapability": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "pass"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "http_status": {
+                "maximum": 299,
+                "minimum": 200
+              },
+              "error_code": {
+                "type": "null"
+              },
+              "plain_text_control_observed": {
+                "const": true
+              },
+              "control_response_model_matches_requested": {
+                "const": true
+              },
+              "control_finish_reason_present": {
+                "const": true
+              },
+              "valid_json_object": {
+                "const": true
+              },
+              "format_enforced_against_plain_text_control": {
+                "const": true
+              },
+              "response_model_matches_requested": {
+                "const": true
+              },
+              "finish_reason_present": {
+                "const": true
+              }
+            },
+            "required": [
+              "http_status",
+              "plain_text_control_observed",
+              "control_response_model_matches_requested",
+              "control_finish_reason_present",
+              "valid_json_object",
+              "format_enforced_against_plain_text_control",
+              "response_model_matches_requested",
+              "finish_reason_present"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "fail"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "error_code": {
+                "not": {
+                  "type": "null"
+                }
+              }
+            },
+            "required": [
+              "error_code"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "pass",
+            "fail"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "http_status": {
+          "anyOf": [
+            {
+              "maximum": 599,
+              "minimum": 100,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Http Status"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProbeErrorCode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "plain_text_control_observed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plain Text Control Observed"
+        },
+        "control_response_model_matches_requested": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Control Response Model Matches Requested"
+        },
+        "control_finish_reason_present": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Control Finish Reason Present"
+        },
+        "valid_json_object": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Valid Json Object"
+        },
+        "format_enforced_against_plain_text_control": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Format Enforced Against Plain Text Control"
+        },
+        "response_model_matches_requested": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Response Model Matches Requested"
+        },
+        "finish_reason_present": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finish Reason Present"
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UsageSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "JsonObjectCapability",
+      "type": "object"
+    },
+    "ModelsCapability": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "pass"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "http_status": {
+                "maximum": 299,
+                "minimum": 200
+              },
+              "error_code": {
+                "type": "null"
+              },
+              "model_count": {
+                "minimum": 1
+              },
+              "selected_model_listed": {
+                "const": true
+              }
+            },
+            "required": [
+              "http_status",
+              "model_count",
+              "selected_model_listed"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "fail"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "error_code": {
+                "not": {
+                  "type": "null"
+                }
+              }
+            },
+            "required": [
+              "error_code"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "pass",
+            "fail"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "http_status": {
+          "anyOf": [
+            {
+              "maximum": 599,
+              "minimum": 100,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Http Status"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProbeErrorCode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "model_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Count"
+        },
+        "selected_model_listed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selected Model Listed"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "ModelsCapability",
+      "type": "object"
+    },
+    "NamedFunctionToolChoiceCapability": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "pass"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "http_status": {
+                "maximum": 299,
+                "minimum": 200
+              },
+              "error_code": {
+                "type": "null"
+              },
+              "tool_call_count": {
+                "const": 1
+              },
+              "function_type_valid": {
+                "const": true
+              },
+              "tool_call_id_present": {
+                "const": true
+              },
+              "selected_named_function": {
+                "const": true
+              },
+              "arguments_valid_json_object": {
+                "const": true
+              },
+              "arguments_match_expected_marker": {
+                "const": true
+              },
+              "response_model_matches_requested": {
+                "const": true
+              },
+              "finish_reason_present": {
+                "const": true
+              },
+              "finish_reason_is_tool_calls": {
+                "const": true
+              }
+            },
+            "required": [
+              "http_status",
+              "tool_call_count",
+              "function_type_valid",
+              "tool_call_id_present",
+              "selected_named_function",
+              "arguments_valid_json_object",
+              "arguments_match_expected_marker",
+              "response_model_matches_requested",
+              "finish_reason_present",
+              "finish_reason_is_tool_calls"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "fail"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "error_code": {
+                "not": {
+                  "type": "null"
+                }
+              }
+            },
+            "required": [
+              "error_code"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "pass",
+            "fail"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "http_status": {
+          "anyOf": [
+            {
+              "maximum": 599,
+              "minimum": 100,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Http Status"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProbeErrorCode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "tool_call_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool Call Count"
+        },
+        "function_type_valid": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Function Type Valid"
+        },
+        "tool_call_id_present": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool Call Id Present"
+        },
+        "selected_named_function": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selected Named Function"
+        },
+        "arguments_valid_json_object": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Arguments Valid Json Object"
+        },
+        "arguments_match_expected_marker": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Arguments Match Expected Marker"
+        },
+        "response_model_matches_requested": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Response Model Matches Requested"
+        },
+        "finish_reason_present": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finish Reason Present"
+        },
+        "finish_reason_is_tool_calls": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finish Reason Is Tool Calls"
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UsageSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "NamedFunctionToolChoiceCapability",
+      "type": "object"
+    },
+    "ProbeErrorCode": {
+      "enum": [
+        "http_status",
+        "transport_error",
+        "response_too_large",
+        "invalid_json",
+        "invalid_response",
+        "model_mismatch",
+        "invalid_stream",
+        "stream_limit",
+        "deadline_exceeded"
+      ],
+      "title": "ProbeErrorCode",
+      "type": "string"
+    },
+    "ProbeLimits": {
+      "additionalProperties": false,
+      "properties": {
+        "timeout_seconds": {
+          "exclusiveMinimum": 0,
+          "maximum": 300,
+          "title": "Timeout Seconds",
+          "type": "number"
+        },
+        "max_json_response_bytes": {
+          "const": 2097152,
+          "title": "Max Json Response Bytes",
+          "type": "integer"
+        },
+        "max_stream_line_bytes": {
+          "const": 131072,
+          "title": "Max Stream Line Bytes",
+          "type": "integer"
+        },
+        "max_stream_events": {
+          "const": 2048,
+          "title": "Max Stream Events",
+          "type": "integer"
+        },
+        "max_stream_lines": {
+          "const": 8192,
+          "title": "Max Stream Lines",
+          "type": "integer"
+        },
+        "max_stream_bytes": {
+          "const": 4194304,
+          "title": "Max Stream Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "timeout_seconds",
+        "max_json_response_bytes",
+        "max_stream_line_bytes",
+        "max_stream_events",
+        "max_stream_lines",
+        "max_stream_bytes"
+      ],
+      "title": "ProbeLimits",
+      "type": "object"
+    },
+    "ProviderCapabilities": {
+      "additionalProperties": false,
+      "properties": {
+        "models": {
+          "$ref": "#/$defs/ModelsCapability"
+        },
+        "json_object": {
+          "$ref": "#/$defs/JsonObjectCapability"
+        },
+        "named_function_tool_choice": {
+          "$ref": "#/$defs/NamedFunctionToolChoiceCapability"
+        },
+        "streaming": {
+          "$ref": "#/$defs/StreamingCapability"
+        },
+        "cancel": {
+          "$ref": "#/$defs/CancelCapability"
+        }
+      },
+      "required": [
+        "models",
+        "json_object",
+        "named_function_tool_choice",
+        "streaming",
+        "cancel"
+      ],
+      "title": "ProviderCapabilities",
+      "type": "object"
+    },
+    "ProviderTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "base_url": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Base Url",
+          "type": "string"
+        },
+        "model": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "api_key_env": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Api Key Env",
+          "type": "string"
+        },
+        "user_agent": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "User Agent",
+          "type": "string"
+        },
+        "insecure_loopback_http": {
+          "title": "Insecure Loopback Http",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "base_url",
+        "model",
+        "api_key_env",
+        "user_agent",
+        "insecure_loopback_http"
+      ],
+      "title": "ProviderTarget",
+      "type": "object"
+    },
+    "StreamingCapability": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "pass"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "http_status": {
+                "maximum": 299,
+                "minimum": 200
+              },
+              "error_code": {
+                "type": "null"
+              },
+              "sse_event_count": {
+                "minimum": 1
+              },
+              "done_sentinel_received": {
+                "const": true
+              },
+              "content_delta_received": {
+                "const": true
+              },
+              "response_model_matches_requested": {
+                "const": true
+              },
+              "content_type_is_event_stream": {
+                "const": true
+              },
+              "skipped_by_caller": {
+                "const": false
+              }
+            },
+            "required": [
+              "http_status",
+              "sse_event_count",
+              "done_sentinel_received",
+              "content_delta_received",
+              "response_model_matches_requested",
+              "content_type_is_event_stream",
+              "skipped_by_caller"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "fail"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "error_code": {
+                "not": {
+                  "type": "null"
+                }
+              }
+            },
+            "required": [
+              "error_code"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/CapabilityStatus"
+        },
+        "http_status": {
+          "anyOf": [
+            {
+              "maximum": 599,
+              "minimum": 100,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Http Status"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProbeErrorCode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "sse_event_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sse Event Count"
+        },
+        "done_sentinel_received": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Done Sentinel Received"
+        },
+        "content_delta_received": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Delta Received"
+        },
+        "response_model_matches_requested": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Response Model Matches Requested"
+        },
+        "content_type_is_event_stream": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Type Is Event Stream"
+        },
+        "skipped_by_caller": {
+          "default": false,
+          "title": "Skipped By Caller",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "StreamingCapability",
+      "type": "object"
+    },
+    "UsageSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "prompt_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt Tokens"
+        },
+        "completion_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completion Tokens"
+        },
+        "total_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Total Tokens"
+        }
+      },
+      "title": "UsageSummary",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.provider-capability-probe.v3",
+      "title": "Schema",
+      "type": "string"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "target": {
+      "$ref": "#/$defs/ProviderTarget"
+    },
+    "probe_limits": {
+      "$ref": "#/$defs/ProbeLimits"
+    },
+    "credential_handling": {
+      "$ref": "#/$defs/CredentialHandling"
+    },
+    "capabilities": {
+      "$ref": "#/$defs/ProviderCapabilities"
+    }
+  },
+  "required": [
+    "schema",
+    "generated_at",
+    "target",
+    "probe_limits",
+    "credential_handling",
+    "capabilities"
+  ],
+  "title": "ProviderCapabilityProbeReport",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/provider-capability-probe.schema.json"
+}

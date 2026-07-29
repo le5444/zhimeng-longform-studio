@@ -1,0 +1,276 @@
+{
+  "$defs": {
+    "KnowledgeCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.knowledge-candidate.v2",
+          "default": "zhimeng.knowledge-candidate.v2",
+          "title": "Schema",
+          "type": "string"
+        },
+        "candidate_id": {
+          "pattern": "^knowledge-candidate-[0-9a-f]{32}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "source_import_id": {
+          "pattern": "^source-import-[0-9a-f]{32}$",
+          "title": "Source Import Id",
+          "type": "string"
+        },
+        "source_card_index": {
+          "minimum": 0,
+          "title": "Source Card Index",
+          "type": "integer"
+        },
+        "source_draft_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Draft Hash",
+          "type": "string"
+        },
+        "lineage_status": {
+          "$ref": "#/$defs/KnowledgeLineageStatus",
+          "default": "legacy_unverified"
+        },
+        "origin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KnowledgeCandidateOrigin"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "card_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Card Id",
+          "type": "string"
+        },
+        "card_type": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Card Type",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/KnowledgeCandidateStatus"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "content_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "card": {
+          "additionalProperties": true,
+          "title": "Card",
+          "type": "object"
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/KnowledgeReviewIssue"
+          },
+          "maxItems": 128,
+          "title": "Issues",
+          "type": "array"
+        },
+        "promoted_version_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Promoted Version Id"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "source_import_id",
+        "source_card_index",
+        "source_draft_hash",
+        "card_id",
+        "card_type",
+        "status",
+        "revision",
+        "content_hash",
+        "card",
+        "issues",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "KnowledgeCandidate",
+      "type": "object"
+    },
+    "KnowledgeCandidateOrigin": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.knowledge-candidate-origin.v1",
+          "default": "zhimeng.knowledge-candidate-origin.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "source_receipt_id": {
+          "pattern": "^source-import-receipt-[0-9a-f]{32}$",
+          "title": "Source Receipt Id",
+          "type": "string"
+        },
+        "source_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Receipt Hash",
+          "type": "string"
+        },
+        "source_packet_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Packet Fingerprint",
+          "type": "string"
+        },
+        "draft_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Draft Fingerprint",
+          "type": "string"
+        },
+        "cards_draft_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Cards Draft Hash",
+          "type": "string"
+        },
+        "source_card_index": {
+          "minimum": 0,
+          "title": "Source Card Index",
+          "type": "integer"
+        },
+        "source_card_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Card Hash",
+          "type": "string"
+        },
+        "origin_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Origin Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_receipt_id",
+        "source_receipt_hash",
+        "source_packet_fingerprint",
+        "draft_fingerprint",
+        "cards_draft_hash",
+        "source_card_index",
+        "source_card_hash",
+        "origin_hash"
+      ],
+      "title": "KnowledgeCandidateOrigin",
+      "type": "object"
+    },
+    "KnowledgeCandidateStatus": {
+      "enum": [
+        "pending",
+        "promoted",
+        "deferred",
+        "rejected"
+      ],
+      "title": "KnowledgeCandidateStatus",
+      "type": "string"
+    },
+    "KnowledgeLineageStatus": {
+      "enum": [
+        "verified",
+        "legacy_unverified"
+      ],
+      "title": "KnowledgeLineageStatus",
+      "type": "string"
+    },
+    "KnowledgeReviewIssue": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Code",
+          "type": "string"
+        },
+        "field": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Field",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "field",
+        "message"
+      ],
+      "title": "KnowledgeReviewIssue",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.knowledge-candidate-list.v2",
+      "default": "zhimeng.knowledge-candidate-list.v2",
+      "title": "Schema",
+      "type": "string"
+    },
+    "candidates": {
+      "items": {
+        "$ref": "#/$defs/KnowledgeCandidate"
+      },
+      "title": "Candidates",
+      "type": "array"
+    },
+    "candidate_set_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Candidate Set Hash"
+    }
+  },
+  "required": [
+    "candidates"
+  ],
+  "title": "KnowledgeCandidateList",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/knowledge-candidate-list.schema.json"
+}

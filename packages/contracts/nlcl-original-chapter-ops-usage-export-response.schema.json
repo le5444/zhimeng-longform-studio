@@ -1,0 +1,261 @@
+{
+  "$defs": {
+    "NlclOriginalChapterOpsUsageExportReceipt": {
+      "additionalProperties": false,
+      "description": "Bridge receipt for chapter/ops usage continuity into the novel project.\n\nRecords an append-only chapter/ops usage row derived from the original-compatible\ncall_usage export. It does not mutate original character/plot/foreshadowing state\nfiles and does not authorize formal prose.",
+      "properties": {
+        "schema": {
+          "const": "zhimeng.nlcl-original-chapter-ops-usage-export-receipt.v1",
+          "default": "zhimeng.nlcl-original-chapter-ops-usage-export-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "receipt_id": {
+          "pattern": "^nlcl-original-chapter-ops-usage-[0-9a-f]{32}$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "nlcl_original_call_usage_export_receipt_id": {
+          "pattern": "^nlcl-original-call-usage-[0-9a-f]{32}$",
+          "title": "Nlcl Original Call Usage Export Receipt Id",
+          "type": "string"
+        },
+        "nlcl_original_call_usage_export_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Nlcl Original Call Usage Export Receipt Hash",
+          "type": "string"
+        },
+        "nlcl_call_usage_continuity_receipt_id": {
+          "pattern": "^nlcl-call-usage-[0-9a-f]{32}$",
+          "title": "Nlcl Call Usage Continuity Receipt Id",
+          "type": "string"
+        },
+        "nlcl_call_usage_continuity_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Nlcl Call Usage Continuity Receipt Hash",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "applied",
+            "rolled_back"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "chapter_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Chapter Id",
+          "type": "string"
+        },
+        "canonical_chapter_key": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Canonical Chapter Key",
+          "type": "string"
+        },
+        "chapter_relative_paths": {
+          "items": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+\\.(?:json|jsonl|md|txt|yaml|yml)$",
+            "type": "string",
+            "x-zhimeng-invariants": [
+              "path segments cannot use Windows device names",
+              "path segments are at most 255 characters"
+            ]
+          },
+          "maxItems": 64,
+          "title": "Chapter Relative Paths",
+          "type": "array"
+        },
+        "used_card_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Used Card Ids",
+          "type": "array"
+        },
+        "unused_card_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Unused Card Ids",
+          "type": "array"
+        },
+        "missed_card_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Missed Card Ids",
+          "type": "array"
+        },
+        "source_run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Run Id"
+        },
+        "export_relative_path": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+\\.(?:json|jsonl|md|txt|yaml|yml)$",
+          "title": "Export Relative Path",
+          "type": "string",
+          "x-zhimeng-invariants": [
+            "path segments cannot use Windows device names",
+            "path segments are at most 255 characters"
+          ]
+        },
+        "export_absolute_path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Export Absolute Path",
+          "type": "string"
+        },
+        "export_file_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Export File Sha256",
+          "type": "string"
+        },
+        "export_byte_offset": {
+          "minimum": 0,
+          "title": "Export Byte Offset",
+          "type": "integer"
+        },
+        "export_row_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Export Row Sha256",
+          "type": "string"
+        },
+        "record_mode": {
+          "const": "product_bridge_chapter_ops_from_call_usage_export",
+          "default": "product_bridge_chapter_ops_from_call_usage_export",
+          "title": "Record Mode",
+          "type": "string"
+        },
+        "original_nlcl_call_usage_recorded": {
+          "const": true,
+          "default": true,
+          "title": "Original Nlcl Call Usage Recorded",
+          "type": "boolean"
+        },
+        "original_nlcl_chapter_ops_usage_synced": {
+          "const": true,
+          "default": true,
+          "title": "Original Nlcl Chapter Ops Usage Synced",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "quality_assessed": {
+          "const": false,
+          "default": false,
+          "title": "Quality Assessed",
+          "type": "boolean"
+        },
+        "novel_state_synced": {
+          "const": false,
+          "default": false,
+          "title": "Novel State Synced",
+          "type": "boolean"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "change_set_id",
+        "project_id",
+        "nlcl_original_call_usage_export_receipt_id",
+        "nlcl_original_call_usage_export_receipt_hash",
+        "nlcl_call_usage_continuity_receipt_id",
+        "nlcl_call_usage_continuity_receipt_hash",
+        "outcome",
+        "chapter_id",
+        "canonical_chapter_key",
+        "export_relative_path",
+        "export_absolute_path",
+        "export_file_sha256",
+        "export_byte_offset",
+        "export_row_sha256",
+        "created_at",
+        "receipt_hash"
+      ],
+      "title": "NlclOriginalChapterOpsUsageExportReceipt",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.nlcl-original-chapter-ops-usage-export-response.v1",
+      "default": "zhimeng.nlcl-original-chapter-ops-usage-export-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "change_set_id": {
+      "pattern": "^changeset-[0-9a-f]{32}$",
+      "title": "Change Set Id",
+      "type": "string"
+    },
+    "receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NlclOriginalChapterOpsUsageExportReceipt"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "history": {
+      "items": {
+        "$ref": "#/$defs/NlclOriginalChapterOpsUsageExportReceipt"
+      },
+      "maxItems": 32,
+      "title": "History",
+      "type": "array"
+    }
+  },
+  "required": [
+    "change_set_id"
+  ],
+  "title": "NlclOriginalChapterOpsUsageExportResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/nlcl-original-chapter-ops-usage-export-response.schema.json"
+}

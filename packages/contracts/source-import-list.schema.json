@@ -1,0 +1,764 @@
+{
+  "$defs": {
+    "DistillationDraft": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "const": "draft_ready",
+          "default": "draft_ready",
+          "title": "Status",
+          "type": "string"
+        },
+        "output_dir": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Output Dir",
+          "type": "string"
+        },
+        "cards_path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Cards Path",
+          "type": "string"
+        },
+        "report_path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Report Path",
+          "type": "string"
+        },
+        "validation_report_path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Validation Report Path",
+          "type": "string"
+        },
+        "envelope_path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Envelope Path",
+          "type": "string"
+        },
+        "card_count": {
+          "minimum": 1,
+          "title": "Card Count",
+          "type": "integer"
+        },
+        "requires_review": {
+          "const": true,
+          "default": true,
+          "title": "Requires Review",
+          "type": "boolean"
+        },
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/SourceArtifact"
+          },
+          "maxItems": 32,
+          "minItems": 4,
+          "title": "Artifacts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "output_dir",
+        "cards_path",
+        "report_path",
+        "validation_report_path",
+        "envelope_path",
+        "card_count",
+        "artifacts"
+      ],
+      "title": "DistillationDraft",
+      "type": "object"
+    },
+    "LocalFileSourceCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "const": 1,
+          "default": 1,
+          "title": "Index",
+          "type": "integer"
+        },
+        "source_path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Source Path",
+          "type": "string"
+        },
+        "source_format": {
+          "default": "txt",
+          "enum": [
+            "txt",
+            "epub"
+          ],
+          "title": "Source Format",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "author": {
+          "default": "unknown",
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Author",
+          "type": "string"
+        },
+        "source_size_bytes": {
+          "minimum": 1,
+          "title": "Source Size Bytes",
+          "type": "integer"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        },
+        "source_locator_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Locator Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_path",
+        "title",
+        "source_size_bytes",
+        "source_sha256",
+        "source_locator_hash"
+      ],
+      "title": "LocalFileSourceCandidate",
+      "type": "object"
+    },
+    "LocalSourceImportJob": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.source-import.v2",
+          "default": "zhimeng.source-import.v2",
+          "title": "Schema",
+          "type": "string"
+        },
+        "import_id": {
+          "pattern": "^source-import-[0-9a-f]{32}$",
+          "title": "Import Id",
+          "type": "string"
+        },
+        "provider": {
+          "const": "local_file",
+          "default": "local_file",
+          "title": "Provider",
+          "type": "string"
+        },
+        "query": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Query",
+          "type": "string"
+        },
+        "candidate": {
+          "$ref": "#/$defs/LocalFileSourceCandidate"
+        },
+        "status": {
+          "$ref": "#/$defs/SourceImportStatus"
+        },
+        "retry_of": {
+          "anyOf": [
+            {
+              "pattern": "^source-import-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retry Of"
+        },
+        "progress": {
+          "$ref": "#/$defs/SourceImportProgress"
+        },
+        "source_packet": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PreparedLocalSourcePacket"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "distillation_draft": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DistillationDraft"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "error": {
+          "anyOf": [
+            {
+              "maxLength": 8000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "import_id",
+        "query",
+        "candidate",
+        "status",
+        "progress",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "LocalSourceImportJob",
+      "type": "object"
+    },
+    "PreparedLocalSourcePacket": {
+      "additionalProperties": false,
+      "properties": {
+        "source_backend": {
+          "const": "generic_local_file",
+          "default": "generic_local_file",
+          "title": "Source Backend",
+          "type": "string"
+        },
+        "source_format": {
+          "default": "txt",
+          "enum": [
+            "txt",
+            "epub"
+          ],
+          "title": "Source Format",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "author": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Author",
+          "type": "string"
+        },
+        "download_scope": {
+          "const": "full",
+          "default": "full",
+          "title": "Download Scope",
+          "type": "string"
+        },
+        "packet_dir": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Packet Dir",
+          "type": "string"
+        },
+        "packet_manifest_path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Packet Manifest Path",
+          "type": "string"
+        },
+        "packet_source_path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Packet Source Path",
+          "type": "string"
+        },
+        "text_path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Text Path",
+          "type": "string"
+        },
+        "metadata_path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Metadata Path",
+          "type": "string"
+        },
+        "char_count": {
+          "minimum": 1,
+          "title": "Char Count",
+          "type": "integer"
+        },
+        "chapter_marker_count": {
+          "minimum": 0,
+          "title": "Chapter Marker Count",
+          "type": "integer"
+        },
+        "source_file_size_bytes": {
+          "minimum": 1,
+          "title": "Source File Size Bytes",
+          "type": "integer"
+        },
+        "source_file_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source File Sha256",
+          "type": "string"
+        },
+        "packet_source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Packet Source Sha256",
+          "type": "string"
+        },
+        "text_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Text Sha256",
+          "type": "string"
+        },
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/SourceArtifact"
+          },
+          "maxItems": 32,
+          "minItems": 4,
+          "title": "Artifacts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "title",
+        "author",
+        "packet_dir",
+        "packet_manifest_path",
+        "packet_source_path",
+        "text_path",
+        "metadata_path",
+        "char_count",
+        "chapter_marker_count",
+        "source_file_size_bytes",
+        "source_file_sha256",
+        "packet_source_sha256",
+        "text_sha256",
+        "artifacts"
+      ],
+      "title": "PreparedLocalSourcePacket",
+      "type": "object"
+    },
+    "PreparedSourcePacket": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "author": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Author",
+          "type": "string"
+        },
+        "download_scope": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Download Scope",
+          "type": "string"
+        },
+        "packet_dir": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Packet Dir",
+          "type": "string"
+        },
+        "packet_manifest_path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Packet Manifest Path",
+          "type": "string"
+        },
+        "epub_path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Epub Path",
+          "type": "string"
+        },
+        "downloaded_epub_path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Downloaded Epub Path",
+          "type": "string"
+        },
+        "text_path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Text Path",
+          "type": "string"
+        },
+        "metadata_path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Metadata Path",
+          "type": "string"
+        },
+        "char_count": {
+          "minimum": 1,
+          "title": "Char Count",
+          "type": "integer"
+        },
+        "chapter_marker_count": {
+          "minimum": 0,
+          "title": "Chapter Marker Count",
+          "type": "integer"
+        },
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/SourceArtifact"
+          },
+          "maxItems": 32,
+          "minItems": 4,
+          "title": "Artifacts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "title",
+        "author",
+        "download_scope",
+        "packet_dir",
+        "packet_manifest_path",
+        "epub_path",
+        "downloaded_epub_path",
+        "text_path",
+        "metadata_path",
+        "char_count",
+        "chapter_marker_count",
+        "artifacts"
+      ],
+      "title": "PreparedSourcePacket",
+      "type": "object"
+    },
+    "SourceArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Kind",
+          "type": "string"
+        },
+        "path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "size_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size Bytes"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sha256"
+        }
+      },
+      "required": [
+        "kind",
+        "path"
+      ],
+      "title": "SourceArtifact",
+      "type": "object"
+    },
+    "SourceImportJob": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.source-import.v1",
+          "default": "zhimeng.source-import.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "import_id": {
+          "pattern": "^source-import-[0-9a-f]{32}$",
+          "title": "Import Id",
+          "type": "string"
+        },
+        "provider": {
+          "const": "tomato",
+          "default": "tomato",
+          "title": "Provider",
+          "type": "string"
+        },
+        "query": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Query",
+          "type": "string"
+        },
+        "candidate": {
+          "$ref": "#/$defs/TomatoSearchCandidate"
+        },
+        "status": {
+          "$ref": "#/$defs/SourceImportStatus"
+        },
+        "retry_of": {
+          "anyOf": [
+            {
+              "pattern": "^source-import-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retry Of"
+        },
+        "progress": {
+          "$ref": "#/$defs/SourceImportProgress"
+        },
+        "source_packet": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PreparedSourcePacket"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "distillation_draft": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DistillationDraft"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "error": {
+          "anyOf": [
+            {
+              "maxLength": 8000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "import_id",
+        "query",
+        "candidate",
+        "status",
+        "progress",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "SourceImportJob",
+      "type": "object"
+    },
+    "SourceImportProgress": {
+      "additionalProperties": false,
+      "properties": {
+        "stage": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Stage",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "saved_chapters": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Saved Chapters"
+        },
+        "total_chapters": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Total Chapters"
+        },
+        "percent": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Percent"
+        }
+      },
+      "required": [
+        "stage",
+        "message"
+      ],
+      "title": "SourceImportProgress",
+      "type": "object"
+    },
+    "SourceImportStatus": {
+      "enum": [
+        "queued",
+        "downloading",
+        "source_ready",
+        "drafting",
+        "awaiting_review",
+        "formalizing",
+        "completed",
+        "cancel_requested",
+        "cancelled",
+        "failed",
+        "interrupted"
+      ],
+      "title": "SourceImportStatus",
+      "type": "string"
+    },
+    "TomatoSearchCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "minimum": 1,
+          "title": "Index",
+          "type": "integer"
+        },
+        "book_id": {
+          "pattern": "^[0-9]{1,32}$",
+          "title": "Book Id",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "author": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Author",
+          "type": "string"
+        }
+      },
+      "required": [
+        "index",
+        "book_id",
+        "title",
+        "author"
+      ],
+      "title": "TomatoSearchCandidate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.source-import-list.v1",
+      "default": "zhimeng.source-import-list.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "imports": {
+      "items": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/SourceImportJob"
+          },
+          {
+            "$ref": "#/$defs/LocalSourceImportJob"
+          }
+        ]
+      },
+      "title": "Imports",
+      "type": "array"
+    }
+  },
+  "required": [
+    "imports"
+  ],
+  "title": "SourceImportListResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/source-import-list.schema.json"
+}

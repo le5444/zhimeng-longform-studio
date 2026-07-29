@@ -1,0 +1,757 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/execution-protocol.schema.json",
+  "title": "ExecutionProtocolDefinitions",
+  "$comment": "Shared definitions for the vendor-neutral execution protocol. Generic JsonValue objects intentionally allow dynamic keys; every structured protocol object forbids unknown fields.",
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "sha256Fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "jsonValue": {
+      "anyOf": [
+        {"type": "null"},
+        {"type": "boolean"},
+        {"type": "number"},
+        {"type": "string"},
+        {"type": "array", "items": {"$ref": "#/$defs/jsonValue"}},
+        {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/jsonValue"}
+        }
+      ]
+    },
+    "nullableStableId": {
+      "anyOf": [{"$ref": "#/$defs/stableId"}, {"type": "null"}]
+    },
+    "nullableString": {
+      "anyOf": [{"type": "string"}, {"type": "null"}]
+    },
+    "nullableNonEmptyString": {
+      "anyOf": [{"$ref": "#/$defs/nonEmptyString"}, {"type": "null"}]
+    },
+    "nullableTimestamp": {
+      "anyOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]
+    },
+    "executorIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "executor_id",
+        "kind",
+        "implementation",
+        "version",
+        "protocol_version",
+        "instance_id"
+      ],
+      "properties": {
+        "executor_id": {"$ref": "#/$defs/stableId"},
+        "kind": {"enum": ["embedded", "process", "remote"]},
+        "implementation": {"$ref": "#/$defs/nonEmptyString"},
+        "version": {"$ref": "#/$defs/nonEmptyString"},
+        "protocol_version": {"$ref": "#/$defs/nonEmptyString"},
+        "instance_id": {"$ref": "#/$defs/nullableStableId"}
+      }
+    },
+    "capabilityExtension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "config"],
+      "properties": {
+        "version": {"$ref": "#/$defs/nullableNonEmptyString"},
+        "config": {"$ref": "#/$defs/jsonValue"}
+      }
+    },
+    "capabilityProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_version", "names", "extensions"],
+      "properties": {
+        "protocol_version": {"$ref": "#/$defs/nonEmptyString"},
+        "names": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "streaming",
+              "cancel",
+              "resume",
+              "checkpoints",
+              "tool_calls",
+              "file_read",
+              "file_write",
+              "shell",
+              "mcp",
+              "skills",
+              "subagents",
+              "compaction",
+              "approvals",
+              "artifacts"
+            ]
+          }
+        },
+        "extensions": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 3,
+            "maxLength": 128,
+            "pattern": "^x-[a-z0-9][a-z0-9._/-]*$"
+          },
+          "additionalProperties": {"$ref": "#/$defs/capabilityExtension"}
+        }
+      }
+    },
+    "projectRevision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project_id", "revision", "fingerprint", "observed_at"],
+      "properties": {
+        "project_id": {"$ref": "#/$defs/stableId"},
+        "revision": {"type": "integer", "minimum": 1},
+        "fingerprint": {"$ref": "#/$defs/sha256Fingerprint"},
+        "observed_at": {"$ref": "#/$defs/timestamp"}
+      }
+    },
+    "messagePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "content",
+        "name",
+        "message_id",
+        "phase",
+        "delta",
+        "format",
+        "finish_reason",
+        "usage"
+      ],
+      "properties": {
+        "role": {"enum": ["system", "user", "assistant", "tool"]},
+        "content": {
+          "anyOf": [
+            {"$ref": "#/$defs/nonEmptyString"},
+            {"type": "null"}
+          ]
+        },
+        "name": {"$ref": "#/$defs/nullableNonEmptyString"},
+        "message_id": {"$ref": "#/$defs/nullableStableId"},
+        "phase": {"enum": ["delta", "completed"]},
+        "delta": {
+          "anyOf": [
+            {"$ref": "#/$defs/nonEmptyString"},
+            {"type": "null"}
+          ]
+        },
+        "format": {"enum": ["plain", "markdown"]},
+        "finish_reason": {"$ref": "#/$defs/nullableString"},
+        "usage": {
+          "anyOf": [
+            {"$ref": "#/$defs/messageUsage"},
+            {"type": "null"}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"phase": {"const": "delta"}}},
+          "then": {
+            "properties": {
+              "role": {"const": "assistant"},
+              "content": {"type": "null"},
+              "message_id": {"$ref": "#/$defs/stableId"},
+              "delta": {"$ref": "#/$defs/nonEmptyString"},
+              "finish_reason": {"type": "null"},
+              "usage": {"type": "null"}
+            }
+          },
+          "else": {
+            "properties": {
+              "content": {"$ref": "#/$defs/nonEmptyString"},
+              "delta": {"type": "null"}
+            }
+          }
+        }
+      ]
+    },
+    "messageUsage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input_tokens", "output_tokens", "total_tokens"],
+      "properties": {
+        "input_tokens": {"type": "integer", "minimum": 0},
+        "output_tokens": {"type": "integer", "minimum": 0},
+        "total_tokens": {"type": "integer", "minimum": 0}
+      },
+      "x-zhimeng-invariants": ["message_usage_total_covers_parts"]
+    },
+    "runStatePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "previous_status", "detail"],
+      "properties": {
+        "status": {
+          "enum": [
+            "queued", "starting", "running", "awaiting_approval", "paused",
+            "cancelling", "succeeded", "failed", "cancelled", "interrupted"
+          ]
+        },
+        "previous_status": {
+          "anyOf": [
+            {
+              "enum": [
+                "queued", "starting", "running", "awaiting_approval", "paused",
+                "cancelling", "succeeded", "failed", "cancelled", "interrupted"
+              ]
+            },
+            {"type": "null"}
+          ]
+        },
+        "detail": {"$ref": "#/$defs/nullableString"}
+      }
+    },
+    "reasoningPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "content", "visibility"],
+      "properties": {
+        "summary": {"$ref": "#/$defs/nonEmptyString"},
+        "content": {"$ref": "#/$defs/nullableString"},
+        "visibility": {"enum": ["summary", "full", "redacted"]}
+      }
+    },
+    "toolCallPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool_call_id", "tool_name", "arguments"],
+      "properties": {
+        "tool_call_id": {"$ref": "#/$defs/stableId"},
+        "tool_name": {"$ref": "#/$defs/nonEmptyString"},
+        "arguments": {"$ref": "#/$defs/jsonValue"}
+      }
+    },
+    "toolResultPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool_call_id", "status", "output", "error", "duration_ms"],
+      "properties": {
+        "tool_call_id": {"$ref": "#/$defs/stableId"},
+        "status": {"enum": ["succeeded", "failed", "cancelled"]},
+        "output": {"$ref": "#/$defs/jsonValue"},
+        "error": {
+          "anyOf": [
+            {"$ref": "error-envelope.schema.json"},
+            {"type": "null"}
+          ]
+        },
+        "duration_ms": {
+          "anyOf": [
+            {"type": "integer", "minimum": 0},
+            {"type": "null"}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "failed"}}},
+          "then": {"properties": {"error": {"$ref": "error-envelope.schema.json"}}},
+          "else": {"properties": {"error": {"type": "null"}}}
+        }
+      ]
+    },
+    "commandPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command_id",
+        "command",
+        "cwd",
+        "status",
+        "exit_code",
+        "output_artifact_id"
+      ],
+      "properties": {
+        "command_id": {"$ref": "#/$defs/stableId"},
+        "command": {"$ref": "#/$defs/nonEmptyString"},
+        "cwd": {"$ref": "#/$defs/nullableString"},
+        "status": {"enum": ["pending", "running", "succeeded", "failed", "cancelled"]},
+        "exit_code": {
+          "anyOf": [{"type": "integer"}, {"type": "null"}]
+        },
+        "output_artifact_id": {"$ref": "#/$defs/nullableStableId"}
+      }
+    },
+    "fileChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-zhimeng-invariants": ["update_hashes_differ"],
+      "required": [
+        "file_id",
+        "path",
+        "operation",
+        "content_hash_before",
+        "content_hash_after"
+      ],
+      "properties": {
+        "file_id": {"$ref": "#/$defs/nullableStableId"},
+        "path": {"$ref": "#/$defs/nonEmptyString"},
+        "operation": {"enum": ["create", "update", "delete"]},
+        "content_hash_before": {"$ref": "#/$defs/nullableNonEmptyString"},
+        "content_hash_after": {"$ref": "#/$defs/nullableNonEmptyString"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"operation": {"const": "create"}}},
+          "then": {
+            "properties": {
+              "content_hash_before": {"type": "null"},
+              "content_hash_after": {"$ref": "#/$defs/nonEmptyString"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"operation": {"const": "update"}}},
+          "then": {
+            "properties": {
+              "file_id": {"$ref": "#/$defs/stableId"},
+              "content_hash_before": {"$ref": "#/$defs/nonEmptyString"},
+              "content_hash_after": {"$ref": "#/$defs/nonEmptyString"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"operation": {"const": "delete"}}},
+          "then": {
+            "properties": {
+              "file_id": {"$ref": "#/$defs/stableId"},
+              "content_hash_before": {"$ref": "#/$defs/nonEmptyString"},
+              "content_hash_after": {"type": "null"}
+            }
+          }
+        }
+      ]
+    },
+    "changeProposalPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "proposal_id",
+        "title",
+        "summary",
+        "base_revision",
+        "base_fingerprint",
+        "files"
+      ],
+      "properties": {
+        "proposal_id": {"$ref": "#/$defs/stableId"},
+        "title": {"$ref": "#/$defs/nonEmptyString"},
+        "summary": {"$ref": "#/$defs/nonEmptyString"},
+        "base_revision": {"type": "integer", "minimum": 1},
+        "base_fingerprint": {"$ref": "#/$defs/sha256Fingerprint"},
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/fileChange"}
+        }
+      }
+    },
+    "approvalOption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["option_id", "label", "effect"],
+      "properties": {
+        "option_id": {"$ref": "#/$defs/stableId"},
+        "label": {"$ref": "#/$defs/nonEmptyString"},
+        "effect": {"enum": ["approve", "reject", "cancel", "custom"]}
+      }
+    },
+    "approvalRequestPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-zhimeng-invariants": [
+        "approval_option_ids_unique",
+        "selected_option_id_in_options_when_resolved"
+      ],
+      "required": [
+        "approval_id",
+        "subject_kind",
+        "subject_id",
+        "prompt",
+        "options",
+        "status",
+        "selected_option_id"
+      ],
+      "properties": {
+        "approval_id": {"$ref": "#/$defs/stableId"},
+        "subject_kind": {
+          "enum": ["tool_call", "command", "change_proposal", "skill_call", "subagent"]
+        },
+        "subject_id": {"$ref": "#/$defs/stableId"},
+        "prompt": {"$ref": "#/$defs/nonEmptyString"},
+        "options": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/approvalOption"}
+        },
+        "status": {"enum": ["pending", "resolved", "expired", "cancelled"]},
+        "selected_option_id": {"$ref": "#/$defs/nullableStableId"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "resolved"}}},
+          "then": {
+            "properties": {"selected_option_id": {"$ref": "#/$defs/stableId"}}
+          },
+          "else": {"properties": {"selected_option_id": {"type": "null"}}}
+        }
+      ]
+    },
+    "skillCallPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["skill_call_id", "skill_id", "skill_version", "status", "input", "output"],
+      "properties": {
+        "skill_call_id": {"$ref": "#/$defs/stableId"},
+        "skill_id": {"$ref": "#/$defs/nonEmptyString"},
+        "skill_version": {"$ref": "#/$defs/nullableNonEmptyString"},
+        "status": {"enum": ["pending", "running", "succeeded", "failed", "cancelled"]},
+        "input": {"$ref": "#/$defs/jsonValue"},
+        "output": {"$ref": "#/$defs/jsonValue"}
+      }
+    },
+    "subagentPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subagent_id", "name", "task", "status", "child_run_id"],
+      "properties": {
+        "subagent_id": {"$ref": "#/$defs/stableId"},
+        "name": {"$ref": "#/$defs/nullableString"},
+        "task": {"$ref": "#/$defs/nonEmptyString"},
+        "status": {
+          "enum": [
+            "requested",
+            "running",
+            "waiting",
+            "succeeded",
+            "failed",
+            "cancelled",
+            "interrupted"
+          ]
+        },
+        "child_run_id": {"$ref": "#/$defs/nullableStableId"}
+      }
+    },
+    "compactionPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-zhimeng-invariants": ["from_sequence_lte_to_sequence"],
+      "required": [
+        "from_sequence",
+        "to_sequence",
+        "strategy",
+        "summary",
+        "tokens_before",
+        "tokens_after",
+        "artifact_id"
+      ],
+      "properties": {
+        "from_sequence": {"type": "integer", "minimum": 1},
+        "to_sequence": {"type": "integer", "minimum": 1},
+        "strategy": {"$ref": "#/$defs/nonEmptyString"},
+        "summary": {"$ref": "#/$defs/nonEmptyString"},
+        "tokens_before": {
+          "anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]
+        },
+        "tokens_after": {
+          "anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]
+        },
+        "artifact_id": {"$ref": "#/$defs/nullableStableId"}
+      }
+    },
+    "artifactPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_type",
+        "name",
+        "uri",
+        "media_type",
+        "content_hash",
+        "size_bytes"
+      ],
+      "properties": {
+        "artifact_id": {"$ref": "#/$defs/stableId"},
+        "artifact_type": {"$ref": "#/$defs/nonEmptyString"},
+        "name": {"$ref": "#/$defs/nonEmptyString"},
+        "uri": {"$ref": "#/$defs/nonEmptyString"},
+        "media_type": {"$ref": "#/$defs/nullableString"},
+        "content_hash": {"$ref": "#/$defs/nullableString"},
+        "size_bytes": {
+          "anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]
+        }
+      }
+    },
+    "errorPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["error", "fatal", "scope"],
+      "properties": {
+        "error": {"$ref": "error-envelope.schema.json"},
+        "fatal": {"type": "boolean"},
+        "scope": {"enum": ["activity", "run", "session", "runtime"]}
+      }
+    },
+    "executionSession": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "session_id",
+        "status",
+        "created_at",
+        "updated_at",
+        "executor",
+        "capabilities",
+        "project_revision",
+        "correlation_id"
+      ],
+      "properties": {
+        "schema": {"const": "zhimeng.execution-session.v1"},
+        "session_id": {"$ref": "#/$defs/stableId"},
+        "status": {"enum": ["active", "idle", "closing", "closed", "interrupted"]},
+        "created_at": {"$ref": "#/$defs/timestamp"},
+        "updated_at": {"$ref": "#/$defs/timestamp"},
+        "executor": {"$ref": "#/$defs/executorIdentity"},
+        "capabilities": {"$ref": "#/$defs/capabilityProfile"},
+        "project_revision": {"$ref": "#/$defs/projectRevision"},
+        "correlation_id": {"$ref": "#/$defs/stableId"}
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "run_id",
+        "session_id",
+        "ordinal",
+        "status",
+        "objective",
+        "created_at",
+        "updated_at",
+        "started_at",
+        "completed_at",
+        "executor",
+        "capabilities",
+        "project_revision",
+        "correlation_id",
+        "causation_id",
+        "last_activity_sequence",
+        "checkpoint_id",
+        "error"
+      ],
+      "properties": {
+        "schema": {"const": "zhimeng.execution-run.v1"},
+        "run_id": {"$ref": "#/$defs/stableId"},
+        "session_id": {"$ref": "#/$defs/stableId"},
+        "ordinal": {"type": "integer", "minimum": 1},
+        "status": {
+          "enum": [
+            "queued",
+            "starting",
+            "running",
+            "awaiting_approval",
+            "paused",
+            "cancelling",
+            "succeeded",
+            "failed",
+            "cancelled",
+            "interrupted"
+          ]
+        },
+        "objective": {"$ref": "#/$defs/nonEmptyString"},
+        "created_at": {"$ref": "#/$defs/timestamp"},
+        "updated_at": {"$ref": "#/$defs/timestamp"},
+        "started_at": {"$ref": "#/$defs/nullableTimestamp"},
+        "completed_at": {"$ref": "#/$defs/nullableTimestamp"},
+        "executor": {"$ref": "#/$defs/executorIdentity"},
+        "capabilities": {"$ref": "#/$defs/capabilityProfile"},
+        "project_revision": {"$ref": "#/$defs/projectRevision"},
+        "correlation_id": {"$ref": "#/$defs/stableId"},
+        "causation_id": {"$ref": "#/$defs/nullableStableId"},
+        "last_activity_sequence": {"type": "integer", "minimum": 0},
+        "checkpoint_id": {"$ref": "#/$defs/nullableStableId"},
+        "error": {
+          "anyOf": [
+            {"$ref": "error-envelope.schema.json"},
+            {"type": "null"}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "queued"}}},
+          "then": {
+            "properties": {
+              "started_at": {"type": "null"},
+              "completed_at": {"type": "null"}
+            }
+          },
+          "else": {"properties": {"started_at": {"$ref": "#/$defs/timestamp"}}}
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {"enum": ["succeeded", "failed", "cancelled", "interrupted"]}
+            }
+          },
+          "then": {"properties": {"completed_at": {"$ref": "#/$defs/timestamp"}}},
+          "else": {"properties": {"completed_at": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"status": {"const": "failed"}}},
+          "then": {"properties": {"error": {"$ref": "error-envelope.schema.json"}}},
+          "else": {"properties": {"error": {"type": "null"}}}
+        }
+      ]
+    },
+    "activityItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "activity_id",
+        "session_id",
+        "run_id",
+        "sequence",
+        "created_at",
+        "project_revision",
+        "correlation_id",
+        "causation_id",
+        "kind",
+        "payload"
+      ],
+      "properties": {
+        "schema": {"const": "zhimeng.activity-item.v1"},
+        "activity_id": {"$ref": "#/$defs/stableId"},
+        "session_id": {"$ref": "#/$defs/stableId"},
+        "run_id": {"$ref": "#/$defs/stableId"},
+        "sequence": {"type": "integer", "minimum": 1},
+        "created_at": {"$ref": "#/$defs/timestamp"},
+        "project_revision": {"$ref": "#/$defs/projectRevision"},
+        "correlation_id": {"$ref": "#/$defs/stableId"},
+        "causation_id": {"$ref": "#/$defs/nullableStableId"},
+        "kind": {
+          "enum": [
+            "message",
+            "run_state",
+            "reasoning",
+            "tool_call",
+            "tool_result",
+            "command",
+            "change_proposal",
+            "approval_request",
+            "skill_call",
+            "subagent",
+            "compaction",
+            "artifact",
+            "error"
+          ]
+        },
+        "payload": {"$ref": "#/$defs/jsonValue"}
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {"const": "message"},
+            "payload": {"$ref": "#/$defs/messagePayload"}
+          }
+        },
+        {
+          "properties": {
+            "kind": {"const": "run_state"},
+            "payload": {"$ref": "#/$defs/runStatePayload"}
+          }
+        },
+        {
+          "properties": {
+            "kind": {"const": "reasoning"},
+            "payload": {"$ref": "#/$defs/reasoningPayload"}
+          }
+        },
+        {
+          "properties": {
+            "kind": {"const": "tool_call"},
+            "payload": {"$ref": "#/$defs/toolCallPayload"}
+          }
+        },
+        {
+          "properties": {
+            "kind": {"const": "tool_result"},
+            "payload": {"$ref": "#/$defs/toolResultPayload"}
+          }
+        },
+        {
+          "properties": {
+            "kind": {"const": "command"},
+            "payload": {"$ref": "#/$defs/commandPayload"}
+          }
+        },
+        {
+          "properties": {
+            "kind": {"const": "change_proposal"},
+            "payload": {"$ref": "#/$defs/changeProposalPayload"}
+          },
+          "x-zhimeng-invariants": [
+            "proposal_base_revision_matches_project_revision",
+            "proposal_base_fingerprint_matches_project_revision"
+          ]
+        },
+        {
+          "properties": {
+            "kind": {"const": "approval_request"},
+            "payload": {"$ref": "#/$defs/approvalRequestPayload"}
+          }
+        },
+        {
+          "properties": {
+            "kind": {"const": "skill_call"},
+            "payload": {"$ref": "#/$defs/skillCallPayload"}
+          }
+        },
+        {
+          "properties": {
+            "kind": {"const": "subagent"},
+            "payload": {"$ref": "#/$defs/subagentPayload"}
+          }
+        },
+        {
+          "properties": {
+            "kind": {"const": "compaction"},
+            "payload": {"$ref": "#/$defs/compactionPayload"}
+          },
+          "x-zhimeng-invariants": ["compaction_precedes_current_activity"]
+        },
+        {
+          "properties": {
+            "kind": {"const": "artifact"},
+            "payload": {"$ref": "#/$defs/artifactPayload"}
+          }
+        },
+        {
+          "properties": {
+            "kind": {"const": "error"},
+            "payload": {"$ref": "#/$defs/errorPayload"}
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,269 @@
+{
+  "$defs": {
+    "CapabilityName": {
+      "enum": [
+        "streaming",
+        "cancel",
+        "resume",
+        "checkpoints",
+        "tool_calls",
+        "file_read",
+        "file_write",
+        "shell",
+        "mcp",
+        "skills",
+        "subagents",
+        "compaction",
+        "approvals",
+        "artifacts"
+      ],
+      "title": "CapabilityName",
+      "type": "string"
+    },
+    "ExecutorIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "executor_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Executor Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ExecutorKind"
+        },
+        "implementation": {
+          "minLength": 1,
+          "title": "Implementation",
+          "type": "string"
+        },
+        "version": {
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "protocol_version": {
+          "minLength": 1,
+          "title": "Protocol Version",
+          "type": "string"
+        },
+        "instance_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Instance Id"
+        }
+      },
+      "required": [
+        "executor_id",
+        "kind",
+        "implementation",
+        "version",
+        "protocol_version",
+        "instance_id"
+      ],
+      "title": "ExecutorIdentity",
+      "type": "object"
+    },
+    "ExecutorKind": {
+      "enum": [
+        "embedded",
+        "process",
+        "remote"
+      ],
+      "title": "ExecutorKind",
+      "type": "string"
+    },
+    "JsonValue": {},
+    "KernelSessionRef": {
+      "additionalProperties": false,
+      "properties": {
+        "upstream_session_id": {
+          "title": "Upstream Session Id",
+          "type": "string"
+        },
+        "normalized_session_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Normalized Session Id",
+          "type": "string"
+        },
+        "persistent": {
+          "title": "Persistent",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "upstream_session_id",
+        "normalized_session_id",
+        "persistent"
+      ],
+      "title": "KernelSessionRef",
+      "type": "object"
+    },
+    "ProbeCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "check_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Check Id",
+          "type": "string"
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "evidence_ref": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Evidence Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "check_id",
+        "passed",
+        "summary",
+        "evidence_ref"
+      ],
+      "title": "ProbeCheck",
+      "type": "object"
+    },
+    "TransportCapabilitySnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "declared": {
+          "items": {
+            "$ref": "#/$defs/CapabilityName"
+          },
+          "title": "Declared",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "measured": {
+          "items": {
+            "$ref": "#/$defs/CapabilityName"
+          },
+          "title": "Measured",
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "declared",
+        "measured"
+      ],
+      "title": "TransportCapabilitySnapshot",
+      "type": "object",
+      "x-zhimeng-invariants": [
+        "measured capabilities must be a subset of declared capabilities",
+        "declared and measured capability names must be unique"
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.kernel-transport-probe.v2",
+      "default": "zhimeng.kernel-transport-probe.v2",
+      "title": "Schema",
+      "type": "string"
+    },
+    "adapter": {
+      "$ref": "#/$defs/ExecutorIdentity"
+    },
+    "binary_path": {
+      "title": "Binary Path",
+      "type": "string"
+    },
+    "binary_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Binary Hash",
+      "type": "string"
+    },
+    "protocol_schema_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Protocol Schema Hash",
+      "type": "string"
+    },
+    "config_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Config Hash",
+      "type": "string"
+    },
+    "capabilities": {
+      "$ref": "#/$defs/TransportCapabilitySnapshot"
+    },
+    "session": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/KernelSessionRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "checks": {
+      "items": {
+        "$ref": "#/$defs/ProbeCheck"
+      },
+      "minItems": 1,
+      "title": "Checks",
+      "type": "array"
+    },
+    "required_check_ids": {
+      "items": {
+        "maxLength": 128,
+        "minLength": 8,
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Required Check Ids",
+      "type": "array",
+      "uniqueItems": true
+    },
+    "metadata": {
+      "$ref": "#/$defs/JsonValue"
+    }
+  },
+  "required": [
+    "adapter",
+    "binary_path",
+    "binary_hash",
+    "protocol_schema_hash",
+    "config_hash",
+    "capabilities",
+    "session",
+    "checks",
+    "required_check_ids",
+    "metadata"
+  ],
+  "title": "TransportProbeResult",
+  "type": "object",
+  "x-zhimeng-invariants": [
+    "check_id values must be unique",
+    "required_check_ids must be unique and each must appear in checks",
+    "passed requires every required check and every emitted check to be true",
+    "measured capabilities must be a subset of declared capabilities"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/kernel-transport-probe.schema.json"
+}

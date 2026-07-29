@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/novel-kb-handoff-result.schema.json",
+  "title": "Novel distillation to KB manager handoff result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "handoff_id",
+    "status",
+    "upstream_formalization_receipt_id",
+    "upstream_formalization_receipt_hash",
+    "distillation_index_hash",
+    "downstream_target",
+    "entries",
+    "counts",
+    "risk_summary",
+    "next_action"
+  ],
+  "properties": {
+    "schema": { "const": "zhimeng.novel-kb-handoff-result.v1" },
+    "handoff_id": { "type": "string", "pattern": "^skill-handoff-[0-9a-f]{32}$" },
+    "status": { "enum": ["ready_for_downstream", "blocked"] },
+    "upstream_formalization_receipt_id": { "type": "string", "pattern": "^knowledge-formalization-[0-9a-f]{32}$" },
+    "upstream_formalization_receipt_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "distillation_index_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "downstream_target": { "const": "novel-kb-manager.import-distillation-index" },
+    "entries": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["card_id", "card_type", "version_id", "content_hash", "title", "route_terms", "tags", "safety_summary"],
+        "properties": {
+          "card_id": { "type": "string", "minLength": 1, "maxLength": 160 },
+          "card_type": { "enum": ["work", "voice", "validator"] },
+          "version_id": { "type": "string", "pattern": "^knowledge-version-[0-9a-f]{32}$" },
+          "content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "title": { "type": "string", "minLength": 1, "maxLength": 512 },
+          "route_terms": { "type": "array", "items": { "type": "string", "maxLength": 160 }, "maxItems": 32 },
+          "tags": { "type": "array", "items": { "type": "string", "maxLength": 160 }, "maxItems": 32 },
+          "safety_summary": { "type": "string", "maxLength": 2000 }
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["work", "voice", "validator"],
+      "properties": {
+        "work": { "const": 1 },
+        "voice": { "const": 1 },
+        "validator": { "const": 1 }
+      }
+    },
+    "risk_summary": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "next_action": { "type": "string", "minLength": 1, "maxLength": 1000 }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "ready_for_downstream" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "entries": { "minItems": 3, "maxItems": 3 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "blocked" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "entries": { "maxItems": 0 }
+        }
+      }
+    }
+  ]
+}

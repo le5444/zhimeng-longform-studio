@@ -1,0 +1,71 @@
+{
+  "$defs": {
+    "KnowledgeScopeType": {
+      "description": "The ownership boundary used by the native knowledge store.",
+      "enum": [
+        "application",
+        "project"
+      ],
+      "title": "KnowledgeScopeType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.knowledge-scope-record.v1",
+      "default": "zhimeng.knowledge-scope-record.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "scope_id": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "Scope Id",
+      "type": "string"
+    },
+    "scope_type": {
+      "$ref": "#/$defs/KnowledgeScopeType"
+    },
+    "project_binding_id": {
+      "anyOf": [
+        {
+          "maxLength": 160,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Project Binding Id"
+    },
+    "state_revision": {
+      "default": 1,
+      "minimum": 1,
+      "title": "State Revision",
+      "type": "integer"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "scope_id",
+    "scope_type",
+    "created_at",
+    "updated_at"
+  ],
+  "title": "KnowledgeScopeRecord",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/knowledge-scope-record.schema.json"
+}

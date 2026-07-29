@@ -1,0 +1,42 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.eval-corpus-regression-request.v1",
+      "default": "zhimeng.eval-corpus-regression-request.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "expected_baseline_receipt_id": {
+      "anyOf": [
+        {
+          "maxLength": 160,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Baseline Receipt Id"
+    },
+    "expected_export_file_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Export File Sha256"
+    }
+  },
+  "title": "EvalCorpusRegressionEvaluateRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/eval-corpus-regression-request.schema.json"
+}

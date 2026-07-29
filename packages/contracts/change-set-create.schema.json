@@ -1,0 +1,272 @@
+{
+  "$defs": {
+    "ChangeSetOrigin": {
+      "enum": [
+        "manual",
+        "agent",
+        "skill_workflow"
+      ],
+      "title": "ChangeSetOrigin",
+      "type": "string"
+    },
+    "CreateFileChangeInput": {
+      "additionalProperties": false,
+      "properties": {
+        "rationale": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "operation": {
+          "const": "create",
+          "title": "Operation",
+          "type": "string"
+        },
+        "relative_path": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+\\.(?:json|jsonl|md|txt|yaml|yml)$",
+          "title": "Relative Path",
+          "type": "string",
+          "x-zhimeng-invariants": [
+            "path segments cannot use Windows device names",
+            "path segments are at most 255 characters"
+          ]
+        },
+        "after_content": {
+          "maxLength": 8388608,
+          "title": "After Content",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rationale",
+        "operation",
+        "relative_path",
+        "after_content"
+      ],
+      "title": "CreateFileChangeInput",
+      "type": "object"
+    },
+    "DeleteFileChangeInput": {
+      "additionalProperties": false,
+      "properties": {
+        "rationale": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "operation": {
+          "const": "delete",
+          "title": "Operation",
+          "type": "string"
+        },
+        "file_id": {
+          "pattern": "^file-[0-9a-f]{32}$",
+          "title": "File Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rationale",
+        "operation",
+        "file_id"
+      ],
+      "title": "DeleteFileChangeInput",
+      "type": "object"
+    },
+    "UpdateFileChangeInput": {
+      "additionalProperties": false,
+      "properties": {
+        "rationale": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "operation": {
+          "const": "update",
+          "title": "Operation",
+          "type": "string"
+        },
+        "file_id": {
+          "pattern": "^file-[0-9a-f]{32}$",
+          "title": "File Id",
+          "type": "string"
+        },
+        "after_content": {
+          "maxLength": 8388608,
+          "title": "After Content",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rationale",
+        "operation",
+        "file_id",
+        "after_content"
+      ],
+      "title": "UpdateFileChangeInput",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "origin": {
+            "const": "skill_workflow"
+          }
+        },
+        "required": [
+          "origin"
+        ]
+      },
+      "then": {
+        "properties": {
+          "source_skill_ids": {
+            "minItems": 1
+          }
+        },
+        "required": [
+          "source_skill_ids"
+        ]
+      }
+    }
+  ],
+  "properties": {
+    "schema": {
+      "const": "zhimeng.change-set-create.v1",
+      "default": "zhimeng.change-set-create.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "base_revision": {
+      "minimum": 1,
+      "title": "Base Revision",
+      "type": "integer"
+    },
+    "base_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Base Fingerprint",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 240,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "summary": {
+      "maxLength": 8000,
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    },
+    "origin": {
+      "$ref": "#/$defs/ChangeSetOrigin",
+      "default": "manual"
+    },
+    "source_run_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Run Id"
+    },
+    "source_tool_call_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Tool Call Id"
+    },
+    "source_request_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Request Hash"
+    },
+    "source_skill_ids": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Source Skill Ids",
+      "type": "array",
+      "uniqueItems": true
+    },
+    "gate_required": {
+      "default": false,
+      "title": "Gate Required",
+      "type": "boolean"
+    },
+    "changes": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "create": "#/$defs/CreateFileChangeInput",
+            "delete": "#/$defs/DeleteFileChangeInput",
+            "update": "#/$defs/UpdateFileChangeInput"
+          },
+          "propertyName": "operation"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/CreateFileChangeInput"
+          },
+          {
+            "$ref": "#/$defs/UpdateFileChangeInput"
+          },
+          {
+            "$ref": "#/$defs/DeleteFileChangeInput"
+          }
+        ]
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "title": "Changes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "base_revision",
+    "base_fingerprint",
+    "title",
+    "summary",
+    "changes"
+  ],
+  "title": "ChangeSetCreateRequest",
+  "type": "object",
+  "x-zhimeng-invariants": [
+    "source_skill_ids are unique",
+    "skill_workflow origin requires at least one source_skill_id",
+    "aggregate after_content length is at most 32 MiB characters"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/change-set-create.schema.json"
+}

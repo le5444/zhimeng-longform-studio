@@ -1,0 +1,28 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "expected_revision": {
+      "minimum": 1,
+      "title": "Expected Revision",
+      "type": "integer"
+    },
+    "expected_content_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Content Hash",
+      "type": "string"
+    },
+    "replace_active": {
+      "default": false,
+      "title": "Replace Active",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "expected_revision",
+    "expected_content_hash"
+  ],
+  "title": "KnowledgePromotionRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/knowledge-promotion.schema.json"
+}

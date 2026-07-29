@@ -1,0 +1,18 @@
+{
+  "additionalProperties": false,
+  "description": "Author-triggered original-compatible novel state file writeback.",
+  "properties": {
+    "expected_nlcl_original_novel_state_bridge_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Nlcl Original Novel State Bridge Receipt Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "expected_nlcl_original_novel_state_bridge_receipt_hash"
+  ],
+  "title": "NlclOriginalNovelStateSyncRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/nlcl-original-novel-state-sync-request.schema.json"
+}

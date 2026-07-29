@@ -1,0 +1,324 @@
+{
+  "$defs": {
+    "ReaderFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "finding_id": {
+          "pattern": "^reader-finding-[0-9a-f]{16}$",
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "fact_risk",
+            "continuity_risk",
+            "subjective_note"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "watch",
+            "concern"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "evidence_quote": {
+          "maxLength": 1000,
+          "minLength": 0,
+          "title": "Evidence Quote",
+          "type": "string"
+        },
+        "relative_path": {
+          "anyOf": [
+            {
+              "maxLength": 1024,
+              "minLength": 1,
+              "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+\\.(?:json|jsonl|md|txt|yaml|yml)$",
+              "type": "string",
+              "x-zhimeng-invariants": [
+                "path segments cannot use Windows device names",
+                "path segments are at most 255 characters"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Path"
+        },
+        "overrides_gate": {
+          "const": false,
+          "default": false,
+          "title": "Overrides Gate",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "finding_id",
+        "kind",
+        "severity",
+        "summary",
+        "evidence_quote"
+      ],
+      "title": "ReaderFinding",
+      "type": "object"
+    },
+    "ReaderReviewReceipt": {
+      "additionalProperties": false,
+      "description": "Cold-read Reader opinion bound to a ChangeSet candidate revision.\n\nThis is an isolated opinion surface. It does not override deterministic Gate\nresults, does not authorize formal prose, and does not mutate novel state.",
+      "properties": {
+        "schema": {
+          "const": "zhimeng.reader-review-receipt.v1",
+          "default": "zhimeng.reader-review-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "receipt_id": {
+          "pattern": "^reader-review-[0-9a-f]{32}$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "applied",
+            "rolled_back"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "result_revision": {
+          "minimum": 1,
+          "title": "Result Revision",
+          "type": "integer"
+        },
+        "result_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Result Fingerprint",
+          "type": "string"
+        },
+        "review_mode": {
+          "const": "deterministic_cold_read_v1",
+          "default": "deterministic_cold_read_v1",
+          "title": "Review Mode",
+          "type": "string"
+        },
+        "evaluator_kind": {
+          "const": "deterministic_cold_read_v1",
+          "default": "deterministic_cold_read_v1",
+          "title": "Evaluator Kind",
+          "type": "string"
+        },
+        "evaluator_id": {
+          "const": "zhimeng.reader.deterministic-cold-read",
+          "default": "zhimeng.reader.deterministic-cold-read",
+          "title": "Evaluator Id",
+          "type": "string"
+        },
+        "model_id": {
+          "const": "none",
+          "default": "none",
+          "title": "Model Id",
+          "type": "string"
+        },
+        "prompt_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt Fingerprint"
+        },
+        "context_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Context Fingerprint"
+        },
+        "evaluator_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evaluator Fingerprint"
+        },
+        "allowed_input_classes": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Allowed Input Classes",
+          "type": "array"
+        },
+        "excluded_input_classes": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Excluded Input Classes",
+          "type": "array"
+        },
+        "candidate_relative_paths": {
+          "items": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+\\.(?:json|jsonl|md|txt|yaml|yml)$",
+            "type": "string",
+            "x-zhimeng-invariants": [
+              "path segments cannot use Windows device names",
+              "path segments are at most 255 characters"
+            ]
+          },
+          "maxItems": 64,
+          "title": "Candidate Relative Paths",
+          "type": "array"
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/ReaderFinding"
+          },
+          "maxItems": 64,
+          "title": "Findings",
+          "type": "array"
+        },
+        "finding_counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Finding Counts",
+          "type": "object"
+        },
+        "reader_opinion_recorded": {
+          "const": true,
+          "default": true,
+          "title": "Reader Opinion Recorded",
+          "type": "boolean"
+        },
+        "overrides_gate": {
+          "const": false,
+          "default": false,
+          "title": "Overrides Gate",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "quality_assessed": {
+          "const": false,
+          "default": false,
+          "title": "Quality Assessed",
+          "type": "boolean"
+        },
+        "novel_state_synced": {
+          "const": false,
+          "default": false,
+          "title": "Novel State Synced",
+          "type": "boolean"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "change_set_id",
+        "project_id",
+        "outcome",
+        "result_revision",
+        "result_fingerprint",
+        "created_at",
+        "receipt_hash"
+      ],
+      "title": "ReaderReviewReceipt",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.reader-review-response.v1",
+      "default": "zhimeng.reader-review-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "change_set_id": {
+      "pattern": "^changeset-[0-9a-f]{32}$",
+      "title": "Change Set Id",
+      "type": "string"
+    },
+    "receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReaderReviewReceipt"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "history": {
+      "items": {
+        "$ref": "#/$defs/ReaderReviewReceipt"
+      },
+      "maxItems": 32,
+      "title": "History",
+      "type": "array"
+    }
+  },
+  "required": [
+    "change_set_id"
+  ],
+  "title": "ReaderReviewResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/reader-review-response.schema.json"
+}

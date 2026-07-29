@@ -1,0 +1,145 @@
+{
+  "schema": "zhimeng.creation-instruction-map.v1",
+  "skill_id": "novel-creation-suite.writer-instruction",
+  "source_path": "references/bundled-skills/novel-volume-folder/SKILL.md",
+  "source_hash": "5d0ece9fbdaec1b51465dcaac2752c8e1344104dbc513bf8ee3639b28c835a38",
+  "source_line_count": 156,
+  "max_included_utf8_bytes": 20000,
+  "blocks": [
+    {
+      "block_id": "frontmatter",
+      "title": "Package metadata",
+      "line_start": 1,
+      "line_end": 7,
+      "include": false,
+      "exclusion_reason": "Package metadata is not a writing instruction.",
+      "content_hash": "1d3c03e7f82188755808e7f0dcdf87cf3e4aef41d1a8b008fa941b62c406af8d"
+    },
+    {
+      "block_id": "global-core",
+      "title": "Global hard rules",
+      "line_start": 8,
+      "line_end": 13,
+      "include": true,
+      "exclusion_reason": null,
+      "content_hash": "c7bbb09c8d0550f25a81eb391db202a74a3a192280c9f706ea81653eb9320f04"
+    },
+    {
+      "block_id": "global-export",
+      "title": "Automatic EPUB export rules",
+      "line_start": 14,
+      "line_end": 15,
+      "include": false,
+      "exclusion_reason": "Export and project-output side effects remain outside Provider authority.",
+      "content_hash": "d0e4b8e962997f562f83df42dab21140493abf3c726c080b83c53a2a741fcdfd"
+    },
+    {
+      "block_id": "global-voice",
+      "title": "Author voice priority",
+      "line_start": 16,
+      "line_end": 17,
+      "include": true,
+      "exclusion_reason": null,
+      "content_hash": "23face35139d220bf964067adfc4691baf45614e7b762970592766c5fe903bfd"
+    },
+    {
+      "block_id": "required-reads",
+      "title": "External required reads",
+      "line_start": 18,
+      "line_end": 29,
+      "include": false,
+      "exclusion_reason": "Runtime Context and receipts replace unmanaged relative reads.",
+      "content_hash": "9391818853fec1b6a23cd62dbbfbdb4a9625bdccf7899d77e010bd4587d34e26"
+    },
+    {
+      "block_id": "writing-boundary",
+      "title": "Writing boundary",
+      "line_start": 30,
+      "line_end": 38,
+      "include": true,
+      "exclusion_reason": null,
+      "content_hash": "aec69ee98037f6f2dd0b9511dc92aa7338e543f2cf0cbe6fc3a5559c78b4508a"
+    },
+    {
+      "block_id": "execution-pack-gate",
+      "title": "Execution package acceptance gate",
+      "line_start": 39,
+      "line_end": 54,
+      "include": true,
+      "exclusion_reason": null,
+      "content_hash": "297fb6ca67be10686b2019b9da28c658ccfd9eee406707030a5743fc8a8c88db"
+    },
+    {
+      "block_id": "prose-requirements",
+      "title": "Prose requirements",
+      "line_start": 55,
+      "line_end": 66,
+      "include": true,
+      "exclusion_reason": null,
+      "content_hash": "e33be8a2347cfe750147419d9f9488dc5826ba7c9ba7ae4bd9bf4fa2b61b13cc"
+    },
+    {
+      "block_id": "draft-acceptance-gate",
+      "title": "Web-fiction draft acceptance gate",
+      "line_start": 67,
+      "line_end": 100,
+      "include": true,
+      "exclusion_reason": null,
+      "content_hash": "57bfe6ae6f3cd6d52829560cd6301bc42e44153c93882de53517b793970bca29"
+    },
+    {
+      "block_id": "segmented-writing",
+      "title": "Segmented writing",
+      "line_start": 101,
+      "line_end": 107,
+      "include": true,
+      "exclusion_reason": null,
+      "content_hash": "e0c2ed5043b3e2abb2c7b5f6fd3521368a60f07976f47b9f4b40dd8f3139558b"
+    },
+    {
+      "block_id": "workflow-side-effects",
+      "title": "Workflow state transitions",
+      "line_start": 108,
+      "line_end": 124,
+      "include": false,
+      "exclusion_reason": "Workflow and state transitions remain Runtime-owned.",
+      "content_hash": "ada44718167eb259cee536c8f8a5de29825670bfa15edc2cd59ad1186fe1d920"
+    },
+    {
+      "block_id": "version-chain",
+      "title": "Version-chain management",
+      "line_start": 125,
+      "line_end": 136,
+      "include": false,
+      "exclusion_reason": "Version persistence remains Runtime-owned.",
+      "content_hash": "3eb8600178aab960c2cf4de55e89047ff49dba0847925998118c85184c3b3ff2"
+    },
+    {
+      "block_id": "epub-export",
+      "title": "EPUB synchronization",
+      "line_start": 137,
+      "line_end": 145,
+      "include": false,
+      "exclusion_reason": "Export side effects remain outside Provider authority.",
+      "content_hash": "0c38c90022c7cda72552719fd929eee8aa6a3ad2b57e7151df41d1d2b765c0ea"
+    },
+    {
+      "block_id": "postwrite-writeback",
+      "title": "Post-write project updates",
+      "line_start": 146,
+      "line_end": 154,
+      "include": false,
+      "exclusion_reason": "Project truth writeback remains ChangeSet and Runtime-owned.",
+      "content_hash": "3fea1bf01121501af42682fb46e0855aef35b03a1da849d1e9e7943957ef2fad"
+    },
+    {
+      "block_id": "compatibility-routing",
+      "title": "Legacy compatibility routing",
+      "line_start": 155,
+      "line_end": 156,
+      "include": false,
+      "exclusion_reason": "Legacy routing is not part of the Writer instruction.",
+      "content_hash": "d0724a55c44d8589a56a06ffbd5dfa40c6973ef8458e4f02305f8c9e0ff71e3d"
+    }
+  ]
+}

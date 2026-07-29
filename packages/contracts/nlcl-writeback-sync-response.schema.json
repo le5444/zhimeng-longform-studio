@@ -1,0 +1,266 @@
+{
+  "$defs": {
+    "NlclWritebackSyncReceipt": {
+      "additionalProperties": false,
+      "description": "Product-native continuity receipt after writeback evidence exists.\n\nCloses the post-writeback evidence-sync gap for Runtime continuity without\nclaiming original NLCL chapter/ops/usage state mutation or formal prose.",
+      "properties": {
+        "schema": {
+          "const": "zhimeng.nlcl-writeback-sync-receipt.v1",
+          "default": "zhimeng.nlcl-writeback-sync-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "receipt_id": {
+          "pattern": "^nlcl-writeback-sync-[0-9a-f]{32}$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "writeback_evidence_receipt_id": {
+          "pattern": "^writeback-evidence-[0-9a-f]{32}$",
+          "title": "Writeback Evidence Receipt Id",
+          "type": "string"
+        },
+        "writeback_evidence_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Writeback Evidence Receipt Hash",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "applied",
+            "rolled_back"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "result_revision": {
+          "minimum": 1,
+          "title": "Result Revision",
+          "type": "integer"
+        },
+        "result_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Result Fingerprint",
+          "type": "string"
+        },
+        "affected_relative_paths": {
+          "items": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+\\.(?:json|jsonl|md|txt|yaml|yml)$",
+            "type": "string",
+            "x-zhimeng-invariants": [
+              "path segments cannot use Windows device names",
+              "path segments are at most 255 characters"
+            ]
+          },
+          "maxItems": 64,
+          "title": "Affected Relative Paths",
+          "type": "array"
+        },
+        "chapter_relative_paths": {
+          "items": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+\\.(?:json|jsonl|md|txt|yaml|yml)$",
+            "type": "string",
+            "x-zhimeng-invariants": [
+              "path segments cannot use Windows device names",
+              "path segments are at most 255 characters"
+            ]
+          },
+          "maxItems": 64,
+          "title": "Chapter Relative Paths",
+          "type": "array"
+        },
+        "context_pack_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Context Pack Id"
+        },
+        "context_pack_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Context Pack Hash"
+        },
+        "route_receipt_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Route Receipt Id"
+        },
+        "route_receipt_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Route Receipt Hash"
+        },
+        "knowledge_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Fingerprint"
+        },
+        "selected_card_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Selected Card Ids",
+          "type": "array"
+        },
+        "source_run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Run Id"
+        },
+        "sync_scope": {
+          "const": "product_native_evidence_continuity",
+          "default": "product_native_evidence_continuity",
+          "title": "Sync Scope",
+          "type": "string"
+        },
+        "original_nlcl_chapter_ops_usage_synced": {
+          "const": false,
+          "default": false,
+          "title": "Original Nlcl Chapter Ops Usage Synced",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "quality_assessed": {
+          "const": false,
+          "default": false,
+          "title": "Quality Assessed",
+          "type": "boolean"
+        },
+        "novel_state_synced": {
+          "const": false,
+          "default": false,
+          "title": "Novel State Synced",
+          "type": "boolean"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "change_set_id",
+        "project_id",
+        "writeback_evidence_receipt_id",
+        "writeback_evidence_receipt_hash",
+        "outcome",
+        "result_revision",
+        "result_fingerprint",
+        "created_at",
+        "receipt_hash"
+      ],
+      "title": "NlclWritebackSyncReceipt",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.nlcl-writeback-sync-response.v1",
+      "default": "zhimeng.nlcl-writeback-sync-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "change_set_id": {
+      "pattern": "^changeset-[0-9a-f]{32}$",
+      "title": "Change Set Id",
+      "type": "string"
+    },
+    "receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NlclWritebackSyncReceipt"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "history": {
+      "items": {
+        "$ref": "#/$defs/NlclWritebackSyncReceipt"
+      },
+      "maxItems": 32,
+      "title": "History",
+      "type": "array"
+    }
+  },
+  "required": [
+    "change_set_id"
+  ],
+  "title": "NlclWritebackSyncResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/nlcl-writeback-sync-response.schema.json"
+}

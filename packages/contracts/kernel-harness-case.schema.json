@@ -1,0 +1,411 @@
+{
+  "$defs": {
+    "ActivityKind": {
+      "enum": [
+        "message",
+        "run_state",
+        "reasoning",
+        "tool_call",
+        "tool_result",
+        "command",
+        "change_proposal",
+        "approval_request",
+        "skill_call",
+        "subagent",
+        "compaction",
+        "artifact",
+        "error"
+      ],
+      "title": "ActivityKind",
+      "type": "string"
+    },
+    "AssertionOperator": {
+      "enum": [
+        "capability_present",
+        "activity_kind_present",
+        "event_sequence_valid",
+        "status_equals",
+        "snapshot_unchanged",
+        "citation_fields_present",
+        "permission_effect",
+        "artifact_hash_stable",
+        "paths_changed_only",
+        "conflict_rejected",
+        "cleanup_no_diff",
+        "transport_handshake_passed",
+        "isolation_boundary"
+      ],
+      "title": "AssertionOperator",
+      "type": "string"
+    },
+    "CapabilityName": {
+      "enum": [
+        "streaming",
+        "cancel",
+        "resume",
+        "checkpoints",
+        "tool_calls",
+        "file_read",
+        "file_write",
+        "shell",
+        "mcp",
+        "skills",
+        "subagents",
+        "compaction",
+        "approvals",
+        "artifacts"
+      ],
+      "title": "CapabilityName",
+      "type": "string"
+    },
+    "EvidenceKind": {
+      "enum": [
+        "protocol_transcript",
+        "capability_snapshot",
+        "activity_stream",
+        "artifact",
+        "citation_report",
+        "changeset",
+        "permission_decision",
+        "process_lifecycle",
+        "workspace_snapshot",
+        "metric",
+        "cleanup_report",
+        "isolation_report",
+        "provider_probe"
+      ],
+      "title": "EvidenceKind",
+      "type": "string"
+    },
+    "FixtureFileRole": {
+      "enum": [
+        "project",
+        "reference",
+        "skill",
+        "expected"
+      ],
+      "title": "FixtureFileRole",
+      "type": "string"
+    },
+    "HarnessAssertionSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "assertion_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Assertion Id",
+          "type": "string"
+        },
+        "gate": {
+          "$ref": "#/$defs/HarnessGate"
+        },
+        "operator": {
+          "$ref": "#/$defs/AssertionOperator"
+        },
+        "expected": {
+          "$ref": "#/$defs/JsonValue"
+        },
+        "required_evidence_kinds": {
+          "items": {
+            "$ref": "#/$defs/EvidenceKind"
+          },
+          "minItems": 1,
+          "title": "Required Evidence Kinds",
+          "type": "array"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "assertion_id",
+        "gate",
+        "operator",
+        "expected",
+        "required_evidence_kinds"
+      ],
+      "title": "HarnessAssertionSpec",
+      "type": "object"
+    },
+    "HarnessFixtureSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "project_root": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Project Root",
+          "type": "string"
+        },
+        "references_root": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "References Root",
+          "type": "string"
+        },
+        "skills_root": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Skills Root",
+          "type": "string"
+        },
+        "staging_root": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Staging Root",
+          "type": "string"
+        },
+        "expected_root": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Expected Root",
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/HarnessSeedFile"
+          },
+          "minItems": 1,
+          "title": "Files",
+          "type": "array"
+        },
+        "formal_project_must_remain_unchanged": {
+          "const": true,
+          "default": true,
+          "title": "Formal Project Must Remain Unchanged",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "project_root",
+        "references_root",
+        "skills_root",
+        "staging_root",
+        "expected_root",
+        "files"
+      ],
+      "title": "HarnessFixtureSpec",
+      "type": "object"
+    },
+    "HarnessGate": {
+      "enum": [
+        "G1",
+        "G2",
+        "G3",
+        "G4",
+        "G5"
+      ],
+      "title": "HarnessGate",
+      "type": "string"
+    },
+    "HarnessLane": {
+      "enum": [
+        "transport",
+        "compatible_provider",
+        "native_provider"
+      ],
+      "title": "HarnessLane",
+      "type": "string"
+    },
+    "HarnessOperation": {
+      "enum": [
+        "prepare",
+        "transport_handshake",
+        "bind_snapshot",
+        "benchmark_turn",
+        "skill_call",
+        "change_turn",
+        "permission_matrix",
+        "cancel_long_tool",
+        "restart_resume",
+        "partial_hunk_accept",
+        "inject_revision_conflict",
+        "compact_followup",
+        "cleanup"
+      ],
+      "title": "HarnessOperation",
+      "type": "string"
+    },
+    "HarnessSeedFile": {
+      "additionalProperties": false,
+      "properties": {
+        "file_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "File Id",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/FixtureFileRole"
+        },
+        "path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "file_id",
+        "role",
+        "path",
+        "sha256",
+        "size_bytes"
+      ],
+      "title": "HarnessSeedFile",
+      "type": "object"
+    },
+    "HarnessStepSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "step_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Step Id",
+          "type": "string"
+        },
+        "ordinal": {
+          "minimum": 1,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "operation": {
+          "$ref": "#/$defs/HarnessOperation"
+        },
+        "objective": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Objective",
+          "type": "string"
+        },
+        "timeout_seconds": {
+          "maximum": 3600,
+          "minimum": 1,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        },
+        "assertion_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Assertion Ids",
+          "type": "array"
+        },
+        "required_capabilities": {
+          "items": {
+            "$ref": "#/$defs/CapabilityName"
+          },
+          "title": "Required Capabilities",
+          "type": "array"
+        },
+        "expected_activity_kinds": {
+          "items": {
+            "$ref": "#/$defs/ActivityKind"
+          },
+          "title": "Expected Activity Kinds",
+          "type": "array"
+        }
+      },
+      "required": [
+        "step_id",
+        "ordinal",
+        "operation",
+        "objective",
+        "timeout_seconds",
+        "assertion_ids",
+        "required_capabilities",
+        "expected_activity_kinds"
+      ],
+      "title": "HarnessStepSpec",
+      "type": "object"
+    },
+    "JsonValue": {}
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.kernel-harness-case.v2",
+      "title": "Schema",
+      "type": "string"
+    },
+    "case_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Case Id",
+      "type": "string"
+    },
+    "version": {
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "lane": {
+      "$ref": "#/$defs/HarnessLane"
+    },
+    "fixture_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Fixture Fingerprint",
+      "type": "string"
+    },
+    "fixture": {
+      "$ref": "#/$defs/HarnessFixtureSpec"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/HarnessStepSpec"
+      },
+      "minItems": 1,
+      "title": "Steps",
+      "type": "array"
+    },
+    "assertions": {
+      "items": {
+        "$ref": "#/$defs/HarnessAssertionSpec"
+      },
+      "minItems": 1,
+      "title": "Assertions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "case_id",
+    "version",
+    "title",
+    "lane",
+    "fixture_fingerprint",
+    "fixture",
+    "steps",
+    "assertions"
+  ],
+  "title": "HarnessCase",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/kernel-harness-case.schema.json"
+}

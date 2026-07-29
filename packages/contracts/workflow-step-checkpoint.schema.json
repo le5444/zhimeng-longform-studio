@@ -1,0 +1,750 @@
+{
+  "$comment": "Canonical hashes, predecessor hash continuity, step order and plan binding MUST also pass WorkflowStepCheckpoint.model_validate_json and validate_workflow_checkpoint_chain.",
+  "$id": "https://zhimeng.local/contracts/workflow-step-checkpoint.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "else": {
+        "properties": {
+          "previous_checkpoint_hash": {
+            "not": {
+              "type": "null"
+            }
+          },
+          "previous_checkpoint_id": {
+            "not": {
+              "type": "null"
+            }
+          }
+        },
+        "required": [
+          "previous_checkpoint_id",
+          "previous_checkpoint_hash"
+        ]
+      },
+      "if": {
+        "properties": {
+          "step_ordinal": {
+            "const": 1
+          }
+        },
+        "required": [
+          "step_ordinal"
+        ]
+      },
+      "then": {
+        "properties": {
+          "previous_checkpoint_hash": {
+            "type": "null"
+          },
+          "previous_checkpoint_id": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "previous_checkpoint_id",
+          "previous_checkpoint_hash"
+        ]
+      }
+    },
+    {
+      "else": {
+        "properties": {
+          "input_hash": {
+            "not": {
+              "type": "null"
+            }
+          },
+          "provider_tool_call_id": {
+            "not": {
+              "type": "null"
+            }
+          },
+          "skill_call_id": {
+            "not": {
+              "type": "null"
+            }
+          }
+        },
+        "required": [
+          "provider_tool_call_id",
+          "skill_call_id",
+          "input_hash"
+        ]
+      },
+      "if": {
+        "properties": {
+          "tool_call_id": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "tool_call_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "output_hash": {
+            "type": "null"
+          },
+          "provider_tool_call_id": {
+            "type": "null"
+          },
+          "route_execution_receipt_hash": {
+            "type": "null"
+          },
+          "route_execution_receipt_id": {
+            "type": "null"
+          },
+          "skill_call_id": {
+            "type": "null"
+          },
+          "skill_receipt_hash": {
+            "type": "null"
+          },
+          "skill_receipt_id": {
+            "type": "null"
+          },
+          "tool_result_hash": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "provider_tool_call_id",
+          "skill_call_id",
+          "skill_receipt_id",
+          "skill_receipt_hash",
+          "route_execution_receipt_id",
+          "route_execution_receipt_hash",
+          "output_hash",
+          "tool_result_hash"
+        ]
+      }
+    },
+    {
+      "else": {
+        "properties": {
+          "input_hash": {
+            "not": {
+              "type": "null"
+            }
+          },
+          "output_hash": {
+            "not": {
+              "type": "null"
+            }
+          },
+          "provider_tool_call_id": {
+            "not": {
+              "type": "null"
+            }
+          },
+          "skill_call_id": {
+            "not": {
+              "type": "null"
+            }
+          },
+          "skill_receipt_hash": {
+            "not": {
+              "type": "null"
+            }
+          },
+          "tool_call_id": {
+            "not": {
+              "type": "null"
+            }
+          }
+        },
+        "required": [
+          "skill_receipt_hash",
+          "tool_call_id",
+          "provider_tool_call_id",
+          "skill_call_id",
+          "input_hash",
+          "output_hash"
+        ]
+      },
+      "if": {
+        "properties": {
+          "skill_receipt_id": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "skill_receipt_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "output_hash": {
+            "type": "null"
+          },
+          "route_execution_receipt_hash": {
+            "type": "null"
+          },
+          "route_execution_receipt_id": {
+            "type": "null"
+          },
+          "skill_receipt_hash": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "skill_receipt_hash",
+          "route_execution_receipt_id",
+          "route_execution_receipt_hash",
+          "output_hash"
+        ]
+      }
+    },
+    {
+      "else": {
+        "properties": {
+          "route_execution_receipt_hash": {
+            "not": {
+              "type": "null"
+            }
+          },
+          "skill_receipt_hash": {
+            "not": {
+              "type": "null"
+            }
+          },
+          "skill_receipt_id": {
+            "not": {
+              "type": "null"
+            }
+          },
+          "tool_result_hash": {
+            "not": {
+              "type": "null"
+            }
+          }
+        },
+        "required": [
+          "route_execution_receipt_hash",
+          "skill_receipt_id",
+          "skill_receipt_hash",
+          "tool_result_hash"
+        ]
+      },
+      "if": {
+        "properties": {
+          "route_execution_receipt_id": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "route_execution_receipt_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "route_execution_receipt_hash": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "route_execution_receipt_hash"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "tool_result_hash": {
+            "not": {
+              "type": "null"
+            }
+          }
+        },
+        "required": [
+          "tool_result_hash"
+        ]
+      },
+      "then": {
+        "properties": {
+          "tool_call_id": {
+            "not": {
+              "type": "null"
+            }
+          }
+        },
+        "required": [
+          "tool_call_id"
+        ]
+      }
+    },
+    {
+      "else": {
+        "allOf": [
+          {
+            "properties": {
+              "domain_status": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "domain_status"
+            ]
+          },
+          {
+            "properties": {
+              "error_code": {
+                "not": {
+                  "type": "null"
+                }
+              },
+              "error_message": {
+                "not": {
+                  "type": "null"
+                }
+              }
+            },
+            "required": [
+              "error_code",
+              "error_message"
+            ]
+          }
+        ]
+      },
+      "if": {
+        "properties": {
+          "execution_status": {
+            "const": "succeeded"
+          }
+        },
+        "required": [
+          "execution_status"
+        ]
+      },
+      "then": {
+        "allOf": [
+          {
+            "properties": {
+              "domain_status": {
+                "not": {
+                  "type": "null"
+                }
+              },
+              "input_hash": {
+                "not": {
+                  "type": "null"
+                }
+              },
+              "output_hash": {
+                "not": {
+                  "type": "null"
+                }
+              },
+              "provider_tool_call_id": {
+                "not": {
+                  "type": "null"
+                }
+              },
+              "route_execution_receipt_hash": {
+                "not": {
+                  "type": "null"
+                }
+              },
+              "route_execution_receipt_id": {
+                "not": {
+                  "type": "null"
+                }
+              },
+              "skill_call_id": {
+                "not": {
+                  "type": "null"
+                }
+              },
+              "skill_receipt_hash": {
+                "not": {
+                  "type": "null"
+                }
+              },
+              "skill_receipt_id": {
+                "not": {
+                  "type": "null"
+                }
+              },
+              "tool_call_id": {
+                "not": {
+                  "type": "null"
+                }
+              },
+              "tool_result_hash": {
+                "not": {
+                  "type": "null"
+                }
+              }
+            },
+            "required": [
+              "tool_call_id",
+              "provider_tool_call_id",
+              "skill_call_id",
+              "skill_receipt_id",
+              "skill_receipt_hash",
+              "route_execution_receipt_id",
+              "route_execution_receipt_hash",
+              "input_hash",
+              "output_hash",
+              "tool_result_hash",
+              "domain_status"
+            ]
+          },
+          {
+            "properties": {
+              "error_code": {
+                "type": "null"
+              },
+              "error_message": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "error_code",
+              "error_message"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "properties": {
+    "attempt_ordinal": {
+      "const": 1,
+      "title": "Attempt Ordinal",
+      "type": "integer"
+    },
+    "checkpoint_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Checkpoint Hash",
+      "type": "string"
+    },
+    "checkpoint_id": {
+      "pattern": "^workflow-checkpoint-[0-9a-f]{32}$",
+      "title": "Checkpoint Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "domain_status": {
+      "anyOf": [
+        {
+          "enum": [
+            "healthy",
+            "degraded",
+            "blocked"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Domain Status"
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 2,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Error Code"
+    },
+    "error_message": {
+      "anyOf": [
+        {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Error Message"
+    },
+    "execution_status": {
+      "enum": [
+        "succeeded",
+        "failed",
+        "cancelled"
+      ],
+      "title": "Execution Status",
+      "type": "string"
+    },
+    "expected_manifest_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Manifest Fingerprint",
+      "type": "string"
+    },
+    "expected_package_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Package Fingerprint",
+      "type": "string"
+    },
+    "expected_skill_version": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[0-9A-Za-z][0-9A-Za-z._+-]*$",
+      "title": "Expected Skill Version",
+      "type": "string"
+    },
+    "expected_skill_version_id": {
+      "pattern": "^skill-version-[0-9a-f]{32}$",
+      "title": "Expected Skill Version Id",
+      "type": "string"
+    },
+    "formal_draft_allowed": {
+      "const": false,
+      "title": "Formal Draft Allowed",
+      "type": "boolean"
+    },
+    "input_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Input Hash"
+    },
+    "output_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Output Hash"
+    },
+    "plan_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Plan Hash",
+      "type": "string"
+    },
+    "previous_checkpoint_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Previous Checkpoint Hash"
+    },
+    "previous_checkpoint_id": {
+      "anyOf": [
+        {
+          "pattern": "^workflow-checkpoint-[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Previous Checkpoint Id"
+    },
+    "provider_tool_call_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Provider Tool Call Id"
+    },
+    "route_execution_receipt_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Route Execution Receipt Hash"
+    },
+    "route_execution_receipt_id": {
+      "anyOf": [
+        {
+          "pattern": "^nlcl-route-exec-[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Route Execution Receipt Id"
+    },
+    "run_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "runner": {
+      "const": "managed_skill",
+      "title": "Runner",
+      "type": "string"
+    },
+    "schema": {
+      "const": "zhimeng.workflow-step-checkpoint.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "skill_call_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Skill Call Id"
+    },
+    "skill_id": {
+      "maxLength": 128,
+      "minLength": 3,
+      "pattern": "^[a-z0-9][a-z0-9._-]*[a-z0-9]$",
+      "title": "Skill Id",
+      "type": "string"
+    },
+    "skill_receipt_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Skill Receipt Hash"
+    },
+    "skill_receipt_id": {
+      "anyOf": [
+        {
+          "pattern": "^skill-receipt-[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Skill Receipt Id"
+    },
+    "step_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Step Hash",
+      "type": "string"
+    },
+    "step_id": {
+      "pattern": "^workflow-step-[0-9a-f]{32}$",
+      "title": "Step Id",
+      "type": "string"
+    },
+    "step_ordinal": {
+      "maximum": 32,
+      "minimum": 1,
+      "title": "Step Ordinal",
+      "type": "integer"
+    },
+    "tool_call_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Tool Call Id"
+    },
+    "tool_result_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Tool Result Hash"
+    },
+    "workflow_plan_id": {
+      "pattern": "^workflow-plan-[0-9a-f]{32}$",
+      "title": "Workflow Plan Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "checkpoint_id",
+    "workflow_plan_id",
+    "plan_hash",
+    "run_id",
+    "step_id",
+    "step_hash",
+    "step_ordinal",
+    "runner",
+    "skill_id",
+    "expected_skill_version_id",
+    "expected_skill_version",
+    "expected_manifest_fingerprint",
+    "expected_package_fingerprint",
+    "attempt_ordinal",
+    "previous_checkpoint_id",
+    "previous_checkpoint_hash",
+    "tool_call_id",
+    "provider_tool_call_id",
+    "skill_call_id",
+    "skill_receipt_id",
+    "skill_receipt_hash",
+    "route_execution_receipt_id",
+    "route_execution_receipt_hash",
+    "input_hash",
+    "output_hash",
+    "tool_result_hash",
+    "execution_status",
+    "domain_status",
+    "error_code",
+    "error_message",
+    "formal_draft_allowed",
+    "created_at",
+    "checkpoint_hash"
+  ],
+  "title": "WorkflowStepCheckpoint",
+  "type": "object"
+}

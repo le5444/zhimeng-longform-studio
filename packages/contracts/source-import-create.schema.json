@@ -1,0 +1,65 @@
+{
+  "$defs": {
+    "TomatoSearchCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "minimum": 1,
+          "title": "Index",
+          "type": "integer"
+        },
+        "book_id": {
+          "pattern": "^[0-9]{1,32}$",
+          "title": "Book Id",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "author": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Author",
+          "type": "string"
+        }
+      },
+      "required": [
+        "index",
+        "book_id",
+        "title",
+        "author"
+      ],
+      "title": "TomatoSearchCandidate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "provider": {
+      "const": "tomato",
+      "default": "tomato",
+      "title": "Provider",
+      "type": "string"
+    },
+    "query": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Query",
+      "type": "string"
+    },
+    "candidate": {
+      "$ref": "#/$defs/TomatoSearchCandidate"
+    }
+  },
+  "required": [
+    "query",
+    "candidate"
+  ],
+  "title": "SourceImportCreateRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/source-import-create.schema.json"
+}

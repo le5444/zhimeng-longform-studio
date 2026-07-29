@@ -1,0 +1,18 @@
+{
+  "additionalProperties": false,
+  "description": "Author-triggered mandatory usage plan scaffold after truth content extract.",
+  "properties": {
+    "expected_nlcl_original_truth_content_extract_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Nlcl Original Truth Content Extract Receipt Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "expected_nlcl_original_truth_content_extract_receipt_hash"
+  ],
+  "title": "NlclOriginalMandatoryUsagePlanRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/nlcl-original-mandatory-usage-plan-request.schema.json"
+}

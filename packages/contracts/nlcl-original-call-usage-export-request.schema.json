@@ -1,0 +1,18 @@
+{
+  "additionalProperties": false,
+  "description": "Author-triggered original-compatible call_usage.jsonl export bridge.",
+  "properties": {
+    "expected_nlcl_call_usage_continuity_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Nlcl Call Usage Continuity Receipt Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "expected_nlcl_call_usage_continuity_receipt_hash"
+  ],
+  "title": "NlclOriginalCallUsageExportRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/nlcl-original-call-usage-export-request.schema.json"
+}

@@ -1,0 +1,82 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.skill-rule-evolution-prepare-request.v1",
+      "default": "zhimeng.skill-rule-evolution-prepare-request.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "skill_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Skill Id",
+      "type": "string"
+    },
+    "target_version_id": {
+      "pattern": "^skill-version-[0-9a-f]{32}$",
+      "title": "Target Version Id",
+      "type": "string"
+    },
+    "project_id": {
+      "anyOf": [
+        {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Project Id"
+    },
+    "change_set_id": {
+      "anyOf": [
+        {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Change Set Id"
+    },
+    "expected_current_version_id": {
+      "anyOf": [
+        {
+          "pattern": "^skill-version-[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Current Version Id"
+    },
+    "expected_state_revision": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected State Revision"
+    }
+  },
+  "required": [
+    "skill_id",
+    "target_version_id"
+  ],
+  "title": "SkillRuleEvolutionPrepareRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/skill-rule-evolution-prepare-request.schema.json"
+}

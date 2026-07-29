@@ -1,0 +1,18 @@
+{
+  "additionalProperties": false,
+  "description": "Author-triggered product-native NLCL call_usage continuity after writeback sync.",
+  "properties": {
+    "expected_nlcl_writeback_sync_receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Nlcl Writeback Sync Receipt Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "expected_nlcl_writeback_sync_receipt_hash"
+  ],
+  "title": "NlclCallUsageContinuityRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/nlcl-call-usage-continuity-request.schema.json"
+}

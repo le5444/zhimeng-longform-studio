@@ -1,0 +1,280 @@
+{
+  "$defs": {
+    "FourSkillsInstructionChainHandoffReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.four-skills-instruction-chain-handoff-receipt.v1",
+          "default": "zhimeng.four-skills-instruction-chain-handoff-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "handoff_id": {
+          "pattern": "^four-skills-instruction-chain-handoff-[0-9a-f]{32}$",
+          "title": "Handoff Id",
+          "type": "string"
+        },
+        "batch_id": {
+          "pattern": "^four-skills-raw-adaptation-[0-9a-f]{32}$",
+          "title": "Batch Id",
+          "type": "string"
+        },
+        "batch_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Batch Hash",
+          "type": "string"
+        },
+        "binding_id": {
+          "pattern": "^four-skills-workflow-binding-[0-9a-f]{32}$",
+          "title": "Binding Id",
+          "type": "string"
+        },
+        "binding_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Binding Hash",
+          "type": "string"
+        },
+        "orchestration_id": {
+          "pattern": "^four-skills-workflow-orchestration-[0-9a-f]{32}$",
+          "title": "Orchestration Id",
+          "type": "string"
+        },
+        "orchestration_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Orchestration Hash",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "ready",
+            "incomplete",
+            "failed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "workflow_surface": {
+          "const": "generic_instruction_workflow",
+          "default": "generic_instruction_workflow",
+          "title": "Workflow Surface",
+          "type": "string"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/FourSkillsInstructionChainHandoffStep"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "title": "Steps",
+          "type": "array"
+        },
+        "step_count": {
+          "maximum": 4,
+          "minimum": 4,
+          "title": "Step Count",
+          "type": "integer"
+        },
+        "prepared_step_count": {
+          "maximum": 4,
+          "minimum": 0,
+          "title": "Prepared Step Count",
+          "type": "integer"
+        },
+        "instruction_chain_ready": {
+          "title": "Instruction Chain Ready",
+          "type": "boolean"
+        },
+        "managed_skill_execution": {
+          "const": false,
+          "default": false,
+          "title": "Managed Skill Execution",
+          "type": "boolean"
+        },
+        "raw_skill_md_execution": {
+          "const": false,
+          "default": false,
+          "title": "Raw Skill Md Execution",
+          "type": "boolean"
+        },
+        "four_skills_generic_exactly_once": {
+          "const": false,
+          "default": false,
+          "title": "Four Skills Generic Exactly Once",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "writes_project_truth": {
+          "const": false,
+          "default": false,
+          "title": "Writes Project Truth",
+          "type": "boolean"
+        },
+        "policy_version": {
+          "const": "local-v1-four-skills-instruction-chain-handoff-1",
+          "default": "local-v1-four-skills-instruction-chain-handoff-1",
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "detail": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Detail",
+          "type": "string"
+        },
+        "handed_off_at": {
+          "format": "date-time",
+          "title": "Handed Off At",
+          "type": "string"
+        },
+        "handoff_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Handoff Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "handoff_id",
+        "batch_id",
+        "batch_hash",
+        "binding_id",
+        "binding_hash",
+        "orchestration_id",
+        "orchestration_hash",
+        "status",
+        "steps",
+        "step_count",
+        "prepared_step_count",
+        "instruction_chain_ready",
+        "detail",
+        "handed_off_at",
+        "handoff_hash"
+      ],
+      "title": "FourSkillsInstructionChainHandoffReceipt",
+      "type": "object"
+    },
+    "FourSkillsInstructionChainHandoffStep": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "$ref": "#/$defs/FourSkillsRawFamily"
+        },
+        "ordinal": {
+          "maximum": 4,
+          "minimum": 1,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "skill_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Skill Id",
+          "type": "string"
+        },
+        "skill_version_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Skill Version Id",
+          "type": "string"
+        },
+        "package_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Package Fingerprint",
+          "type": "string"
+        },
+        "runner": {
+          "const": "instruction_chain_handoff",
+          "default": "instruction_chain_handoff",
+          "title": "Runner",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "prepared",
+            "skipped",
+            "failed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "managed_skill_execution": {
+          "const": false,
+          "default": false,
+          "title": "Managed Skill Execution",
+          "type": "boolean"
+        },
+        "raw_skill_md_execution": {
+          "const": false,
+          "default": false,
+          "title": "Raw Skill Md Execution",
+          "type": "boolean"
+        },
+        "detail": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "family",
+        "ordinal",
+        "skill_id",
+        "skill_version_id",
+        "package_fingerprint",
+        "status",
+        "detail"
+      ],
+      "title": "FourSkillsInstructionChainHandoffStep",
+      "type": "object"
+    },
+    "FourSkillsRawFamily": {
+      "enum": [
+        "source_ingest",
+        "distillation",
+        "knowledge_context",
+        "creation_suite"
+      ],
+      "title": "FourSkillsRawFamily",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.four-skills-instruction-chain-handoff-response.v1",
+      "default": "zhimeng.four-skills-instruction-chain-handoff-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "receipt": {
+      "$ref": "#/$defs/FourSkillsInstructionChainHandoffReceipt"
+    },
+    "not_claiming": {
+      "default": [
+        "four_skills_generic_exactly_once",
+        "raw_skill_md_execution",
+        "managed_skill_execution",
+        "deterministic_tool_auto_generation",
+        "formal_draft_authorization_unlock",
+        "local_v1_exe"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Not Claiming",
+      "type": "array"
+    }
+  },
+  "required": [
+    "receipt"
+  ],
+  "title": "FourSkillsInstructionChainHandoffResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/four-skills-instruction-chain-handoff-response.schema.json"
+}

@@ -1,0 +1,59 @@
+{
+  "$defs": {
+    "FeedbackCandidatePromotionDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "pattern": "^feedback-candidate-[0-9a-f]{32}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "action": {
+          "enum": [
+            "verify_source",
+            "check_conflicts",
+            "evaluate_regression",
+            "approve",
+            "record_experience",
+            "reject",
+            "rollback_experience"
+          ],
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "action"
+      ],
+      "title": "FeedbackCandidatePromotionDecision",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Author-controlled FR-EVO promotion steps over feedback candidates.",
+  "properties": {
+    "expected_feedback_candidate_bundle_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Feedback Candidate Bundle Hash",
+      "type": "string"
+    },
+    "decisions": {
+      "items": {
+        "$ref": "#/$defs/FeedbackCandidatePromotionDecision"
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "title": "Decisions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "expected_feedback_candidate_bundle_hash",
+    "decisions"
+  ],
+  "title": "FeedbackCandidatePromotionRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/feedback-candidate-promotion-request.schema.json"
+}

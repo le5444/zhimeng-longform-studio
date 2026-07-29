@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.codex/novel-creation-suite/ai-smell-bridge.schema.json",
+  "title": "Novel creation suite AI smell project audit bridge",
+  "type": "object",
+  "required": [
+    "version",
+    "ai_smell_project_audit_bridge",
+    "report_dir",
+    "command",
+    "ai_smell_reports_seen",
+    "release_blocking_findings"
+  ],
+  "properties": {
+    "version": {
+      "const": "v1"
+    },
+    "ai_smell_project_audit_bridge": {
+      "enum": ["pass", "fail", "warn", "not_applicable"]
+    },
+    "report_dir": {
+      "type": "string"
+    },
+    "command": {
+      "type": "string"
+    },
+    "ai_smell_reports_seen": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "release_blocking_findings": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "project_audit_health": {
+      "enum": ["healthy", "degraded", "blocked", "not_run", "unknown"]
+    },
+    "checked_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

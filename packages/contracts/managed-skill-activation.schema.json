@@ -1,0 +1,278 @@
+{
+  "$defs": {
+    "ManagedSkillActivationReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "receipt_id": {
+          "pattern": "^skill-activation-[0-9a-f]{32}$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/ManagedSkillScope"
+        },
+        "skill_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "title": "Skill Id",
+          "type": "string"
+        },
+        "action": {
+          "enum": [
+            "builtin_bootstrap",
+            "enable",
+            "disable",
+            "upgrade",
+            "rollback",
+            "inherit"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "previous_state": {
+          "enum": [
+            "unconfigured",
+            "inherited",
+            "enabled",
+            "disabled"
+          ],
+          "title": "Previous State",
+          "type": "string"
+        },
+        "previous_version_id": {
+          "anyOf": [
+            {
+              "pattern": "^skill-version-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Previous Version Id"
+        },
+        "next_state": {
+          "enum": [
+            "inherited",
+            "enabled",
+            "disabled"
+          ],
+          "title": "Next State",
+          "type": "string"
+        },
+        "next_version_id": {
+          "anyOf": [
+            {
+              "pattern": "^skill-version-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Next Version Id"
+        },
+        "expected_state_revision": {
+          "minimum": 0,
+          "title": "Expected State Revision",
+          "type": "integer"
+        },
+        "expected_version_id": {
+          "anyOf": [
+            {
+              "pattern": "^skill-version-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Version Id"
+        },
+        "state_revision": {
+          "minimum": 1,
+          "title": "State Revision",
+          "type": "integer"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "scope",
+        "skill_id",
+        "action",
+        "previous_state",
+        "next_state",
+        "expected_state_revision",
+        "state_revision",
+        "receipt_hash",
+        "created_at"
+      ],
+      "title": "ManagedSkillActivationReceipt",
+      "type": "object"
+    },
+    "ManagedSkillActivationRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "$ref": "#/$defs/ManagedSkillScope"
+        },
+        "skill_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[a-z0-9][a-z0-9._-]*[a-z0-9]$",
+          "title": "Skill Id",
+          "type": "string"
+        },
+        "configured_state": {
+          "enum": [
+            "unconfigured",
+            "inherited",
+            "enabled",
+            "disabled"
+          ],
+          "title": "Configured State",
+          "type": "string"
+        },
+        "configured_version_id": {
+          "anyOf": [
+            {
+              "pattern": "^skill-version-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Configured Version Id"
+        },
+        "state_revision": {
+          "minimum": 0,
+          "title": "State Revision",
+          "type": "integer"
+        },
+        "effective_state": {
+          "enum": [
+            "enabled",
+            "disabled"
+          ],
+          "title": "Effective State",
+          "type": "string"
+        },
+        "effective_version_id": {
+          "anyOf": [
+            {
+              "pattern": "^skill-version-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effective Version Id"
+        },
+        "effective_scope": {
+          "enum": [
+            "application",
+            "project",
+            "none"
+          ],
+          "title": "Effective Scope",
+          "type": "string"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Updated At"
+        }
+      },
+      "required": [
+        "scope",
+        "skill_id",
+        "configured_state",
+        "state_revision",
+        "effective_state",
+        "effective_scope"
+      ],
+      "title": "ManagedSkillActivationRecord",
+      "type": "object"
+    },
+    "ManagedSkillScope": {
+      "additionalProperties": false,
+      "properties": {
+        "scope_type": {
+          "enum": [
+            "application",
+            "project"
+          ],
+          "title": "Scope Type",
+          "type": "string"
+        },
+        "project_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Id"
+        }
+      },
+      "required": [
+        "scope_type"
+      ],
+      "title": "ManagedSkillScope",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.managed-skill-activation.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "activation": {
+      "$ref": "#/$defs/ManagedSkillActivationRecord"
+    },
+    "receipt": {
+      "$ref": "#/$defs/ManagedSkillActivationReceipt"
+    }
+  },
+  "required": [
+    "schema",
+    "activation",
+    "receipt"
+  ],
+  "title": "ManagedSkillActivationResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/managed-skill-activation.schema.json"
+}

@@ -1,0 +1,402 @@
+{
+  "$defs": {
+    "LocalSourceImportRequestEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "source_format": {
+          "default": "txt",
+          "enum": [
+            "txt",
+            "epub"
+          ],
+          "title": "Source Format",
+          "type": "string"
+        },
+        "source_locator_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Locator Hash",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "author": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Author",
+          "type": "string"
+        },
+        "source_size_bytes": {
+          "minimum": 1,
+          "title": "Source Size Bytes",
+          "type": "integer"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_locator_hash",
+        "title",
+        "author",
+        "source_size_bytes",
+        "source_sha256"
+      ],
+      "title": "LocalSourceImportRequestEvidence",
+      "type": "object"
+    },
+    "SourceImportArtifactEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Kind",
+          "type": "string"
+        },
+        "relative_path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "relative_path",
+        "size_bytes",
+        "sha256"
+      ],
+      "title": "SourceImportArtifactEvidence",
+      "type": "object"
+    },
+    "SourceImportToolEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "tool_id": {
+          "maxLength": 160,
+          "minLength": 3,
+          "pattern": "^[a-z][a-z0-9._-]*$",
+          "title": "Tool Id",
+          "type": "string"
+        },
+        "tool_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Tool Version",
+          "type": "string"
+        },
+        "tool_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Tool Fingerprint",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool_id",
+        "tool_version",
+        "tool_fingerprint"
+      ],
+      "title": "SourceImportToolEvidence",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.source-import-execution-receipt.v2",
+      "default": "zhimeng.source-import-execution-receipt.v2",
+      "title": "Schema",
+      "type": "string"
+    },
+    "receipt_id": {
+      "pattern": "^source-import-receipt-[0-9a-f]{32}$",
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "source_import_id": {
+      "pattern": "^source-import-[0-9a-f]{32}$",
+      "title": "Source Import Id",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^source-import-run-[0-9a-f]{32}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "revision": {
+      "const": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "idempotency_key": {
+      "pattern": "^source-import-idempotency-[0-9a-f]{32}$",
+      "title": "Idempotency Key",
+      "type": "string"
+    },
+    "lineage_status": {
+      "const": "verified",
+      "default": "verified",
+      "title": "Lineage Status",
+      "type": "string"
+    },
+    "provider": {
+      "const": "local_file",
+      "default": "local_file",
+      "title": "Provider",
+      "type": "string"
+    },
+    "request": {
+      "$ref": "#/$defs/LocalSourceImportRequestEvidence"
+    },
+    "request_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Request Hash",
+      "type": "string"
+    },
+    "retry_of": {
+      "anyOf": [
+        {
+          "pattern": "^source-import-[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Retry Of"
+    },
+    "prepare_invocation_id": {
+      "pattern": "^source-import-invocation-[0-9a-f]{32}$",
+      "title": "Prepare Invocation Id",
+      "type": "string"
+    },
+    "prepare_tool": {
+      "$ref": "#/$defs/SourceImportToolEvidence"
+    },
+    "prepare_input_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Prepare Input Hash",
+      "type": "string"
+    },
+    "prepare_output_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Prepare Output Hash",
+      "type": "string"
+    },
+    "download_scope": {
+      "const": "full",
+      "default": "full",
+      "title": "Download Scope",
+      "type": "string"
+    },
+    "source_format": {
+      "default": "txt",
+      "enum": [
+        "txt",
+        "epub"
+      ],
+      "title": "Source Format",
+      "type": "string"
+    },
+    "source_locator_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Locator Hash",
+      "type": "string"
+    },
+    "source_file_size_bytes": {
+      "minimum": 1,
+      "title": "Source File Size Bytes",
+      "type": "integer"
+    },
+    "source_file_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source File Sha256",
+      "type": "string"
+    },
+    "source_packet_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Packet Fingerprint",
+      "type": "string"
+    },
+    "packet_manifest_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Packet Manifest Hash",
+      "type": "string"
+    },
+    "packet_source_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Packet Source Hash",
+      "type": "string"
+    },
+    "packet_text_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Packet Text Hash",
+      "type": "string"
+    },
+    "packet_metadata_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Packet Metadata Hash",
+      "type": "string"
+    },
+    "packet_source_size_bytes": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Packet Source Size Bytes"
+    },
+    "packet_text_size_bytes": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Packet Text Size Bytes"
+    },
+    "source_artifacts": {
+      "items": {
+        "$ref": "#/$defs/SourceImportArtifactEvidence"
+      },
+      "maxItems": 32,
+      "minItems": 4,
+      "title": "Source Artifacts",
+      "type": "array"
+    },
+    "distillation_invocation_id": {
+      "pattern": "^source-import-invocation-[0-9a-f]{32}$",
+      "title": "Distillation Invocation Id",
+      "type": "string"
+    },
+    "distillation_tool": {
+      "$ref": "#/$defs/SourceImportToolEvidence"
+    },
+    "distillation_input_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Distillation Input Hash",
+      "type": "string"
+    },
+    "distillation_output_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Distillation Output Hash",
+      "type": "string"
+    },
+    "draft_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Draft Fingerprint",
+      "type": "string"
+    },
+    "cards_draft_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Cards Draft Hash",
+      "type": "string"
+    },
+    "envelope_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Envelope Hash",
+      "type": "string"
+    },
+    "envelope_schema": {
+      "const": "novel_distillation.source_packet_draft.v1",
+      "title": "Envelope Schema",
+      "type": "string"
+    },
+    "envelope_status": {
+      "const": "draft_ready",
+      "title": "Envelope Status",
+      "type": "string"
+    },
+    "card_count": {
+      "maximum": 64,
+      "minimum": 1,
+      "title": "Card Count",
+      "type": "integer"
+    },
+    "draft_artifacts": {
+      "items": {
+        "$ref": "#/$defs/SourceImportArtifactEvidence"
+      },
+      "maxItems": 32,
+      "minItems": 4,
+      "title": "Draft Artifacts",
+      "type": "array"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Receipt Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "source_import_id",
+    "run_id",
+    "revision",
+    "idempotency_key",
+    "request",
+    "request_hash",
+    "prepare_invocation_id",
+    "prepare_tool",
+    "prepare_input_hash",
+    "prepare_output_hash",
+    "source_locator_hash",
+    "source_file_size_bytes",
+    "source_file_sha256",
+    "source_packet_fingerprint",
+    "packet_manifest_hash",
+    "packet_source_hash",
+    "packet_text_hash",
+    "packet_metadata_hash",
+    "source_artifacts",
+    "distillation_invocation_id",
+    "distillation_tool",
+    "distillation_input_hash",
+    "distillation_output_hash",
+    "draft_fingerprint",
+    "cards_draft_hash",
+    "envelope_hash",
+    "envelope_schema",
+    "envelope_status",
+    "card_count",
+    "draft_artifacts",
+    "created_at",
+    "receipt_hash"
+  ],
+  "title": "LocalSourceImportExecutionReceipt",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/local-source-import-execution-receipt.schema.json"
+}

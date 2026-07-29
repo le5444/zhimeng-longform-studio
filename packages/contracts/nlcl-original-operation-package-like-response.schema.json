@@ -1,0 +1,272 @@
+{
+  "$defs": {
+    "NlclOriginalOperationPackageLikeReceipt": {
+      "additionalProperties": false,
+      "description": "Receipt for product-bridge operation_package_like scaffold.\n\nreadiness is fixed to risk_draft_only. Never authorizes formal prose.",
+      "properties": {
+        "schema": {
+          "const": "zhimeng.nlcl-original-operation-package-like-receipt.v1",
+          "default": "zhimeng.nlcl-original-operation-package-like-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "receipt_id": {
+          "pattern": "^nlcl-original-operation-package-like-[0-9a-f]{32}$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "nlcl_original_mandatory_usage_closure_receipt_id": {
+          "pattern": "^nlcl-original-mandatory-usage-closure-[0-9a-f]{32}$",
+          "title": "Nlcl Original Mandatory Usage Closure Receipt Id",
+          "type": "string"
+        },
+        "nlcl_original_mandatory_usage_closure_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Nlcl Original Mandatory Usage Closure Receipt Hash",
+          "type": "string"
+        },
+        "nlcl_original_mandatory_usage_plan_receipt_id": {
+          "pattern": "^nlcl-original-mandatory-usage-plan-[0-9a-f]{32}$",
+          "title": "Nlcl Original Mandatory Usage Plan Receipt Id",
+          "type": "string"
+        },
+        "nlcl_original_mandatory_usage_plan_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Nlcl Original Mandatory Usage Plan Receipt Hash",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "applied",
+            "rolled_back"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "chapter_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Chapter Id",
+          "type": "string"
+        },
+        "canonical_chapter_key": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Canonical Chapter Key",
+          "type": "string"
+        },
+        "operation_package_id": {
+          "pattern": "^product-bridge-operation-package-[0-9a-f]{32}$",
+          "title": "Operation Package Id",
+          "type": "string"
+        },
+        "package_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Package Hash",
+          "type": "string"
+        },
+        "readiness": {
+          "const": "risk_draft_only",
+          "default": "risk_draft_only",
+          "title": "Readiness",
+          "type": "string"
+        },
+        "written_files": {
+          "items": {
+            "$ref": "#/$defs/NlclOriginalOperationPackageLikeWrittenFile"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Written Files",
+          "type": "array"
+        },
+        "package_relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?:chapter_context|07_[^/]+/nlcl_state/chapter_context)/[A-Za-z0-9._-]+_operation_package_like_latest\\.json$",
+          "title": "Package Relative Path",
+          "type": "string"
+        },
+        "record_mode": {
+          "const": "product_bridge_operation_package_like_scaffold",
+          "default": "product_bridge_operation_package_like_scaffold",
+          "title": "Record Mode",
+          "type": "string"
+        },
+        "original_nlcl_novel_state_synced": {
+          "const": true,
+          "default": true,
+          "title": "Original Nlcl Novel State Synced",
+          "type": "boolean"
+        },
+        "truth_content_extracted": {
+          "const": true,
+          "default": true,
+          "title": "Truth Content Extracted",
+          "type": "boolean"
+        },
+        "mandatory_usage_plan_synced": {
+          "const": true,
+          "default": true,
+          "title": "Mandatory Usage Plan Synced",
+          "type": "boolean"
+        },
+        "mandatory_usage_closure_closed": {
+          "const": true,
+          "default": true,
+          "title": "Mandatory Usage Closure Closed",
+          "type": "boolean"
+        },
+        "operation_package_like_synced": {
+          "const": true,
+          "default": true,
+          "title": "Operation Package Like Synced",
+          "type": "boolean"
+        },
+        "route_validated": {
+          "const": false,
+          "default": false,
+          "title": "Route Validated",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "quality_assessed": {
+          "const": false,
+          "default": false,
+          "title": "Quality Assessed",
+          "type": "boolean"
+        },
+        "novel_state_synced": {
+          "const": true,
+          "default": true,
+          "title": "Novel State Synced",
+          "type": "boolean"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "change_set_id",
+        "project_id",
+        "nlcl_original_mandatory_usage_closure_receipt_id",
+        "nlcl_original_mandatory_usage_closure_receipt_hash",
+        "nlcl_original_mandatory_usage_plan_receipt_id",
+        "nlcl_original_mandatory_usage_plan_receipt_hash",
+        "outcome",
+        "chapter_id",
+        "canonical_chapter_key",
+        "operation_package_id",
+        "package_hash",
+        "written_files",
+        "package_relative_path",
+        "created_at",
+        "receipt_hash"
+      ],
+      "title": "NlclOriginalOperationPackageLikeReceipt",
+      "type": "object"
+    },
+    "NlclOriginalOperationPackageLikeWrittenFile": {
+      "additionalProperties": false,
+      "properties": {
+        "relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?:chapter_context|07_[^/]+/nlcl_state/chapter_context)/[A-Za-z0-9._-]+_operation_package_like_(?:latest|post_writeback)\\.(?:json|md)$",
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "source_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Hash",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "json_latest",
+            "md_latest",
+            "json_stage",
+            "md_stage"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "created": {
+          "title": "Created",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "relative_path",
+        "source_hash",
+        "kind",
+        "created"
+      ],
+      "title": "NlclOriginalOperationPackageLikeWrittenFile",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.nlcl-original-operation-package-like-response.v1",
+      "default": "zhimeng.nlcl-original-operation-package-like-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "change_set_id": {
+      "pattern": "^changeset-[0-9a-f]{32}$",
+      "title": "Change Set Id",
+      "type": "string"
+    },
+    "receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NlclOriginalOperationPackageLikeReceipt"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "history": {
+      "items": {
+        "$ref": "#/$defs/NlclOriginalOperationPackageLikeReceipt"
+      },
+      "maxItems": 32,
+      "title": "History",
+      "type": "array"
+    }
+  },
+  "required": [
+    "change_set_id"
+  ],
+  "title": "NlclOriginalOperationPackageLikeResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/nlcl-original-operation-package-like-response.schema.json"
+}

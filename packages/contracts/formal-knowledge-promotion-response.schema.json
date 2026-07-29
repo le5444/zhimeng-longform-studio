@@ -1,0 +1,663 @@
+{
+  "$defs": {
+    "FormalKnowledgePromotionCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/FormalKnowledgePromotionCheckCode"
+        },
+        "required": {
+          "title": "Required",
+          "type": "boolean"
+        },
+        "present": {
+          "title": "Present",
+          "type": "boolean"
+        },
+        "detail": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Detail",
+          "type": "string"
+        },
+        "candidate_id": {
+          "anyOf": [
+            {
+              "pattern": "^feedback-candidate-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Candidate Id"
+        }
+      },
+      "required": [
+        "code",
+        "required",
+        "present",
+        "detail"
+      ],
+      "title": "FormalKnowledgePromotionCheck",
+      "type": "object"
+    },
+    "FormalKnowledgePromotionCheckCode": {
+      "enum": [
+        "change_set_terminal",
+        "feedback_bundle_present",
+        "experience_recorded",
+        "regression_pass",
+        "eval_corpus_baseline_gate",
+        "no_formal_contamination",
+        "formal_draft_locked"
+      ],
+      "title": "FormalKnowledgePromotionCheckCode",
+      "type": "string"
+    },
+    "FormalKnowledgePromotionItem": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "pattern": "^feedback-candidate-[0-9a-f]{32}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "finding_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "finding_kind": {
+          "enum": [
+            "fact_risk",
+            "continuity_risk",
+            "subjective_note"
+          ],
+          "title": "Finding Kind",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "evidence_quote": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Evidence Quote",
+          "type": "string"
+        },
+        "relative_path": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Path"
+        },
+        "experience_relative_path": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Experience Relative Path"
+        },
+        "promotion_status": {
+          "enum": [
+            "experience_recorded",
+            "formal_promotion_staged",
+            "formal_promotion_materialized",
+            "formal_promotion_author_requested",
+            "formal_promotion_author_withheld",
+            "formal_promotion_author_committed",
+            "formal_promotion_rejected",
+            "formal_promotion_rolled_back"
+          ],
+          "title": "Promotion Status",
+          "type": "string"
+        },
+        "regression_result": {
+          "enum": [
+            "not_run",
+            "pass_with_watch",
+            "fail_blocked",
+            "skipped_rejected"
+          ],
+          "title": "Regression Result",
+          "type": "string"
+        },
+        "staged_package_id": {
+          "anyOf": [
+            {
+              "pattern": "^formal-knowledge-promotion-package-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Staged Package Id"
+        },
+        "materialized_source_import_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Materialized Source Import Id"
+        },
+        "materialized_knowledge_candidate_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Materialized Knowledge Candidate Id"
+        },
+        "formal_knowledge_contaminated": {
+          "const": false,
+          "default": false,
+          "title": "Formal Knowledge Contaminated",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "writes_formal_knowledge": {
+          "default": false,
+          "title": "Writes Formal Knowledge",
+          "type": "boolean"
+        },
+        "committed_knowledge_card_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Committed Knowledge Card Id"
+        },
+        "committed_knowledge_version_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Committed Knowledge Version Id"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "finding_id",
+        "finding_kind",
+        "summary",
+        "promotion_status",
+        "regression_result"
+      ],
+      "title": "FormalKnowledgePromotionItem",
+      "type": "object"
+    },
+    "FormalKnowledgePromotionPackage": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.formal-knowledge-promotion-package.v1",
+          "default": "zhimeng.formal-knowledge-promotion-package.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "package_id": {
+          "pattern": "^formal-knowledge-promotion-package-[0-9a-f]{32}$",
+          "title": "Package Id",
+          "type": "string"
+        },
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "candidate_id": {
+          "pattern": "^feedback-candidate-[0-9a-f]{32}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "finding_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "finding_kind": {
+          "enum": [
+            "fact_risk",
+            "continuity_risk",
+            "subjective_note"
+          ],
+          "title": "Finding Kind",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "evidence_quote": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Evidence Quote",
+          "type": "string"
+        },
+        "relative_path": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Path"
+        },
+        "proposed_card_type": {
+          "const": "validator",
+          "default": "validator",
+          "title": "Proposed Card Type",
+          "type": "string"
+        },
+        "proposed_card_title": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Proposed Card Title",
+          "type": "string"
+        },
+        "proposed_card_body": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Proposed Card Body",
+          "type": "string"
+        },
+        "source_kind": {
+          "const": "feedback_experience",
+          "default": "feedback_experience",
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "experience_relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Experience Relative Path",
+          "type": "string"
+        },
+        "formal_knowledge_contaminated": {
+          "const": false,
+          "default": false,
+          "title": "Formal Knowledge Contaminated",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "writes_formal_knowledge": {
+          "const": false,
+          "default": false,
+          "title": "Writes Formal Knowledge",
+          "type": "boolean"
+        },
+        "quality_assessed": {
+          "const": false,
+          "default": false,
+          "title": "Quality Assessed",
+          "type": "boolean"
+        },
+        "staged_at": {
+          "format": "date-time",
+          "title": "Staged At",
+          "type": "string"
+        },
+        "materialized_source_import_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Materialized Source Import Id"
+        },
+        "materialized_knowledge_candidate_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Materialized Knowledge Candidate Id"
+        },
+        "package_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Package Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "package_id",
+        "change_set_id",
+        "project_id",
+        "candidate_id",
+        "finding_id",
+        "finding_kind",
+        "summary",
+        "proposed_card_title",
+        "proposed_card_body",
+        "experience_relative_path",
+        "staged_at",
+        "package_hash"
+      ],
+      "title": "FormalKnowledgePromotionPackage",
+      "type": "object"
+    },
+    "FormalKnowledgePromotionReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.formal-knowledge-promotion-receipt.v1",
+          "default": "zhimeng.formal-knowledge-promotion-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "receipt_id": {
+          "pattern": "^formal-knowledge-promotion-[0-9a-f]{32}$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "feedback_candidate_bundle_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Feedback Candidate Bundle Id"
+        },
+        "feedback_candidate_bundle_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Feedback Candidate Bundle Hash"
+        },
+        "status": {
+          "$ref": "#/$defs/FormalKnowledgePromotionStatus"
+        },
+        "authorization_input_ready": {
+          "title": "Authorization Input Ready",
+          "type": "boolean"
+        },
+        "author_formalization_intent": {
+          "default": "none",
+          "enum": [
+            "none",
+            "request",
+            "withhold"
+          ],
+          "title": "Author Formalization Intent",
+          "type": "string"
+        },
+        "author_formalization_effective": {
+          "default": false,
+          "title": "Author Formalization Effective",
+          "type": "boolean"
+        },
+        "formal_knowledge_contaminated": {
+          "const": false,
+          "default": false,
+          "title": "Formal Knowledge Contaminated",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "writes_formal_knowledge": {
+          "default": false,
+          "title": "Writes Formal Knowledge",
+          "type": "boolean"
+        },
+        "quality_assessed": {
+          "const": false,
+          "default": false,
+          "title": "Quality Assessed",
+          "type": "boolean"
+        },
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/FormalKnowledgePromotionCheck"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Checks",
+          "type": "array"
+        },
+        "missing_required": {
+          "items": {
+            "$ref": "#/$defs/FormalKnowledgePromotionCheckCode"
+          },
+          "maxItems": 32,
+          "title": "Missing Required",
+          "type": "array"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/FormalKnowledgePromotionItem"
+          },
+          "maxItems": 64,
+          "title": "Items",
+          "type": "array"
+        },
+        "packages": {
+          "items": {
+            "$ref": "#/$defs/FormalKnowledgePromotionPackage"
+          },
+          "maxItems": 64,
+          "title": "Packages",
+          "type": "array"
+        },
+        "queue_relative_path": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Queue Relative Path"
+        },
+        "queue_rows_appended": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Queue Rows Appended",
+          "type": "integer"
+        },
+        "policy_version": {
+          "const": "local-v1-formal-knowledge-promotion-1",
+          "default": "local-v1-formal-knowledge-promotion-1",
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "evaluated_at": {
+          "format": "date-time",
+          "title": "Evaluated At",
+          "type": "string"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "change_set_id",
+        "project_id",
+        "status",
+        "authorization_input_ready",
+        "checks",
+        "evaluated_at",
+        "receipt_hash"
+      ],
+      "title": "FormalKnowledgePromotionReceipt",
+      "type": "object"
+    },
+    "FormalKnowledgePromotionStatus": {
+      "enum": [
+        "ready",
+        "incomplete",
+        "blocked",
+        "staged",
+        "materialized",
+        "author_formalization_requested",
+        "author_formalization_withheld",
+        "author_formalization_committed",
+        "rejected",
+        "rolled_back"
+      ],
+      "title": "FormalKnowledgePromotionStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.formal-knowledge-promotion-response.v1",
+      "default": "zhimeng.formal-knowledge-promotion-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "change_set_id": {
+      "pattern": "^changeset-[0-9a-f]{32}$",
+      "title": "Change Set Id",
+      "type": "string"
+    },
+    "receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FormalKnowledgePromotionReceipt"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "history": {
+      "items": {
+        "$ref": "#/$defs/FormalKnowledgePromotionReceipt"
+      },
+      "maxItems": 32,
+      "title": "History",
+      "type": "array"
+    },
+    "not_claiming": {
+      "default": [
+        "formal_knowledge_auto_activation",
+        "formal_prose_writeback",
+        "formal_draft_authorization_unlock",
+        "four_skills_generic_exactly_once",
+        "local_v1_exe"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Not Claiming",
+      "type": "array"
+    }
+  },
+  "required": [
+    "change_set_id"
+  ],
+  "title": "FormalKnowledgePromotionResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/formal-knowledge-promotion-response.schema.json"
+}

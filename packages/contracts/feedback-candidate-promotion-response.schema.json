@@ -1,0 +1,470 @@
+{
+  "$defs": {
+    "FeedbackCandidate": {
+      "additionalProperties": false,
+      "description": "Versioned author-feedback candidate. Not formal knowledge.",
+      "properties": {
+        "candidate_id": {
+          "pattern": "^feedback-candidate-[0-9a-f]{32}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "source_kind": {
+          "const": "reader_review_decision",
+          "default": "reader_review_decision",
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "source_decision": {
+          "enum": [
+            "adopted",
+            "rejected",
+            "deferred"
+          ],
+          "title": "Source Decision",
+          "type": "string"
+        },
+        "finding_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "finding_kind": {
+          "enum": [
+            "fact_risk",
+            "continuity_risk",
+            "subjective_note"
+          ],
+          "title": "Finding Kind",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "evidence_quote": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Evidence Quote",
+          "type": "string"
+        },
+        "relative_path": {
+          "anyOf": [
+            {
+              "maxLength": 1024,
+              "minLength": 1,
+              "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+\\.(?:json|jsonl|md|txt|yaml|yml)$",
+              "type": "string",
+              "x-zhimeng-invariants": [
+                "path segments cannot use Windows device names",
+                "path segments are at most 255 characters"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Path"
+        },
+        "status": {
+          "default": "candidate",
+          "enum": [
+            "candidate",
+            "rejected",
+            "experience"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "promotion_status": {
+          "default": "not_promoted",
+          "enum": [
+            "not_promoted",
+            "source_verified",
+            "conflict_checked",
+            "regression_evaluated",
+            "author_approved",
+            "experience_recorded",
+            "rejected",
+            "rolled_back"
+          ],
+          "title": "Promotion Status",
+          "type": "string"
+        },
+        "confidence": {
+          "const": "author_explicit",
+          "default": "author_explicit",
+          "title": "Confidence",
+          "type": "string"
+        },
+        "regression_result": {
+          "default": "not_run",
+          "enum": [
+            "not_run",
+            "pass_with_watch",
+            "fail_blocked",
+            "skipped_rejected"
+          ],
+          "title": "Regression Result",
+          "type": "string"
+        },
+        "experience_relative_path": {
+          "anyOf": [
+            {
+              "maxLength": 1024,
+              "minLength": 1,
+              "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+\\.(?:json|jsonl|md|txt|yaml|yml)$",
+              "type": "string",
+              "x-zhimeng-invariants": [
+                "path segments cannot use Windows device names",
+                "path segments are at most 255 characters"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Experience Relative Path"
+        },
+        "formal_knowledge_contaminated": {
+          "const": false,
+          "default": false,
+          "title": "Formal Knowledge Contaminated",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "source_decision",
+        "finding_id",
+        "finding_kind",
+        "summary"
+      ],
+      "title": "FeedbackCandidate",
+      "type": "object"
+    },
+    "FeedbackCandidateBundle": {
+      "additionalProperties": false,
+      "description": "Bundle of feedback candidates produced from one Reader decision receipt.",
+      "properties": {
+        "schema": {
+          "const": "zhimeng.feedback-candidate-bundle.v1",
+          "default": "zhimeng.feedback-candidate-bundle.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "bundle_id": {
+          "pattern": "^feedback-candidate-bundle-[0-9a-f]{32}$",
+          "title": "Bundle Id",
+          "type": "string"
+        },
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "reader_review_decision_receipt_id": {
+          "pattern": "^reader-review-decision-[0-9a-f]{32}$",
+          "title": "Reader Review Decision Receipt Id",
+          "type": "string"
+        },
+        "reader_review_decision_receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Reader Review Decision Receipt Hash",
+          "type": "string"
+        },
+        "follow_up_change_set_id": {
+          "anyOf": [
+            {
+              "pattern": "^changeset-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Follow Up Change Set Id"
+        },
+        "candidates": {
+          "items": {
+            "$ref": "#/$defs/FeedbackCandidate"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Candidates",
+          "type": "array"
+        },
+        "formal_knowledge_contaminated": {
+          "const": false,
+          "default": false,
+          "title": "Formal Knowledge Contaminated",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "quality_assessed": {
+          "const": false,
+          "default": false,
+          "title": "Quality Assessed",
+          "type": "boolean"
+        },
+        "novel_state_synced": {
+          "const": false,
+          "default": false,
+          "title": "Novel State Synced",
+          "type": "boolean"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "bundle_id",
+        "change_set_id",
+        "project_id",
+        "reader_review_decision_receipt_id",
+        "reader_review_decision_receipt_hash",
+        "candidates",
+        "created_at",
+        "receipt_hash"
+      ],
+      "title": "FeedbackCandidateBundle",
+      "type": "object"
+    },
+    "FeedbackCandidatePromotionDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "pattern": "^feedback-candidate-[0-9a-f]{32}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "action": {
+          "enum": [
+            "verify_source",
+            "check_conflicts",
+            "evaluate_regression",
+            "approve",
+            "record_experience",
+            "reject",
+            "rollback_experience"
+          ],
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "action"
+      ],
+      "title": "FeedbackCandidatePromotionDecision",
+      "type": "object"
+    },
+    "FeedbackCandidatePromotionReceipt": {
+      "additionalProperties": false,
+      "description": "Receipt for one promotion batch. Does not contaminate formal knowledge.",
+      "properties": {
+        "schema": {
+          "const": "zhimeng.feedback-candidate-promotion-receipt.v1",
+          "default": "zhimeng.feedback-candidate-promotion-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "receipt_id": {
+          "pattern": "^feedback-candidate-promotion-[0-9a-f]{32}$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "feedback_candidate_bundle_id": {
+          "pattern": "^feedback-candidate-bundle-[0-9a-f]{32}$",
+          "title": "Feedback Candidate Bundle Id",
+          "type": "string"
+        },
+        "feedback_candidate_bundle_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Feedback Candidate Bundle Hash",
+          "type": "string"
+        },
+        "decisions": {
+          "items": {
+            "$ref": "#/$defs/FeedbackCandidatePromotionDecision"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Decisions",
+          "type": "array"
+        },
+        "resulting_candidates": {
+          "items": {
+            "$ref": "#/$defs/FeedbackCandidate"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Resulting Candidates",
+          "type": "array"
+        },
+        "experience_relative_path": {
+          "anyOf": [
+            {
+              "maxLength": 1024,
+              "minLength": 1,
+              "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+\\.(?:json|jsonl|md|txt|yaml|yml)$",
+              "type": "string",
+              "x-zhimeng-invariants": [
+                "path segments cannot use Windows device names",
+                "path segments are at most 255 characters"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Experience Relative Path"
+        },
+        "experience_rows_appended": {
+          "minimum": 0,
+          "title": "Experience Rows Appended",
+          "type": "integer"
+        },
+        "formal_knowledge_contaminated": {
+          "const": false,
+          "default": false,
+          "title": "Formal Knowledge Contaminated",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "quality_assessed": {
+          "const": false,
+          "default": false,
+          "title": "Quality Assessed",
+          "type": "boolean"
+        },
+        "novel_state_synced": {
+          "const": false,
+          "default": false,
+          "title": "Novel State Synced",
+          "type": "boolean"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "change_set_id",
+        "project_id",
+        "feedback_candidate_bundle_id",
+        "feedback_candidate_bundle_hash",
+        "decisions",
+        "resulting_candidates",
+        "experience_rows_appended",
+        "created_at",
+        "receipt_hash"
+      ],
+      "title": "FeedbackCandidatePromotionReceipt",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.feedback-candidate-promotion-response.v1",
+      "default": "zhimeng.feedback-candidate-promotion-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "change_set_id": {
+      "pattern": "^changeset-[0-9a-f]{32}$",
+      "title": "Change Set Id",
+      "type": "string"
+    },
+    "receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FeedbackCandidatePromotionReceipt"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "history": {
+      "items": {
+        "$ref": "#/$defs/FeedbackCandidatePromotionReceipt"
+      },
+      "maxItems": 32,
+      "title": "History",
+      "type": "array"
+    },
+    "bundle": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FeedbackCandidateBundle"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "change_set_id"
+  ],
+  "title": "FeedbackCandidatePromotionResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/feedback-candidate-promotion-response.schema.json"
+}

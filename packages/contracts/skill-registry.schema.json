@@ -1,0 +1,495 @@
+{
+  "$defs": {
+    "DiscoveredSkill": {
+      "additionalProperties": false,
+      "properties": {
+        "skill_id": {
+          "pattern": "^skill-[0-9a-f]{32}$",
+          "title": "Skill Id",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 16384,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "source": {
+          "$ref": "#/$defs/SkillSource"
+        },
+        "manifest_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Manifest Fingerprint"
+        },
+        "manifest_revision": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Manifest Revision"
+        },
+        "revision_status": {
+          "enum": [
+            "manifest_only",
+            "unavailable"
+          ],
+          "title": "Revision Status",
+          "type": "string"
+        },
+        "declared_version": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Declared Version"
+        },
+        "effective_version": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effective Version"
+        },
+        "version_status": {
+          "enum": [
+            "declared",
+            "derived_from_manifest_fingerprint",
+            "unavailable"
+          ],
+          "title": "Version Status",
+          "type": "string"
+        },
+        "validation_status": {
+          "enum": [
+            "valid",
+            "invalid"
+          ],
+          "title": "Validation Status",
+          "type": "string"
+        },
+        "readiness": {
+          "enum": [
+            "discovered",
+            "loadable"
+          ],
+          "title": "Readiness",
+          "type": "string"
+        },
+        "execution_status": {
+          "const": "not_assessed",
+          "default": "not_assessed",
+          "title": "Execution Status",
+          "type": "string"
+        },
+        "package_fingerprint": {
+          "default": null,
+          "title": "Package Fingerprint",
+          "type": "null"
+        },
+        "package_fingerprint_status": {
+          "const": "not_scanned",
+          "default": "not_scanned",
+          "title": "Package Fingerprint Status",
+          "type": "string"
+        },
+        "diagnostics": {
+          "items": {
+            "$ref": "#/$defs/SkillDiagnostic"
+          },
+          "title": "Diagnostics",
+          "type": "array"
+        }
+      },
+      "required": [
+        "skill_id",
+        "source",
+        "revision_status",
+        "version_status",
+        "validation_status",
+        "readiness",
+        "diagnostics"
+      ],
+      "title": "DiscoveredSkill",
+      "type": "object"
+    },
+    "SkillDiagnostic": {
+      "additionalProperties": false,
+      "properties": {
+        "severity": {
+          "enum": [
+            "info",
+            "warning",
+            "error"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "code": {
+          "pattern": "^[a-z][a-z0-9_]{1,63}$",
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "relative_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Path"
+        }
+      },
+      "required": [
+        "severity",
+        "code",
+        "message"
+      ],
+      "title": "SkillDiagnostic",
+      "type": "object"
+    },
+    "SkillRootInventory": {
+      "additionalProperties": false,
+      "properties": {
+        "directories_visited": {
+          "minimum": 0,
+          "title": "Directories Visited",
+          "type": "integer"
+        },
+        "entries_seen": {
+          "minimum": 0,
+          "title": "Entries Seen",
+          "type": "integer"
+        },
+        "excluded_directories": {
+          "minimum": 0,
+          "title": "Excluded Directories",
+          "type": "integer"
+        },
+        "manifests_found": {
+          "minimum": 0,
+          "title": "Manifests Found",
+          "type": "integer"
+        },
+        "manifests_loaded": {
+          "minimum": 0,
+          "title": "Manifests Loaded",
+          "type": "integer"
+        },
+        "manifest_bytes_read": {
+          "minimum": 0,
+          "title": "Manifest Bytes Read",
+          "type": "integer"
+        },
+        "content_files_read": {
+          "const": 0,
+          "default": 0,
+          "title": "Content Files Read",
+          "type": "integer"
+        },
+        "content_bytes_read": {
+          "const": 0,
+          "default": 0,
+          "title": "Content Bytes Read",
+          "type": "integer"
+        },
+        "package_fingerprint": {
+          "default": null,
+          "title": "Package Fingerprint",
+          "type": "null"
+        },
+        "package_fingerprint_status": {
+          "const": "not_scanned",
+          "default": "not_scanned",
+          "title": "Package Fingerprint Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "directories_visited",
+        "entries_seen",
+        "excluded_directories",
+        "manifests_found",
+        "manifests_loaded",
+        "manifest_bytes_read"
+      ],
+      "title": "SkillRootInventory",
+      "type": "object"
+    },
+    "SkillRootSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "root_id": {
+          "pattern": "^skill-root-[0-9a-f]{24}$",
+          "title": "Root Id",
+          "type": "string"
+        },
+        "priority": {
+          "minimum": 0,
+          "title": "Priority",
+          "type": "integer"
+        },
+        "display_name": {
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string"
+        },
+        "root_path": {
+          "minLength": 1,
+          "title": "Root Path",
+          "type": "string"
+        },
+        "scan_status": {
+          "enum": [
+            "complete",
+            "partial",
+            "blocked"
+          ],
+          "title": "Scan Status",
+          "type": "string"
+        },
+        "manifest_set_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Manifest Set Fingerprint"
+        },
+        "inventory": {
+          "$ref": "#/$defs/SkillRootInventory"
+        },
+        "diagnostics": {
+          "items": {
+            "$ref": "#/$defs/SkillDiagnostic"
+          },
+          "title": "Diagnostics",
+          "type": "array"
+        }
+      },
+      "required": [
+        "root_id",
+        "priority",
+        "display_name",
+        "root_path",
+        "scan_status",
+        "inventory",
+        "diagnostics"
+      ],
+      "title": "SkillRootSnapshot",
+      "type": "object"
+    },
+    "SkillScanLimits": {
+      "additionalProperties": false,
+      "properties": {
+        "max_entries": {
+          "minimum": 1,
+          "title": "Max Entries",
+          "type": "integer"
+        },
+        "max_directories": {
+          "minimum": 1,
+          "title": "Max Directories",
+          "type": "integer"
+        },
+        "max_depth": {
+          "minimum": 0,
+          "title": "Max Depth",
+          "type": "integer"
+        },
+        "max_manifests": {
+          "minimum": 1,
+          "title": "Max Manifests",
+          "type": "integer"
+        },
+        "max_manifest_bytes": {
+          "minimum": 1,
+          "title": "Max Manifest Bytes",
+          "type": "integer"
+        },
+        "max_total_manifest_bytes": {
+          "minimum": 1,
+          "title": "Max Total Manifest Bytes",
+          "type": "integer"
+        },
+        "excluded_directory_names": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Excluded Directory Names",
+          "type": "array"
+        }
+      },
+      "required": [
+        "max_entries",
+        "max_directories",
+        "max_depth",
+        "max_manifests",
+        "max_manifest_bytes",
+        "max_total_manifest_bytes",
+        "excluded_directory_names"
+      ],
+      "title": "SkillScanLimits",
+      "type": "object"
+    },
+    "SkillSource": {
+      "additionalProperties": false,
+      "properties": {
+        "root_id": {
+          "pattern": "^skill-root-[0-9a-f]{24}$",
+          "title": "Root Id",
+          "type": "string"
+        },
+        "root_priority": {
+          "minimum": 0,
+          "title": "Root Priority",
+          "type": "integer"
+        },
+        "root_path": {
+          "minLength": 1,
+          "title": "Root Path",
+          "type": "string"
+        },
+        "relative_path": {
+          "minLength": 1,
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "manifest_path": {
+          "minLength": 1,
+          "title": "Manifest Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "root_id",
+        "root_priority",
+        "root_path",
+        "relative_path",
+        "manifest_path"
+      ],
+      "title": "SkillSource",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.skill-registry.v1",
+      "default": "zhimeng.skill-registry.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "read_only": {
+      "const": true,
+      "default": true,
+      "title": "Read Only",
+      "type": "boolean"
+    },
+    "configured": {
+      "title": "Configured",
+      "type": "boolean"
+    },
+    "registry_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Registry Fingerprint",
+      "type": "string"
+    },
+    "limits": {
+      "$ref": "#/$defs/SkillScanLimits"
+    },
+    "roots": {
+      "items": {
+        "$ref": "#/$defs/SkillRootSnapshot"
+      },
+      "title": "Roots",
+      "type": "array"
+    },
+    "skills": {
+      "items": {
+        "$ref": "#/$defs/DiscoveredSkill"
+      },
+      "title": "Skills",
+      "type": "array"
+    },
+    "diagnostics": {
+      "items": {
+        "$ref": "#/$defs/SkillDiagnostic"
+      },
+      "title": "Diagnostics",
+      "type": "array"
+    }
+  },
+  "required": [
+    "configured",
+    "registry_fingerprint",
+    "limits",
+    "roots",
+    "skills",
+    "diagnostics"
+  ],
+  "title": "SkillRegistryResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/skill-registry.schema.json"
+}

@@ -1,0 +1,279 @@
+{
+  "schema": "zhimeng.kernel-harness-case.v2",
+  "case_id": "kernel-harness.transport.v1",
+  "version": "1.0.0",
+  "title": "Long-form writing Agent transport decision case",
+  "lane": "transport",
+  "fixture_fingerprint": "9aaa82fd9a8abcf3b701d4c946efb38bfff11f5b92ae856568df3f78cdb67d54",
+  "fixture": {
+    "project_root": "project",
+    "references_root": "references",
+    "skills_root": "skills",
+    "staging_root": "staging",
+    "expected_root": "expected",
+    "files": [
+      {
+        "file_id": "fixture.expected.changeset",
+        "role": "expected",
+        "path": "expected/change-set-plan.json",
+        "sha256": "e37b3270237898c28f0233f57c479747029dbb5a8374300cbb13a1918e9057fd",
+        "size_bytes": 413
+      },
+      {
+        "file_id": "fixture.project.intake",
+        "role": "project",
+        "path": "project/01_项目定位/小说简介.md",
+        "sha256": "71c8fd883e5039293f28c24eb683ac6fcb9921410ec885e40f5168ef6dda5a7f",
+        "size_bytes": 143
+      },
+      {
+        "file_id": "fixture.project.world",
+        "role": "project",
+        "path": "project/02_世界观设定/世界观总览.md",
+        "sha256": "5bdba30d075bbd3ab34b169c36a3bf50ded629fdd01a9f000595e5041e4b98fb",
+        "size_bytes": 122
+      },
+      {
+        "file_id": "fixture.project.characters",
+        "role": "project",
+        "path": "project/03_人物设定/characters.json",
+        "sha256": "941c1ffabe466e9523ee9d51e7e9b5c1564458c8c70d061a4555fbd6ab708756",
+        "size_bytes": 360
+      },
+      {
+        "file_id": "fixture.project.outline",
+        "role": "project",
+        "path": "project/04_剧情大纲/全书大框架.md",
+        "sha256": "5fa96f5acad1a688efc7c94cb55dbb107c8b3a38570225cd6d8eecbff45cdf6a",
+        "size_bytes": 134
+      },
+      {
+        "file_id": "fixture.project.chapter001",
+        "role": "project",
+        "path": "project/05_正文内容/第一卷/CH001_正文.md",
+        "sha256": "a8aa78ed93750361ac8f934b7c532fdfc2a5034660dd36ef2cac3bdf01609aa4",
+        "size_bytes": 498
+      },
+      {
+        "file_id": "fixture.project.style",
+        "role": "project",
+        "path": "project/06_写作规范/文风规则.md",
+        "sha256": "11465f2894e069cda7aa79ff529134d8bd2d010d558fd336a9007a22a02eb642",
+        "size_bytes": 178
+      },
+      {
+        "file_id": "fixture.project.timeline",
+        "role": "project",
+        "path": "project/07_运营数据/timeline.json",
+        "sha256": "8f5d84757d486a738243c7d633ba47af9cb7d36f79f13928112d4dbbb07db14c",
+        "size_bytes": 297
+      },
+      {
+        "file_id": "fixture.project.benchmark",
+        "role": "project",
+        "path": "project/08_素材库/对标记录.md",
+        "sha256": "2c9c0b791003d6e268de0a358c3b17fee3726a5f84757640c860df0e6cd36d48",
+        "size_bytes": 128
+      },
+      {
+        "file_id": "fixture.project.review",
+        "role": "project",
+        "path": "project/09_完本复盘/全书总结.md",
+        "sha256": "5b9ec0797fc21ebbed8518bf375a8f750ccc5b3e43ab64726a7627cab951b063",
+        "size_bytes": 44
+      },
+      {
+        "file_id": "fixture.reference.a001",
+        "role": "reference",
+        "path": "references/book-a/chapters/001.txt",
+        "sha256": "58b4b38f9e8b8622fe2b719cd80e1e8c27347ce38665a36defbc9263f89e4863",
+        "size_bytes": 497
+      },
+      {
+        "file_id": "fixture.reference.a002",
+        "role": "reference",
+        "path": "references/book-a/chapters/002.txt",
+        "sha256": "1fdec97a01100ff97e4c392a26a34610e0599c8842ba8913f8576c8fb0e175cc",
+        "size_bytes": 241
+      },
+      {
+        "file_id": "fixture.reference.b001",
+        "role": "reference",
+        "path": "references/book-b/chapters/001.txt",
+        "sha256": "600e1ad60bb7bb7a698678a62ebd9d182e1a01b67c05f9b393c33839af7d0366",
+        "size_bytes": 485
+      },
+      {
+        "file_id": "fixture.reference.b002",
+        "role": "reference",
+        "path": "references/book-b/chapters/002.txt",
+        "sha256": "7d7bb4dbb00bec178d8b25f3b5678128fb067386b250c5824bfd1c184fe76c4e",
+        "size_bytes": 229
+      },
+      {
+        "file_id": "fixture.skill.executor-test",
+        "role": "skill",
+        "path": "skills/executor-test-skill/SKILL.md",
+        "sha256": "4d8d126e79ca87da64eb95cfc93895e3c07090357688531ad2eb31d419dfa9ad",
+        "size_bytes": 754
+      }
+    ],
+    "formal_project_must_remain_unchanged": true
+  },
+  "steps": [
+    {
+      "step_id": "step.prepare",
+      "ordinal": 1,
+      "operation": "prepare",
+      "objective": "Copy the fixed fixture into an isolated run directory and record source and project fingerprints.",
+      "timeout_seconds": 30,
+      "assertion_ids": ["assert.fixture-integrity"],
+      "required_capabilities": [],
+      "expected_activity_kinds": []
+    },
+    {
+      "step_id": "step.transport-handshake",
+      "ordinal": 2,
+      "operation": "transport_handshake",
+      "objective": "Start the isolated sidecar and verify its pinned transport handshake without claiming workflow health.",
+      "timeout_seconds": 60,
+      "assertion_ids": ["assert.transport-handshake", "assert.capability-snapshot", "assert.skill-isolation"],
+      "required_capabilities": ["streaming", "cancel"],
+      "expected_activity_kinds": []
+    },
+    {
+      "step_id": "step.bind-snapshot",
+      "ordinal": 3,
+      "operation": "bind_snapshot",
+      "objective": "Create a session bound to the read-only project revision and the two reference roots.",
+      "timeout_seconds": 60,
+      "assertion_ids": ["assert.project-bound-readonly"],
+      "required_capabilities": ["file_read"],
+      "expected_activity_kinds": []
+    },
+    {
+      "step_id": "step.benchmark-turn",
+      "ordinal": 4,
+      "operation": "benchmark_turn",
+      "objective": "Compare opening pressure, information reveal, conflict escalation, and chapter-end payoff with resolvable citations.",
+      "timeout_seconds": 300,
+      "assertion_ids": ["assert.benchmark-citations"],
+      "required_capabilities": ["streaming", "tool_calls", "file_read", "artifacts"],
+      "expected_activity_kinds": ["message", "tool_call", "tool_result", "artifact"]
+    },
+    {
+      "step_id": "step.skill-call",
+      "ordinal": 5,
+      "operation": "skill_call",
+      "objective": "Invoke executor-test-skill with a pinned manifest revision and produce the benchmark artifact.",
+      "timeout_seconds": 300,
+      "assertion_ids": ["assert.skill-evidence"],
+      "required_capabilities": ["skills", "artifacts"],
+      "expected_activity_kinds": ["skill_call", "artifact"]
+    },
+    {
+      "step_id": "step.change-turn",
+      "ordinal": 6,
+      "operation": "change_turn",
+      "objective": "Propose synchronized Markdown and JSON changes under staging without writing the formal project.",
+      "timeout_seconds": 300,
+      "assertion_ids": ["assert.changeset-artifact", "assert.formal-project-unchanged"],
+      "required_capabilities": ["file_read", "file_write", "artifacts"],
+      "expected_activity_kinds": ["change_proposal", "artifact"]
+    },
+    {
+      "step_id": "step.permission-matrix",
+      "ordinal": 7,
+      "operation": "permission_matrix",
+      "objective": "Observe read allow, staging write ask, and out-of-scope write deny as three separate decisions.",
+      "timeout_seconds": 180,
+      "assertion_ids": ["assert.read-allow", "assert.write-ask", "assert.outside-deny"],
+      "required_capabilities": ["approvals", "file_read", "file_write"],
+      "expected_activity_kinds": ["approval_request"]
+    },
+    {
+      "step_id": "step.cancel",
+      "ordinal": 8,
+      "operation": "cancel_long_tool",
+      "objective": "Cancel a deterministic long tool and prove no false success or partial write.",
+      "timeout_seconds": 120,
+      "assertion_ids": ["assert.cancel-terminal", "assert.cancel-no-half-write"],
+      "required_capabilities": ["cancel", "tool_calls"],
+      "expected_activity_kinds": ["tool_call", "tool_result"]
+    },
+    {
+      "step_id": "step.restart-resume",
+      "ordinal": 9,
+      "operation": "restart_resume",
+      "objective": "Restart the sidecar, resume the same session, and continue from a duplicate-free event cursor.",
+      "timeout_seconds": 180,
+      "assertion_ids": ["assert.resume-continuity", "assert.event-sequence"],
+      "required_capabilities": ["resume", "streaming"],
+      "expected_activity_kinds": ["message"]
+    },
+    {
+      "step_id": "step.partial-accept",
+      "ordinal": 10,
+      "operation": "partial_hunk_accept",
+      "objective": "Accept selected hunks only inside the disposable project copy.",
+      "timeout_seconds": 120,
+      "assertion_ids": ["assert.partial-hunks-only"],
+      "required_capabilities": ["approvals", "file_write"],
+      "expected_activity_kinds": ["change_proposal", "approval_request"]
+    },
+    {
+      "step_id": "step.revision-conflict",
+      "ordinal": 11,
+      "operation": "inject_revision_conflict",
+      "objective": "Advance the disposable project revision externally and reject the stale candidate base.",
+      "timeout_seconds": 120,
+      "assertion_ids": ["assert.stale-conflict"],
+      "required_capabilities": ["file_read", "file_write"],
+      "expected_activity_kinds": ["error"]
+    },
+    {
+      "step_id": "step.compaction-followup",
+      "ordinal": 12,
+      "operation": "compact_followup",
+      "objective": "Compact context and verify citation and approved-decision continuity without exact prose comparison.",
+      "timeout_seconds": 300,
+      "assertion_ids": ["assert.compaction-event", "assert.citation-hash-stable"],
+      "required_capabilities": ["compaction", "artifacts"],
+      "expected_activity_kinds": ["compaction", "message"]
+    },
+    {
+      "step_id": "step.cleanup",
+      "ordinal": 13,
+      "operation": "cleanup",
+      "objective": "Remove run state and prove no changes to real HOME, USERPROFILE, Skill/MCP roots, or the source fixture.",
+      "timeout_seconds": 60,
+      "assertion_ids": ["assert.cleanup-fixture", "assert.cleanup-user-roots"],
+      "required_capabilities": [],
+      "expected_activity_kinds": []
+    }
+  ],
+  "assertions": [
+    {"assertion_id": "assert.fixture-integrity", "gate": "G4", "operator": "snapshot_unchanged", "expected": true, "required_evidence_kinds": ["workspace_snapshot"], "required": true},
+    {"assertion_id": "assert.transport-handshake", "gate": "G1", "operator": "transport_handshake_passed", "expected": true, "required_evidence_kinds": ["protocol_transcript", "process_lifecycle"], "required": true},
+    {"assertion_id": "assert.capability-snapshot", "gate": "G1", "operator": "capability_present", "expected": ["streaming", "cancel"], "required_evidence_kinds": ["capability_snapshot"], "required": true},
+    {"assertion_id": "assert.skill-isolation", "gate": "G2", "operator": "isolation_boundary", "expected": true, "required_evidence_kinds": ["isolation_report"], "required": true},
+    {"assertion_id": "assert.project-bound-readonly", "gate": "G4", "operator": "snapshot_unchanged", "expected": true, "required_evidence_kinds": ["workspace_snapshot"], "required": true},
+    {"assertion_id": "assert.benchmark-citations", "gate": "G4", "operator": "citation_fields_present", "expected": ["reference_id", "chapter_id", "chunk_id"], "required_evidence_kinds": ["artifact", "citation_report"], "required": true},
+    {"assertion_id": "assert.skill-evidence", "gate": "G1", "operator": "activity_kind_present", "expected": "skill_call", "required_evidence_kinds": ["activity_stream", "artifact"], "required": true},
+    {"assertion_id": "assert.changeset-artifact", "gate": "G2", "operator": "activity_kind_present", "expected": "change_proposal", "required_evidence_kinds": ["activity_stream", "changeset"], "required": true},
+    {"assertion_id": "assert.formal-project-unchanged", "gate": "G4", "operator": "snapshot_unchanged", "expected": true, "required_evidence_kinds": ["workspace_snapshot"], "required": true},
+    {"assertion_id": "assert.read-allow", "gate": "G2", "operator": "permission_effect", "expected": "allow", "required_evidence_kinds": ["permission_decision"], "required": true},
+    {"assertion_id": "assert.write-ask", "gate": "G2", "operator": "permission_effect", "expected": "ask", "required_evidence_kinds": ["permission_decision"], "required": true},
+    {"assertion_id": "assert.outside-deny", "gate": "G2", "operator": "permission_effect", "expected": "deny", "required_evidence_kinds": ["permission_decision"], "required": true},
+    {"assertion_id": "assert.cancel-terminal", "gate": "G3", "operator": "status_equals", "expected": "cancelled", "required_evidence_kinds": ["activity_stream", "process_lifecycle"], "required": true},
+    {"assertion_id": "assert.cancel-no-half-write", "gate": "G4", "operator": "snapshot_unchanged", "expected": true, "required_evidence_kinds": ["workspace_snapshot"], "required": true},
+    {"assertion_id": "assert.resume-continuity", "gate": "G3", "operator": "status_equals", "expected": "resumed", "required_evidence_kinds": ["protocol_transcript", "process_lifecycle"], "required": true},
+    {"assertion_id": "assert.event-sequence", "gate": "G3", "operator": "event_sequence_valid", "expected": true, "required_evidence_kinds": ["activity_stream"], "required": true},
+    {"assertion_id": "assert.partial-hunks-only", "gate": "G2", "operator": "paths_changed_only", "expected": ["05_正文内容/第一卷/CH001_正文.md"], "required_evidence_kinds": ["changeset", "workspace_snapshot"], "required": true},
+    {"assertion_id": "assert.stale-conflict", "gate": "G4", "operator": "conflict_rejected", "expected": true, "required_evidence_kinds": ["changeset", "workspace_snapshot"], "required": true},
+    {"assertion_id": "assert.compaction-event", "gate": "G3", "operator": "activity_kind_present", "expected": "compaction", "required_evidence_kinds": ["activity_stream"], "required": true},
+    {"assertion_id": "assert.citation-hash-stable", "gate": "G3", "operator": "artifact_hash_stable", "expected": true, "required_evidence_kinds": ["artifact", "citation_report"], "required": true},
+    {"assertion_id": "assert.cleanup-fixture", "gate": "G5", "operator": "cleanup_no_diff", "expected": true, "required_evidence_kinds": ["cleanup_report", "workspace_snapshot"], "required": true},
+    {"assertion_id": "assert.cleanup-user-roots", "gate": "G5", "operator": "cleanup_no_diff", "expected": true, "required_evidence_kinds": ["cleanup_report"], "required": true}
+  ]
+}

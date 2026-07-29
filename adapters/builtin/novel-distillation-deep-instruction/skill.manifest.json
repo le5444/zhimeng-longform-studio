@@ -1,0 +1,32 @@
+{
+  "schema": "zhimeng.skill-manifest.v1",
+  "id": "novel-distillation.deep-instruction",
+  "display_name": "Novel Distillation Deep Instruction",
+  "description": "Provides an immutable, review-only deep-distillation instruction source for Runtime-owned work, voice, and validator candidate drafting.",
+  "kind": "instruction_source",
+  "version": "2026.07.23-o3.1",
+  "source": {
+    "type": "builtin_managed",
+    "reference": "PROVENANCE.md",
+    "license": null,
+    "source_url": null,
+    "source_version": null,
+    "modified": true
+  },
+  "approval": "none",
+  "permissions": {
+    "read": [],
+    "write": [],
+    "network": false,
+    "secrets": []
+  },
+  "artifacts": [],
+  "capabilities": [
+    "distillation.deep-candidate-instruction.v1"
+  ],
+  "resources": [
+    "instruction-contract.json",
+    "instruction-map.json",
+    "references/bundled-skills/novel-distillation/SKILL.md"
+  ]
+}

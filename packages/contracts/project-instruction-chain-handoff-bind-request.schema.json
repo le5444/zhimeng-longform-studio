@@ -1,0 +1,53 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.project-instruction-chain-handoff-bind-request.v1",
+      "default": "zhimeng.project-instruction-chain-handoff-bind-request.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "expected_project_revision": {
+      "minimum": 1,
+      "title": "Expected Project Revision",
+      "type": "integer"
+    },
+    "expected_project_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Project Fingerprint",
+      "type": "string"
+    },
+    "batch_id": {
+      "pattern": "^four-skills-raw-adaptation-[0-9a-f]{32}$",
+      "title": "Batch Id",
+      "type": "string"
+    },
+    "batch_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Batch Hash",
+      "type": "string"
+    },
+    "handoff_id": {
+      "pattern": "^four-skills-instruction-chain-handoff-[0-9a-f]{32}$",
+      "title": "Handoff Id",
+      "type": "string"
+    },
+    "handoff_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Handoff Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "expected_project_revision",
+    "expected_project_fingerprint",
+    "batch_id",
+    "batch_hash",
+    "handoff_id",
+    "handoff_hash"
+  ],
+  "title": "ProjectInstructionChainHandoffBindRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/project-instruction-chain-handoff-bind-request.schema.json"
+}

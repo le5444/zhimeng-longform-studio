@@ -1,0 +1,37 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.formal-knowledge-promotion-request.v1",
+      "default": "zhimeng.formal-knowledge-promotion-request.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "expected_feedback_candidate_bundle_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Feedback Candidate Bundle Hash"
+    },
+    "candidate_ids": {
+      "items": {
+        "pattern": "^feedback-candidate-[0-9a-f]{32}$",
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Candidate Ids",
+      "type": "array"
+    }
+  },
+  "title": "FormalKnowledgePromotionEvaluateRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/formal-knowledge-promotion-request.schema.json"
+}

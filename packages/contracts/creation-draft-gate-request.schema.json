@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/creation-draft-gate-request.schema.json",
+  "$defs": {
+    "KnowledgeProvenanceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema": { "const": "zhimeng.knowledge-provenance-ref.v1" },
+        "source_import_id": { "type": "string", "pattern": "^source-import-[0-9a-f]{32}$" },
+        "source_receipt_id": { "type": "string", "pattern": "^source-import-receipt-[0-9a-f]{32}$" },
+        "source_receipt_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "source_packet_fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "cards_draft_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "candidate_id": { "type": "string", "pattern": "^knowledge-candidate-[0-9a-f]{32}$" },
+        "candidate_origin_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "card_id": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "version_id": { "type": "string", "pattern": "^knowledge-version-[0-9a-f]{32}$" },
+        "version_content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "version_lineage_receipt_id": { "type": "string", "pattern": "^knowledge-lineage-[0-9a-f]{32}$" },
+        "version_lineage_receipt_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "formalization_receipt_id": { "type": "string", "pattern": "^knowledge-formalization-[0-9a-f]{32}$" },
+        "formalization_receipt_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      },
+      "required": [
+        "schema", "source_import_id", "source_receipt_id", "source_receipt_hash",
+        "source_packet_fingerprint", "cards_draft_hash", "candidate_id",
+        "candidate_origin_hash", "card_id", "version_id", "version_content_hash",
+        "version_lineage_receipt_id", "version_lineage_receipt_hash",
+        "formalization_receipt_id", "formalization_receipt_hash"
+      ]
+    },
+    "KnowledgeValidatorRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rule_id": { "type": "string", "minLength": 3, "maxLength": 64, "pattern": "^[a-z][a-z0-9_]*$" },
+        "kind": { "enum": ["forbid_terms", "require_any_term"] },
+        "terms": {
+          "type": "array", "minItems": 1, "maxItems": 16,
+          "items": { "type": "string", "minLength": 1, "maxLength": 160 }
+        },
+        "case_sensitive": { "type": "boolean" },
+        "failure_signature": { "type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[a-z][a-z0-9_]*$" },
+        "message": { "type": "string", "minLength": 8, "maxLength": 1000 }
+      },
+      "required": ["rule_id", "kind", "terms", "case_sensitive", "failure_signature", "message"]
+    },
+    "KnowledgeValidatorBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "card_id": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "version_id": { "type": "string", "pattern": "^knowledge-version-[0-9a-f]{32}$" },
+        "content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "validator_name": { "type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[a-z][a-z0-9_]*$" },
+        "provenance": { "$ref": "#/$defs/KnowledgeProvenanceRef" },
+        "rules": {
+          "type": "array", "maxItems": 16,
+          "items": { "$ref": "#/$defs/KnowledgeValidatorRule" }
+        },
+        "configuration_errors": {
+          "type": "array", "maxItems": 16, "uniqueItems": true,
+          "items": { "type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[a-z][a-z0-9_]*$" }
+        },
+        "rules_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      },
+      "required": [
+        "card_id", "version_id", "content_hash", "validator_name", "provenance",
+        "rules", "configuration_errors", "rules_hash"
+      ]
+    },
+    "KnowledgeValidatorBundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema": { "const": "zhimeng.knowledge-validator-bundle.v1" },
+        "context_pack_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "context_pack_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "route_receipt_id": { "type": "string", "pattern": "^nlcl-route-[0-9a-f]{32}$" },
+        "route_receipt_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "knowledge_fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "validators": {
+          "type": "array", "minItems": 1, "maxItems": 8,
+          "items": { "$ref": "#/$defs/KnowledgeValidatorBinding" }
+        },
+        "bundle_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      },
+      "required": [
+        "schema", "context_pack_id", "context_pack_hash", "route_receipt_id",
+        "route_receipt_hash", "knowledge_fingerprint", "validators", "bundle_hash"
+      ]
+    },
+    "CandidateDraftFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(?![A-Za-z]:)(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*(?:^|/)\\.(?:/|$))(?!.*(?:^|/)\\.git(?:/|$)).+$"
+        },
+        "after_bytes_base64": {
+          "type": "string",
+          "maxLength": 11184812,
+          "contentEncoding": "base64"
+        },
+        "after_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "after_bytes_base64"
+      ]
+    },
+    "CandidateManifestFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(?![A-Za-z]:)(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*(?:^|/)\\.(?:/|$))(?!.*(?:^|/)\\.git(?:/|$)).+$"
+        },
+        "after_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "byte_length": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "path",
+        "after_sha256",
+        "byte_length"
+      ]
+    },
+    "CandidateDraftManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.candidate-draft-manifest.v1"
+        },
+        "manifest_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "items": {
+            "$ref": "#/$defs/CandidateManifestFile"
+          }
+        }
+      },
+      "required": [
+        "schema",
+        "manifest_id",
+        "files"
+      ]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.creation-draft-gate-request.v1"
+    },
+    "candidate_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "candidate_manifest": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CandidateDraftManifest"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "candidate_files": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {
+        "$ref": "#/$defs/CandidateDraftFile"
+      }
+    },
+    "knowledge_validator_bundle": {
+      "anyOf": [
+        { "$ref": "#/$defs/KnowledgeValidatorBundle" },
+        { "type": "null" }
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "candidate_id",
+    "candidate_files"
+  ],
+  "title": "CreationDraftGateRequest"
+}

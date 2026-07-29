@@ -1,0 +1,303 @@
+{
+  "$defs": {
+    "HardFactGateReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.hard-fact-gate-receipt.v1",
+          "default": "zhimeng.hard-fact-gate-receipt.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "receipt_id": {
+          "pattern": "^hard-fact-gate-[0-9a-f]{32}$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^project-[0-9a-f]{24}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "applied",
+            "rolled_back",
+            "ready_candidate"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "result_revision": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result Revision"
+        },
+        "result_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result Fingerprint"
+        },
+        "review_revision": {
+          "minimum": 0,
+          "title": "Review Revision",
+          "type": "integer"
+        },
+        "gate_mode": {
+          "const": "deterministic_hard_fact_v1",
+          "default": "deterministic_hard_fact_v1",
+          "title": "Gate Mode",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/HardFactStatus"
+        },
+        "authorization_input_ready": {
+          "title": "Authorization Input Ready",
+          "type": "boolean"
+        },
+        "authorization_unlock": {
+          "const": false,
+          "default": false,
+          "title": "Authorization Unlock",
+          "type": "boolean"
+        },
+        "formal_draft_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Formal Draft Allowed",
+          "type": "boolean"
+        },
+        "quality_assessed": {
+          "const": false,
+          "default": false,
+          "title": "Quality Assessed",
+          "type": "boolean"
+        },
+        "post_draft_gate_status": {
+          "default": "missing",
+          "enum": [
+            "missing",
+            "passed",
+            "blocked",
+            "stale"
+          ],
+          "title": "Post Draft Gate Status",
+          "type": "string"
+        },
+        "literary_quality_receipt_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Literary Quality Receipt Id"
+        },
+        "signals": {
+          "items": {
+            "$ref": "#/$defs/HardFactSignal"
+          },
+          "maxItems": 64,
+          "title": "Signals",
+          "type": "array"
+        },
+        "signal_counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Signal Counts",
+          "type": "object"
+        },
+        "policy_version": {
+          "const": "local-v1-hard-fact-1",
+          "default": "local-v1-hard-fact-1",
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "evaluated_at": {
+          "format": "date-time",
+          "title": "Evaluated At",
+          "type": "string"
+        },
+        "receipt_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "change_set_id",
+        "project_id",
+        "outcome",
+        "review_revision",
+        "status",
+        "authorization_input_ready",
+        "evaluated_at",
+        "receipt_hash"
+      ],
+      "title": "HardFactGateReceipt",
+      "type": "object"
+    },
+    "HardFactSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/HardFactSignalCode"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "watch",
+            "block"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "evidence_quote": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Evidence Quote",
+          "type": "string"
+        },
+        "relative_path": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Path"
+        },
+        "source": {
+          "enum": [
+            "candidate_scan",
+            "post_draft_gate",
+            "literary_quality_gate",
+            "runtime"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "summary",
+        "source"
+      ],
+      "title": "HardFactSignal",
+      "type": "object"
+    },
+    "HardFactSignalCode": {
+      "enum": [
+        "placeholder_token",
+        "unresolved_fact_marker",
+        "post_draft_blocked",
+        "literary_hard_fact_signal",
+        "candidate_missing"
+      ],
+      "title": "HardFactSignalCode",
+      "type": "string"
+    },
+    "HardFactStatus": {
+      "enum": [
+        "passed",
+        "failed",
+        "missing_inputs"
+      ],
+      "title": "HardFactStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.hard-fact-gate-response.v1",
+      "default": "zhimeng.hard-fact-gate-response.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "change_set_id": {
+      "pattern": "^changeset-[0-9a-f]{32}$",
+      "title": "Change Set Id",
+      "type": "string"
+    },
+    "receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/HardFactGateReceipt"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "history": {
+      "items": {
+        "$ref": "#/$defs/HardFactGateReceipt"
+      },
+      "maxItems": 32,
+      "title": "History",
+      "type": "array"
+    },
+    "not_claiming": {
+      "default": [
+        "formal_prose_writeback",
+        "formal_draft_authorization_unlock",
+        "literary_quality_score",
+        "four_skills_generic_exactly_once",
+        "local_v1_exe"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Not Claiming",
+      "type": "array"
+    }
+  },
+  "required": [
+    "change_set_id"
+  ],
+  "title": "HardFactGateResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/hard-fact-gate-response.schema.json"
+}

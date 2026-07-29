@@ -1,0 +1,406 @@
+{
+  "$defs": {
+    "SkillExitCodes": {
+      "additionalProperties": false,
+      "properties": {
+        "0": {
+          "const": "success",
+          "title": "0",
+          "type": "string"
+        },
+        "1": {
+          "const": "domain_blocked",
+          "title": "1",
+          "type": "string"
+        }
+      },
+      "required": [
+        "0",
+        "1"
+      ],
+      "title": "SkillExitCodes",
+      "type": "object"
+    },
+    "SkillManifestSource": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "builtin_managed",
+          "title": "Type",
+          "type": "string"
+        },
+        "reference": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Reference",
+          "type": "string"
+        },
+        "license": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "License"
+        },
+        "source_url": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Url"
+        },
+        "source_version": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Version"
+        },
+        "modified": {
+          "title": "Modified",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "reference",
+        "license",
+        "source_url",
+        "source_version",
+        "modified"
+      ],
+      "title": "SkillManifestSource",
+      "type": "object"
+    },
+    "SkillPermissions": {
+      "additionalProperties": false,
+      "properties": {
+        "read": {
+          "items": {
+            "const": "bound_project_snapshot",
+            "type": "string"
+          },
+          "maxItems": 1,
+          "title": "Read",
+          "type": "array"
+        },
+        "write": {
+          "items": {
+            "const": "run_staging",
+            "type": "string"
+          },
+          "maxItems": 1,
+          "title": "Write",
+          "type": "array"
+        },
+        "network": {
+          "const": false,
+          "title": "Network",
+          "type": "boolean"
+        },
+        "secrets": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 0,
+          "title": "Secrets",
+          "type": "array"
+        }
+      },
+      "required": [
+        "read",
+        "write",
+        "network",
+        "secrets"
+      ],
+      "title": "SkillPermissions",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "deterministic_tool"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "entrypoint": {
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "type": "integer"
+          },
+          "exit_codes": {
+            "type": "object"
+          },
+          "artifacts": {
+            "minItems": 1
+          },
+          "input_schema": {
+            "type": "string"
+          },
+          "output_schema": {
+            "type": "string"
+          },
+          "permissions": {
+            "properties": {
+              "read": {
+                "const": [
+                  "bound_project_snapshot"
+                ]
+              },
+              "write": {
+                "const": [
+                  "run_staging"
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "entrypoint",
+          "timeout_seconds",
+          "exit_codes",
+          "artifacts",
+          "input_schema",
+          "output_schema"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "instruction_source"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "entrypoint": {
+            "type": "null"
+          },
+          "timeout_seconds": {
+            "type": "null"
+          },
+          "exit_codes": {
+            "type": "null"
+          },
+          "artifacts": {
+            "maxItems": 0
+          },
+          "input_schema": {
+            "type": "null"
+          },
+          "output_schema": {
+            "type": "null"
+          },
+          "resources": {
+            "contains": {
+              "const": "instruction-map.json"
+            },
+            "minContains": 1,
+            "uniqueItems": true
+          },
+          "permissions": {
+            "properties": {
+              "read": {
+                "maxItems": 0
+              },
+              "write": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        "required": [
+          "resources"
+        ]
+      }
+    }
+  ],
+  "properties": {
+    "schema": {
+      "const": "zhimeng.skill-manifest.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "id": {
+      "maxLength": 128,
+      "minLength": 3,
+      "pattern": "^[a-z0-9][a-z0-9._-]*[a-z0-9]$",
+      "title": "Id",
+      "type": "string"
+    },
+    "display_name": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Display Name",
+      "type": "string"
+    },
+    "description": {
+      "maxLength": 16384,
+      "minLength": 1,
+      "title": "Description",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "deterministic_tool",
+        "instruction_source"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "version": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[0-9A-Za-z][0-9A-Za-z._+-]*$",
+      "title": "Version",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/SkillManifestSource"
+    },
+    "entrypoint": {
+      "anyOf": [
+        {
+          "maxLength": 1024,
+          "minLength": 4,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Entrypoint"
+    },
+    "approval": {
+      "const": "none",
+      "title": "Approval",
+      "type": "string"
+    },
+    "permissions": {
+      "$ref": "#/$defs/SkillPermissions"
+    },
+    "timeout_seconds": {
+      "anyOf": [
+        {
+          "maximum": 900,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Timeout Seconds"
+    },
+    "exit_codes": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SkillExitCodes"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "artifacts": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Artifacts",
+      "type": "array"
+    },
+    "capabilities": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Capabilities",
+      "type": "array"
+    },
+    "resources": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Resources",
+      "type": "array"
+    },
+    "input_schema": {
+      "anyOf": [
+        {
+          "maxLength": 2048,
+          "pattern": "^https://zhimeng\\.local/contracts/[A-Za-z0-9._/-]+\\.schema\\.json$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Input Schema"
+    },
+    "output_schema": {
+      "anyOf": [
+        {
+          "maxLength": 2048,
+          "pattern": "^https://zhimeng\\.local/contracts/[A-Za-z0-9._/-]+\\.schema\\.json$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Output Schema"
+    }
+  },
+  "required": [
+    "schema",
+    "id",
+    "display_name",
+    "description",
+    "kind",
+    "version",
+    "source",
+    "approval",
+    "permissions"
+  ],
+  "title": "SkillManifest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/skill-manifest.schema.json"
+}
