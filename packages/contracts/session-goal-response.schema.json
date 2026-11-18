@@ -1,0 +1,136 @@
+{
+  "$defs": {
+    "SessionGoal": {
+      "properties": {
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "evidence": {
+          "title": "Evidence",
+          "type": "string"
+        },
+        "goal_id": {
+          "title": "Goal Id",
+          "type": "string"
+        },
+        "objective": {
+          "title": "Objective",
+          "type": "string"
+        },
+        "pause_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pause Reason"
+        },
+        "progress": {
+          "title": "Progress",
+          "type": "string"
+        },
+        "requested_status": {
+          "anyOf": [
+            {
+              "enum": [
+                "completed",
+                "blocked"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Requested Status"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "integer"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        },
+        "stage_count": {
+          "title": "Stage Count",
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "active",
+            "paused",
+            "blocked",
+            "completed",
+            "ended"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "status_source": {
+          "enum": [
+            "agent",
+            "user",
+            "runtime"
+          ],
+          "title": "Status Source",
+          "type": "string"
+        },
+        "updated_at": {
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "goal_id",
+        "session_id",
+        "objective",
+        "status",
+        "revision",
+        "run_id",
+        "stage_count",
+        "progress",
+        "evidence",
+        "pause_reason",
+        "requested_status",
+        "created_at",
+        "updated_at",
+        "status_source"
+      ],
+      "title": "SessionGoal",
+      "type": "object"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/session-goal-response.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "goal": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SessionGoal"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "session_id",
+    "goal"
+  ],
+  "title": "SessionGoalResponse",
+  "type": "object"
+}

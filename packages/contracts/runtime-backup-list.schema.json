@@ -1,0 +1,104 @@
+{
+  "$defs": {
+    "RuntimeBackupSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "backup_id": {
+          "pattern": "^runtime-backup-[0-9a-f]{32}$",
+          "title": "Backup Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "database_schema_version": {
+          "minimum": 0,
+          "title": "Database Schema Version",
+          "type": "integer"
+        },
+        "database_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Database Sha256",
+          "type": "string"
+        },
+        "database_size_bytes": {
+          "minimum": 0,
+          "title": "Database Size Bytes",
+          "type": "integer"
+        },
+        "integrity_check": {
+          "enum": [
+            "ok",
+            "failed",
+            "unavailable"
+          ],
+          "title": "Integrity Check",
+          "type": "string"
+        },
+        "manifest_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifest Hash",
+          "type": "string"
+        },
+        "backup_relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Backup Relative Path",
+          "type": "string"
+        },
+        "content_scope": {
+          "const": "runtime_database_unredacted",
+          "default": "runtime_database_unredacted",
+          "title": "Content Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "backup_id",
+        "created_at",
+        "database_schema_version",
+        "database_sha256",
+        "database_size_bytes",
+        "integrity_check",
+        "manifest_hash",
+        "backup_relative_path"
+      ],
+      "title": "RuntimeBackupSummary",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.runtime-backup-list.v1",
+      "default": "zhimeng.runtime-backup-list.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "backups": {
+      "items": {
+        "$ref": "#/$defs/RuntimeBackupSummary"
+      },
+      "maxItems": 256,
+      "title": "Backups",
+      "type": "array"
+    },
+    "not_claiming": {
+      "default": [
+        "local_v1_exe",
+        "project_file_backup"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Not Claiming",
+      "type": "array"
+    }
+  },
+  "title": "RuntimeBackupListResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/runtime-backup-list.schema.json"
+}

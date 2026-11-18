@@ -198,6 +198,55 @@
       "title": "ManagedSkillSourceRecord",
       "type": "object"
     },
+    "ManagedSkillUnavailableVersionRecord": {
+      "additionalProperties": false,
+      "description": "Historical import retained in the database after its snapshot disappeared.",
+      "properties": {
+        "skill_version_id": {
+          "pattern": "^skill-version-[0-9a-f]{32}$",
+          "title": "Skill Version Id",
+          "type": "string"
+        },
+        "skill_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[a-z0-9][a-z0-9._-]*[a-z0-9]$",
+          "title": "Skill Id",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "package_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Package Fingerprint",
+          "type": "string"
+        },
+        "imported_at": {
+          "format": "date-time",
+          "title": "Imported At",
+          "type": "string"
+        },
+        "reason": {
+          "const": "snapshot_missing",
+          "default": "snapshot_missing",
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "skill_version_id",
+        "skill_id",
+        "version",
+        "package_fingerprint",
+        "imported_at"
+      ],
+      "title": "ManagedSkillUnavailableVersionRecord",
+      "type": "object"
+    },
     "ManagedSkillValidationRecord": {
       "additionalProperties": false,
       "properties": {
@@ -750,6 +799,13 @@
         "$ref": "#/$defs/ManagedSkillVersionRecord"
       },
       "title": "Versions",
+      "type": "array"
+    },
+    "unavailable_versions": {
+      "items": {
+        "$ref": "#/$defs/ManagedSkillUnavailableVersionRecord"
+      },
+      "title": "Unavailable Versions",
       "type": "array"
     },
     "activations": {

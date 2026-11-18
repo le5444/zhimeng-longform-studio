@@ -16,10 +16,11 @@ from zhimeng_runtime.database import ProjectBindingRecord, SqliteStore
 from zhimeng_runtime.knowledge_models import KnowledgeCard, KnowledgeCardStatus
 from zhimeng_runtime.source_import_models import SourceImportStatus, parse_source_import_job
 from zhimeng_runtime.project_reader import (
-    PUBLIC_TEXT_FILE_KINDS,
+    PROJECT_FILE_KINDS,
     ProjectReader,
     ProjectReaderError,
 )
+from zhimeng_runtime.project_truth import is_non_truth_project_path
 from zhimeng_runtime.search_models import (
     SearchHit,
     SearchIndexDocument,
@@ -32,18 +33,18 @@ from zhimeng_runtime.search_models import (
     SearchSourceType,
     search_index_hash,
 )
+from zhimeng_runtime.fs_atomic import replace_with_retry
 
 
 BUILDER_ID = "zhimeng.project-search"
-BUILDER_VERSION = "1"
-INDEX_POLICY_VERSION = "exclude-non-truth-v1"
+BUILDER_VERSION = "2"
+INDEX_POLICY_VERSION = "general-text-files-v2"
 INDEX_FILENAME = "index.json"
-MAX_INDEX_BYTES = 64 * 1024 * 1024
+MAX_INDEX_BYTES = 256 * 1024 * 1024
 MAX_SNIPPET_CHARS = 240
 TOKEN_PATTERN = re.compile(r"[\w\u4e00-\u9fff]+", re.UNICODE)
 PROJECT_ID_PATTERN = re.compile(r"^project-[0-9a-f]{24}$")
 REPARSE_POINT_ATTRIBUTE = 0x400
-NON_TRUTH_PATH_MARKER = "勿作为真值"
 
 
 class KnowledgeCardSource(Protocol):
@@ -295,13 +296,6 @@ def _tokenize_query(query: str) -> list[str]:
     return unique
 
 
-def _is_non_truth_project_path(relative_path: str) -> bool:
-    return any(
-        NON_TRUTH_PATH_MARKER in part
-        for part in relative_path.replace("\\", "/").split("/")
-    )
-
-
 def _card_title(card_payload: dict[str, Any], card_id: str) -> str:
     title = str(card_payload.get("title") or "").strip()
     if title:
@@ -430,6 +424,30 @@ def _score_document(
         score += 0.5
     reason = ",".join(reasons) if reasons else "match"
     return score, reason[:512]
+
+
+def _line_context(content: str, query: str, tokens: list[str]) -> dict[str, object]:
+    """Locate real source lines, including when casefold changes character count."""
+    lines = content.splitlines()
+    needle = query.casefold()
+    matched: int | None = None
+    for index, line in enumerate(lines):
+        folded = line.casefold()
+        if needle in folded:
+            matched = index
+            break
+        if matched is None and any(token in folded for token in tokens):
+            matched = index
+    if matched is None:
+        return {}
+    line = lines[matched]
+    line_text = line if len(line) <= 1024 else _snippet_for(line, query, tokens)
+    surrounding = lines[max(0, matched - 1):matched + 2]
+    context = "\n".join(
+        row if len(row) <= 512 else _snippet_for(row, query, tokens)
+        for row in surrounding
+    )
+    return {"line_number": matched + 1, "line_text": line_text, "context": context}
 
 
 class SearchService:
@@ -583,6 +601,8 @@ class SearchService:
                         reason=reason,
                         score=round(score, 4),
                         updated_at=document.updated_at,
+                        **(_line_context(document.content, request.query, tokens)
+                           if document.source_type is SearchSourceType.PROJECT_FILE else {}),
                     )
                 )
             hits.sort(
@@ -693,21 +713,18 @@ class SearchService:
         for raw_file in files:
             if not isinstance(raw_file, dict):
                 continue
-            kind = str(raw_file.get("kind") or "")
-            if kind not in PUBLIC_TEXT_FILE_KINDS:
-                continue
             file_id = str(raw_file.get("file_id") or "").strip()
             relative_path = str(raw_file.get("relative_path") or "").strip()
             source_hash = str(raw_file.get("sha256") or "").strip()
             if not file_id or not relative_path or len(source_hash) != 64:
                 continue
-            if _is_non_truth_project_path(relative_path):
+            if is_non_truth_project_path(relative_path):
                 continue
             try:
                 content_payload = self.project_reader.read_text_file_from_snapshot(
                     inspection,
                     file_id,
-                    allowed_kinds=PUBLIC_TEXT_FILE_KINDS,
+                    allowed_kinds=PROJECT_FILE_KINDS,
                 )
             except ProjectReaderError:
                 continue
@@ -901,7 +918,7 @@ class SearchService:
                 handle.write(data)
                 handle.flush()
                 os.fsync(handle.fileno())
-            os.replace(temp_path, self._index_path(project_id))
+            replace_with_retry(temp_path, self._index_path(project_id))
         except Exception:
             try:
                 if temp_path.exists():

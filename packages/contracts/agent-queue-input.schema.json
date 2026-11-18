@@ -1,0 +1,77 @@
+{
+  "$id": "https://zhimeng.local/contracts/agent-queue-input.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "image_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Image Ids",
+      "type": "array"
+    },
+    "item_id": {
+      "pattern": "^[a-zA-Z0-9-]{8,64}$",
+      "title": "Item Id",
+      "type": "string"
+    },
+    "manual_file_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Manual File Ids",
+      "type": "array"
+    },
+    "manual_skill_names": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Manual Skill Names",
+      "type": "array"
+    },
+    "message": {
+      "default": "",
+      "maxLength": 100000,
+      "title": "Message",
+      "type": "string"
+    },
+    "open_file_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Open File Path"
+    },
+    "project_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Project Id"
+    },
+    "writer_mode": {
+      "default": "repair_only",
+      "enum": [
+        "repair_only",
+        "author_review_change_proposal"
+      ],
+      "title": "Writer Mode",
+      "type": "string"
+    }
+  },
+  "required": [
+    "item_id"
+  ],
+  "title": "QueueInput",
+  "type": "object"
+}

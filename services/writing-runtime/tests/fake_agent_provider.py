@@ -4,10 +4,11 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 
 app = FastAPI()
@@ -382,7 +383,7 @@ async def last_request() -> dict[str, object]:
 
 
 @app.post("/v1/chat/completions")
-async def chat_completions(request: Request) -> StreamingResponse:
+async def chat_completions(request: Request):
     global last_request_messages
     global last_request_tool_names
     body = await request.json()
@@ -414,6 +415,30 @@ async def chat_completions(request: Request) -> StreamingResponse:
     knowledge_mode = "使用本批已正式化知识" in last_user_content
     skill_mode = "受管 Skill 恢复验收" in last_user_content
     change_proposal_mode = _required_candidate_kind(messages) == "change_proposal"
+
+    # ChapterDraftService uses the same OpenAI-compatible endpoint without SSE.
+    # Give browser tests a deterministic chapter body while the Agent path below
+    # keeps exercising streamed tool calls.
+    if isinstance(body, dict) and body.get("stream") is not True:
+        number_match = re.search(r"第\s*(\d+)\s*章", last_user_content)
+        number = int(number_match.group(1)) if number_match else 1
+        await asyncio.sleep(1.0)
+        return JSONResponse(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                f"# 第{number}章 断点之后\n\n"
+                                f"雨声压住了门外的脚步。第{number}章的选择已经逼到眼前。\n\n"
+                                "他没有回头，只把最后一枚筹码推到了桌上。"
+                            )
+                        },
+                        "finish_reason": "stop",
+                    }
+                ]
+            }
+        )
 
     async def stream():
         if isinstance(body, dict) and _is_distillation_tool_request(body):

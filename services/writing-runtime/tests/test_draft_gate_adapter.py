@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -61,6 +62,13 @@ def _execute(tmp_path: Path, request: dict) -> subprocess.CompletedProcess[str]:
         cwd=staging,
         input=json.dumps(request, ensure_ascii=False),
         text=True,
+        # 生产路径（skill_executor.py:312-319）会把 PYTHONIOENCODING/PYTHONUTF8 钉成
+        # utf-8 再拉起适配器。这里必须同样显式指定，否则会继承调用者 shell：
+        # 本机默认是 gbk，中文正文会被错误解码；若外部设了
+        # PYTHONIOENCODING=utf-8:surrogateescape，中文更会变成孤立代理字符，
+        # 适配器写回结果时抛 "surrogates not allowed"，测试结论取决于谁在哪个终端跑。
+        encoding="utf-8",
+        env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"},
         capture_output=True,
         check=False,
         timeout=30,

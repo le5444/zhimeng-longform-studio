@@ -1,0 +1,13 @@
+.zm-history-rail { position: absolute; left: 2px; z-index: 3; width: 24px; display: flex; flex-direction: column; align-items: center; gap: 4px; opacity: .65; }
+.zm-history-rail:hover, .zm-history-rail:focus-within { opacity: 1; }
+.zm-history-marks { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; justify-content: flex-start; overflow-y: auto; scrollbar-width: none; padding: 8px 0; }
+.zm-history-mark { flex: 0 0 14px; width: 24px; display: flex; align-items: center; justify-content: center; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.zm-history-mark > span { display: block; width: 8px; height: 2px; border-radius: 2px; background: var(--zm-line-2); transition: width .1s ease, background .1s ease; }
+.zm-history-mark:hover > span, .zm-history-mark:focus-visible > span { width: 16px; background: var(--zm-fg-2); }
+.zm-history-mark.is-current > span { width: 20px; background: var(--zm-fg); }
+.zm-history-control { flex: none; border: 0; padding: 3px; background: transparent; color: var(--zm-fg-3); cursor: pointer; }
+.zm-history-control svg { width: 15px; height: 15px; }
+.zm-history-preview { position: fixed; z-index: 70; pointer-events: none; width: min(360px, calc(100vw - 70px)); padding: 14px 16px; border: 1px solid var(--zm-line); border-radius: 12px; background: var(--zm-bg); color: var(--zm-fg); box-shadow: var(--zm-shadow-2); font-size: var(--zm-fs-3); }
+.zm-history-preview strong { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 600; line-height: 1.6; }
+.zm-history-preview p { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; margin-top: 6px; color: var(--zm-fg-3); line-height: 1.7; white-space: pre-wrap; }
+@media (max-width: 900px) { .zm-history-rail { display: none; } }

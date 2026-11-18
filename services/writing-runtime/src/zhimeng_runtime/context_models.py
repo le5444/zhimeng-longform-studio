@@ -165,13 +165,22 @@ class ContextCreateRequest(ContextModel):
     )
     expected_project_revision: int = Field(ge=1, strict=True)
     expected_project_fingerprint: Sha256
-    project_kb_state_id: str = Field(
+    # 知识库快照绑定可选（2026-09-25 起普通对话不再带）：带了就核对，不带就只按书的版本号走。
+    project_kb_state_id: str | None = Field(
+        default=None,
         pattern=r"^project-kb-state-[0-9a-f]{32}$",
         strict=True,
     )
-    project_kb_manifest_hash: Sha256
+    project_kb_manifest_hash: Sha256 | None = None
     formal_knowledge_selector: FormalKnowledgeSelector | None = None
     manual_file_ids: tuple[ProjectFileId, ...] = Field(default=(), max_length=20)
+    include_session_history: bool = Field(default=False, strict=True)
+
+    @model_validator(mode="after")
+    def validate_project_kb_pair(self) -> ContextCreateRequest:
+        if (self.project_kb_state_id is None) != (self.project_kb_manifest_hash is None):
+            raise ValueError("project KB state identity and manifest hash must be paired")
+        return self
 
     @field_validator("objective")
     @classmethod
@@ -376,6 +385,7 @@ class ContextPack(ContextModel):
     project_id: str = Field(min_length=1, max_length=128, strict=True)
     history_through_ordinal: int = Field(ge=0, strict=True)
     history_message_count: int = Field(ge=0, strict=True)
+    include_session_history: bool = Field(default=False, strict=True)
     objective: str = Field(min_length=1, max_length=100_000, strict=True)
     profile: str = Field(
         min_length=1,
@@ -557,6 +567,13 @@ class ContextPack(ContextModel):
             profile=self.profile,
             active_chapter_id=self.active_chapter_id,
             included=self.included,
+            include_response_guidance=include_response_guidance_for(
+                self.compiler_version
+            ),
+            response_guidance_version=response_guidance_version_for(
+                self.compiler_version
+            ),
+            human_readable=human_readable_for(self.compiler_version),
         )
         if messages[0].content != expected_system:
             raise ValueError("system context does not match included fragments")
@@ -645,6 +662,112 @@ def render_context_fragment(fragment: ContextFragmentBase) -> str:
     return canonical_json(_fragment_injection_payload(fragment))
 
 
+HUMAN_READABLE_COMPILER_VERSIONS = frozenset(
+    {"context-compiler.v4", "context-compiler.v5", "context-compiler.v6"}
+)
+
+# 不带【回答要求】的版本：v1（当时还没这段）和 v6（作者 2026-09-20 把「口吻规矩」全删——
+# 模型说什么就是什么，不再教它怎么措辞、怎么自称）。存量 v2–v5 资料包受逐字节校验
+# 保护，它们的文字一个字不动；新编的资料包从 v6 起都不带。
+VERSIONS_WITHOUT_RESPONSE_GUIDANCE = frozenset({"context-compiler.v1", "context-compiler.v6"})
+
+
+def include_response_guidance_for(compiler_version: str) -> bool:
+    return compiler_version not in VERSIONS_WITHOUT_RESPONSE_GUIDANCE
+
+
+def response_guidance_version_for(compiler_version: str) -> int:
+    """每个编译器版本固定对应一版【回答要求】文字。
+
+    存量 Pack 在校验时会用当前代码重新渲染系统消息并逐字节比对，
+    所以老版本对应的文字一个字都不能动；要改措辞只能加新版本。
+    """
+
+    if compiler_version == "context-compiler.v2":
+        return 1
+    if compiler_version == "context-compiler.v5":
+        return 3
+    if compiler_version == "context-compiler.v6":
+        return 0  # v6 没有【回答要求】
+    return 2
+
+
+def human_readable_for(compiler_version: str) -> bool:
+    return compiler_version in HUMAN_READABLE_COMPILER_VERSIONS
+
+
+def _response_guidance_text(version: int) -> str:
+    if version <= 0:
+        return ""
+    if version == 1:
+        return "直接用简体中文回答作者。只给最终回答，不要复述任务、解释思考过程或展示草稿。"
+    if version >= 3:
+        # v3（context-compiler.v5 起）：作者 2026-09-13 反馈回答里夹着「ready / 阻断项 /
+        # 工具次数 / 窗口 / 回填」这类话，来源是书里的记账文件和内部说法。这里把它们点名禁掉，
+        # 并要求把记账文件里的英文状态词翻成人话。
+        return (
+            "直接用简体中文回答作者。内部判断和工具使用留在单独的思考与操作记录里；"
+            "最终回答只说做了什么、结果、未完成原因和确实需要作者决定的事情。不要复述"
+            "任务，不要展示草稿、英文自言自语、内部模式名、字段名、数据结构、工具名或"
+            " ChangeSet、Context Pack、Gate、repair-only、author-review 等工程术语；"
+            "也不要说「窗口」「通道」「工具次数」「回合」「回填」「写回」「审稿」「阻断项」这类内部说法，"
+            "遇到限制就直说做不到什么、下一步作者能做什么。书里的总览、修改记录、进度表之类"
+            "记账文件只当参考，其中的英文状态词（如 ready、done、drafting、healthy）一律翻成人话，"
+            "不要原样念出来。对作者称自己为 Agent，不自称助手或搭档；把这本小说叫「这本书」，不叫「作品」或「项目」。"
+        )
+    return (
+        "直接用简体中文回答作者。内部判断和工具使用留在单独的思考与操作记录里；"
+        "最终回答只说做了什么、结果、未完成原因和确实需要作者决定的事情。不要复述"
+        "任务，不要展示草稿、英文自言自语、内部模式名、字段名、数据结构、工具名或"
+        " ChangeSet、Context Pack、Gate、repair-only、author-review 等工程术语。"
+    )
+
+
+_V4_AUTHORITY_SECTIONS: tuple[tuple[ContextAuthority, str], ...] = (
+    (ContextAuthority.PROJECT_TRUTH, "作品内容"),
+    (ContextAuthority.FORMAL_KNOWLEDGE, "写作知识"),
+    (ContextAuthority.REFERENCE, "参考资料"),
+    (ContextAuthority.RISK, "风险提示"),
+)
+
+
+def _render_system_context_human(
+    *,
+    project_id: str,
+    project_revision: int,
+    knowledge_fingerprint: str | None,
+    profile: str,
+    active_chapter_id: str | None,
+    included: tuple[ContextIncludedFragment, ...],
+    include_response_guidance: bool,
+    response_guidance_version: int,
+) -> str:
+    blocks = [
+        "【上下文说明】\n"
+        "以下材料来自这本作品当前的文件与写作资料。「作品内容」是唯一真值；"
+        "「写作知识」与「参考资料」只作辅助，与作品内容冲突时以作品内容为准。"
+    ]
+    project_lines = [f"作品：{project_id}", f"版本：第 {project_revision} 版"]
+    if active_chapter_id is not None:
+        project_lines.append(f"当前章节：{active_chapter_id}")
+    blocks.append("【作品】\n" + "\n".join(project_lines))
+    if profile.startswith("chat") and include_response_guidance:
+        blocks.append(
+            "【回答要求】\n" + _response_guidance_text(response_guidance_version)
+        )
+    for authority, section_name in _V4_AUTHORITY_SECTIONS:
+        fragments = [item for item in included if item.authority is authority]
+        if not fragments:
+            continue
+        entries = "\n\n".join(
+            f"■ {item.title}\n{item.content}" for item in fragments
+        )
+        blocks.append(f"【{section_name}】\n{entries}")
+    if knowledge_fingerprint is not None:
+        blocks.append(f"【写作知识版本】\n装配时核对的知识库指纹：{knowledge_fingerprint}")
+    return "\n\n".join(blocks)
+
+
 def render_system_context(
     *,
     project_id: str,
@@ -656,7 +779,21 @@ def render_system_context(
     profile: str,
     active_chapter_id: str | None,
     included: tuple[ContextIncludedFragment, ...],
+    include_response_guidance: bool = True,
+    response_guidance_version: int = 2,
+    human_readable: bool = False,
 ) -> str:
+    if human_readable:
+        return _render_system_context_human(
+            project_id=project_id,
+            project_revision=project_revision,
+            knowledge_fingerprint=knowledge_fingerprint,
+            profile=profile,
+            active_chapter_id=active_chapter_id,
+            included=included,
+            include_response_guidance=include_response_guidance,
+            response_guidance_version=response_guidance_version,
+        )
     project: dict[str, object] = {
         "project_id": project_id,
         "revision": project_revision,
@@ -677,6 +814,8 @@ def render_system_context(
         "profile": profile,
         "fragments": [_fragment_injection_payload(item) for item in included],
     }
+    if profile.startswith("chat") and include_response_guidance:
+        payload["response_guidance"] = _response_guidance_text(response_guidance_version)
     return canonical_json(payload)
 
 
@@ -745,6 +884,9 @@ def context_pack_hash(pack: ContextPack) -> str:
     if not material.get("manual_file_ids"):
         # Preserve hashes for Context Packs created before manual file selection.
         material.pop("manual_file_ids", None)
+    if not material.get("include_session_history"):
+        # Preserve hashes for Context Packs created before explicit history opt-in.
+        material.pop("include_session_history", None)
     if (
         material.get("project_kb_state_id") is None
         and material.get("project_kb_manifest_hash") is None

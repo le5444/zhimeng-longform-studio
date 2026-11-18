@@ -130,11 +130,15 @@ def test_environment_parses_explicit_reported_model_aliases() -> None:
     )
 
 
-def test_reported_model_aliases_require_a_configured_provider() -> None:
-    with pytest.raises(ValueError, match="require a configured provider"):
-        RuntimeSettings(
-            agent_provider_accepted_reported_models=("reported-model",),
-        )
+def test_reported_model_aliases_are_valid_without_env_provider() -> None:
+    """接受名单不依赖 env provider：模型可在界面（provider-settings.json）配置，
+    名单对运行时实际解析出的 provider 全局生效（2026-09-05 中转站改报
+    deepseek-ai/deepseek-v4-flash-0731 时，作者正是这种配置）。"""
+    settings = RuntimeSettings(
+        agent_provider_accepted_reported_models=("reported-model",),
+    )
+
+    assert settings.agent_provider_accepted_reported_models == ("reported-model",)
 
 
 def test_provider_key_and_credential_reference_must_be_paired() -> None:

@@ -1,0 +1,328 @@
+{
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "enum": [
+              "observe",
+              "click",
+              "fill",
+              "press",
+              "scroll",
+              "navigate",
+              "back",
+              "forward",
+              "reload",
+              "screenshot",
+              "close"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "properties": {
+          "tab_id": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "tab_id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "enum": [
+              "click",
+              "fill",
+              "press",
+              "scroll",
+              "navigate",
+              "back",
+              "forward",
+              "reload",
+              "close"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "properties": {
+          "observation_id": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "observation_id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "enum": [
+              "open",
+              "navigate"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "properties": {
+          "url": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "enum": [
+              "click",
+              "fill"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "properties": {
+          "ref": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "enum": [
+              "fill"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "properties": {
+          "text": {
+            "minLength": 0,
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "enum": [
+              "press"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "properties": {
+          "key": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "enum": [
+              "receipt"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "properties": {
+          "receipt_id": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "receipt_id"
+        ]
+      }
+    }
+  ],
+  "properties": {
+    "action": {
+      "enum": [
+        "list",
+        "open",
+        "observe",
+        "click",
+        "fill",
+        "press",
+        "scroll",
+        "navigate",
+        "back",
+        "forward",
+        "reload",
+        "screenshot",
+        "close",
+        "receipt"
+      ],
+      "title": "Action",
+      "type": "string"
+    },
+    "tab_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Page id returned by open/list; always scoped to this conversation.",
+      "title": "Tab Id"
+    },
+    "observation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Latest observation of this page, required for an action.",
+      "title": "Observation Id"
+    },
+    "url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Url"
+    },
+    "ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Element reference from observe.",
+      "title": "Ref"
+    },
+    "text": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Text"
+    },
+    "key": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "For press: Electron key name, for example Enter, Tab, Escape, ArrowDown.",
+      "title": "Key"
+    },
+    "x": {
+      "default": 0,
+      "title": "X",
+      "type": "integer"
+    },
+    "y": {
+      "default": 0,
+      "title": "Y",
+      "type": "integer"
+    },
+    "receipt_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Request id from an earlier uncertain action; receipt reads it without replay.",
+      "title": "Receipt Id"
+    }
+  },
+  "required": [
+    "action"
+  ],
+  "title": "SharedBrowserArguments",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/tool-shared-browser-arguments.schema.json"
+}

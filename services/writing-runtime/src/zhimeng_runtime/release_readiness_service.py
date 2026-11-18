@@ -13,6 +13,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
 
+from zhimeng_runtime.state_roots import ensure_state_root
+
 
 POLICY_VERSION = "local-v1-release-readiness-runtime-1"
 LATEST_FILENAME = "local-v1-release-readiness.json"
@@ -96,8 +98,7 @@ class ReleaseReadinessService:
         package_path: Path | str | None = None,
         clean_vm_matrix_evidence: Path | str | dict[str, Any] | None = None,
     ) -> None:
-        self.state_root = Path(state_root)
-        self.state_root.mkdir(parents=True, exist_ok=True)
+        self.state_root = ensure_state_root(Path(state_root))
         self.package_path = Path(package_path) if package_path is not None else None
         self.clean_vm_matrix_evidence = clean_vm_matrix_evidence
 

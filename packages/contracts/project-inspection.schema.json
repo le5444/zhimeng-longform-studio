@@ -200,8 +200,20 @@
           "type": "string"
         },
         "format": {
-          "const": "01-09",
+          "enum": [
+            "01-09",
+            "folder"
+          ],
           "title": "Format",
+          "type": "string"
+        },
+        "creation_mode": {
+          "default": "manual",
+          "enum": [
+            "manual",
+            "agent"
+          ],
+          "title": "Creation Mode",
           "type": "string"
         },
         "revision": {

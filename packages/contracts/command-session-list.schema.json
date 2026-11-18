@@ -1,0 +1,312 @@
+{
+  "$defs": {
+    "CommandFileProblem": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "reason"
+      ],
+      "title": "CommandFileProblem",
+      "type": "object"
+    },
+    "CommandFileTracking": {
+      "additionalProperties": false,
+      "properties": {
+        "change_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Change Id"
+        },
+        "file_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "File Count"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "paths": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Paths",
+          "type": "array"
+        },
+        "problems": {
+          "items": {
+            "$ref": "#/$defs/CommandFileProblem"
+          },
+          "title": "Problems",
+          "type": "array"
+        },
+        "status": {
+          "enum": [
+            "observing",
+            "recorded",
+            "partial",
+            "unavailable",
+            "unverified",
+            "interrupted"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "paths",
+        "status"
+      ],
+      "title": "CommandFileTracking",
+      "type": "object"
+    },
+    "CommandSessionSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "title": "Command",
+          "type": "string"
+        },
+        "command_session_id": {
+          "title": "Command Session Id",
+          "type": "string"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "number"
+        },
+        "cwd": {
+          "title": "Cwd",
+          "type": "string"
+        },
+        "duration_ms": {
+          "minimum": 0,
+          "title": "Duration Ms",
+          "type": "integer"
+        },
+        "ended_at": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ended At"
+        },
+        "exit_code": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Exit Code"
+        },
+        "file_tracking": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CommandFileTracking"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "interruption_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Interruption Reason"
+        },
+        "output_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Error"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "running",
+            "exited",
+            "cancelled",
+            "interrupted"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "stderr_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stderr Bytes"
+        },
+        "stdout_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stdout Bytes"
+        },
+        "terminal_columns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Terminal Columns"
+        },
+        "terminal_rows": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Terminal Rows"
+        },
+        "terminal_windows_build": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Terminal Windows Build"
+        },
+        "timed_out": {
+          "title": "Timed Out",
+          "type": "boolean"
+        },
+        "transport": {
+          "default": "pipes",
+          "enum": [
+            "pipes",
+            "pty"
+          ],
+          "title": "Transport",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command_session_id",
+        "run_id",
+        "command",
+        "cwd",
+        "status",
+        "exit_code",
+        "created_at",
+        "ended_at",
+        "duration_ms",
+        "stdout_bytes",
+        "stderr_bytes",
+        "timed_out",
+        "interruption_reason"
+      ],
+      "title": "CommandSessionSummary",
+      "type": "object"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/command-session-list.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "commands": {
+      "items": {
+        "$ref": "#/$defs/CommandSessionSummary"
+      },
+      "title": "Commands",
+      "type": "array"
+    }
+  },
+  "required": [
+    "commands"
+  ],
+  "title": "CommandSessionListResponse",
+  "type": "object"
+}

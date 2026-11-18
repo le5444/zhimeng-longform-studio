@@ -4,7 +4,7 @@
   "display_name": "Creation Suite Handoff",
   "description": "Deterministic Creation handoff artifact over immutable Context, Route, Prewrite package and prior execution receipts; v1 never authorizes formal prose.",
   "kind": "deterministic_tool",
-  "version": "2026.07.21-m3j.1",
+  "version": "2026.07.21-m3j.2",
   "source": {
     "type": "builtin_managed",
     "reference": "PROVENANCE.md",

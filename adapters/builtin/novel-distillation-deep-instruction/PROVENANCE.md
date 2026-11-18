@@ -10,7 +10,7 @@
 
 | Relative source path | Bytes | SHA-256 |
 |---|---:|---|
-| `references/bundled-skills/novel-distillation/SKILL.md` | 25674 | `f4bffb45f6881ebb31ef2a4187ba92d5de4f6c241f7870308458e72bb9bfd003` |
+| `references/bundled-skills/novel-distillation/SKILL.md` | 25673 | `4068f30ce891cad0f4e9ca688b2ea06515d687184d9d2ae81391cf1bc8a7d83d` |
 
 The source snapshot is evidence, not an executable dependency. The Runtime must use `instruction-map.json` and `instruction-contract.json` from the same immutable managed snapshot. It must not read the live `.codex` source, follow links, execute bundled commands, access the network, consume secrets, or write project truth.
 

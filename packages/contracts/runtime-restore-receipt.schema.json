@@ -1,0 +1,106 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.runtime-restore-receipt.v1",
+      "default": "zhimeng.runtime-restore-receipt.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "receipt_id": {
+      "pattern": "^runtime-restore-receipt-[0-9a-f]{32}$",
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "backup_id": {
+      "pattern": "^runtime-backup-[0-9a-f]{32}$",
+      "title": "Backup Id",
+      "type": "string"
+    },
+    "outcome": {
+      "const": "restored",
+      "title": "Outcome",
+      "type": "string"
+    },
+    "restored_database_schema_version": {
+      "minimum": 0,
+      "title": "Restored Database Schema Version",
+      "type": "integer"
+    },
+    "restored_database_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Restored Database Sha256",
+      "type": "string"
+    },
+    "integrity_check": {
+      "enum": [
+        "ok",
+        "failed",
+        "unavailable"
+      ],
+      "title": "Integrity Check",
+      "type": "string"
+    },
+    "foreign_key_violations": {
+      "minimum": 0,
+      "title": "Foreign Key Violations",
+      "type": "integer"
+    },
+    "pre_restore_backup_id": {
+      "anyOf": [
+        {
+          "pattern": "^runtime-backup-[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pre Restore Backup Id"
+    },
+    "formal_draft_allowed": {
+      "const": false,
+      "default": false,
+      "title": "Formal Draft Allowed",
+      "type": "boolean"
+    },
+    "writes_project_truth": {
+      "const": false,
+      "default": false,
+      "title": "Writes Project Truth",
+      "type": "boolean"
+    },
+    "includes_project_files": {
+      "const": false,
+      "default": false,
+      "title": "Includes Project Files",
+      "type": "boolean"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "receipt_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Receipt Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "backup_id",
+    "outcome",
+    "restored_database_schema_version",
+    "restored_database_sha256",
+    "integrity_check",
+    "foreign_key_violations",
+    "created_at",
+    "receipt_hash"
+  ],
+  "title": "RuntimeRestoreReceipt",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/runtime-restore-receipt.schema.json"
+}

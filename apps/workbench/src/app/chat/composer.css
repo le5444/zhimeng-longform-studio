@@ -1,0 +1,67 @@
+/* 输入和运行设置共用一个边框；原生模型下拉仍位于发送 form 外。 */
+.zm-compose-box { border: 1px solid var(--zm-line-2); border-radius: 12px; background: var(--zm-bg); box-shadow: var(--zm-shadow-1); overflow: hidden; transition: border-color var(--zm-t-row), box-shadow var(--zm-t-row); }
+.zm-compose-box:focus-within { border-color: var(--zm-accent); box-shadow: 0 0 0 2px var(--zm-focus); }
+.zm-compose-surface .zm-composer { gap: 10px; padding: 14px 14px 8px; border: 0; border-radius: 0; box-shadow: none; }
+.zm-compose-surface .zm-composer-input { min-height: 42px; max-height: min(220px, 28dvh); overflow-y: auto; font-size: calc(var(--zm-ui) + 2px); }
+.zm-compose-surface .zm-composer-input:focus-visible { outline: none; }
+.zm-compose-toolbar { display: flex; align-items: center; gap: 8px; min-height: 36px; min-width: 0; flex-wrap: wrap; }
+.zm-compose-toolbar button, .zm-compose-toolbar select { font: inherit; }
+.zm-compose-actions { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; }
+.zm-compose-action { display: inline-flex; align-items: center; justify-content: center; height: 32px; gap: 6px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--zm-fg-2); cursor: pointer; font-size: var(--zm-fs-2); }
+.zm-compose-action svg { width: 16px; height: 16px; }
+.zm-compose-action:hover, .zm-compose-action[aria-expanded=true] { background: var(--zm-bg-hover); color: var(--zm-fg); }
+.zm-compose-action:disabled { opacity: .45; cursor: default; }
+.zm-compose-model { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; padding: 6px 12px; border-top: 1px solid var(--zm-line); background: color-mix(in srgb, var(--zm-bg-side) 45%, var(--zm-bg)); }
+.zm-compose-model:empty { display: none; }
+.zm-model-controls { flex: 1 1 auto; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.zm-model-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.zm-model-warning { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 6px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--zm-warn) 25%, transparent); border-radius: 8px; background: var(--zm-warn-soft); color: var(--zm-warn); font-size: var(--zm-fs-2); line-height: 1.5; }
+.zm-model-warning > svg { flex: none; width: 17px; height: 17px; }
+.zm-model-warning > span { flex: 1; min-width: 160px; }
+.zm-model-warning > button { border: 1px solid currentColor; border-radius: 6px; padding: 4px 8px; background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+.zm-model-warning > button:disabled { opacity: .5; cursor: default; }
+.zm-compose-model-identity { display: flex; align-items: center; gap: 4px; min-width: 0; max-width: min(380px, 100%); }
+.zm-compose-provider { flex: 0 1 auto; max-width: 110px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--zm-fg-2); font-size: var(--zm-fs-2); }
+.zm-compose-model-identity .zm-compose-model-picker { flex: 1 1 auto; }
+.zm-compose-model-identity .zm-compose-model-picker::before { content: '/'; position: absolute; left: 0; top: 50%; transform: translateY(-50%); color: var(--zm-fg-3); pointer-events: none; }
+.zm-compose-model-identity .zm-compose-model-picker { padding-left: 12px; }
+.zm-compose-model .zm-compose-model-picker { max-width: min(340px, 100%); min-width: 0; height: 30px; flex: 0 1 auto; font-weight: 600; }
+.zm-compose-model .zm-composer-select select { text-overflow: ellipsis; }
+.zm-compose-model .zm-compose-option { max-width: none; height: 30px; }
+.zm-compose-option > span { flex: none; color: var(--zm-fg-3); }
+.zm-compose-model .zm-compose-option select { width: auto; min-width: 64px; }
+.zm-compose-send { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex: none; margin-left: auto; }
+.zm-compose-send .zm-send { width: 34px; height: 34px; }
+.zm-compose-send .zm-send.is-queue, .zm-compose-send .zm-send.is-steer { width: auto; white-space: nowrap; }
+.zm-composer-popover { position: fixed; z-index: 65; width: min(380px, calc(100vw - 24px)); max-height: min(440px, calc(100vh - 32px)); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--zm-line-2); border-radius: 12px; background: var(--zm-bg); color: var(--zm-fg); box-shadow: 0 8px 32px #0002; font-size: var(--zm-fs-2); }
+.zm-composer-popover > header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid var(--zm-line); }
+.zm-composer-popover > header strong { font-size: var(--zm-fs-3); font-weight: 600; }
+.zm-composer-popover > header button { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: var(--zm-fg-3); cursor: pointer; }
+.zm-composer-popover > header button svg { width: 16px; height: 16px; }
+.zm-compose-search { display: flex; align-items: center; gap: 8px; padding: 9px 12px; }
+.zm-compose-search svg { width: 15px; height: 15px; color: var(--zm-fg-3); }
+.zm-compose-search input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: inherit; font: inherit; padding: 4px 0; }
+.zm-compose-options { overflow-y: auto; min-height: 0; padding: 4px 6px 8px; }
+.zm-compose-options > button { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 8px; border: 0; border-radius: 7px; background: transparent; color: inherit; text-align: left; cursor: pointer; font: inherit; }
+.zm-compose-options > button:hover, .zm-compose-options > button:focus-visible { background: var(--zm-bg-hover); }
+.zm-compose-options > button > svg { width: 16px; height: 16px; flex: none; color: var(--zm-fg-3); }
+.zm-compose-options > button > span { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.zm-compose-options small { display: block; color: var(--zm-fg-3); font-size: var(--zm-fs-1); margin-top: 3px; }
+.zm-compose-options > p { color: var(--zm-fg-3); margin: 8px; line-height: 1.6; }
+.zm-compose-pagination { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 12px; border-top: 1px solid var(--zm-line); color: var(--zm-fg-3); font-variant-numeric: tabular-nums; }
+.zm-compose-pagination button { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--zm-fg); cursor: pointer; }
+.zm-compose-pagination button:disabled { opacity: .35; cursor: default; }
+.zm-compose-pagination button:hover:not(:disabled) { background: var(--zm-bg-hover); }
+.zm-compose-pagination svg { width: 16px; height: 16px; }
+.zm-compose-library { border: 0; border-top: 1px solid var(--zm-line); padding: 11px 14px; background: transparent; color: var(--zm-accent); text-align: left; cursor: pointer; font: inherit; }
+.zm-compose-access { display: inline-flex; align-items: center; gap: 6px; height: 30px; border: 0; border-left: 1px solid var(--zm-line-2); border-radius: 0; padding: 0 10px; background: transparent; color: var(--zm-fg-2); font-size: var(--zm-fs-2); cursor: pointer; white-space: nowrap; }
+.zm-compose-access svg { width: 15px; height: 15px; }
+.zm-compose-access:hover:not(:disabled) { background: var(--zm-bg-hover); color: var(--zm-fg); }
+.zm-compose-access.is-warn { color: var(--zm-warn); }
+.zm-compose-access:disabled { opacity: .5; cursor: default; }
+@media(max-width: 560px) {
+  .zm-compose-toolbar { gap: 4px; }
+  .zm-compose-action { padding: 0 6px; }
+  .zm-compose-model .zm-compose-model-picker { max-width: 100%; padding-right: 4px; }
+  .zm-compose-send.has-draft { width: 100%; }
+}

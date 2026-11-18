@@ -18,6 +18,7 @@ from zhimeng_runtime.source_import_models import (
     ACTIVE_SOURCE_IMPORT_STATUSES,
     AnySourceImportCreateRequest,
     AnySourceImportJob,
+    DistillationDraft,
     LocalFileSourceCandidate,
     LocalSourceImportCreateRequest,
     LocalSourceImportJob,
@@ -86,6 +87,10 @@ class SourceImportStateError(SourceImportError):
 
 
 class SourceImportExecutionError(SourceImportError):
+    pass
+
+
+class SourceImportUnavailableError(SourceImportExecutionError):
     pass
 
 
@@ -193,7 +198,7 @@ class SourceImportService:
         if not candidate_query:
             raise SourceImportExecutionError("Novel name must not be empty")
         if self.adapter is None:
-            raise SourceImportExecutionError("Tomato source adapter is not configured")
+            raise SourceImportUnavailableError("Tomato source adapter is not configured")
         try:
             candidates = self.adapter.search(candidate_query)
         except TomatoAdapterError as exc:
@@ -226,7 +231,7 @@ class SourceImportService:
 
     def resolve_tomato(self, request: TomatoResolveRequest) -> TomatoResolveResponse:
         if self.adapter is None:
-            raise SourceImportExecutionError("Tomato source adapter is not configured")
+            raise SourceImportUnavailableError("Tomato source adapter is not configured")
         try:
             book_id, locator_kind, source_locator = extract_tomato_book_id(
                 book_id=request.book_id,
@@ -252,7 +257,7 @@ class SourceImportService:
 
     def inspect_local(self, source_path: str) -> LocalFileSourceCandidate:
         if self.local_adapter is None:
-            raise SourceImportExecutionError("Local source adapter is not configured")
+            raise SourceImportUnavailableError("Local source adapter is not configured")
         try:
             return self.local_adapter.inspect(source_path)
         except LocalSourceAdapterError as exc:
@@ -270,7 +275,7 @@ class SourceImportService:
         created_at = _now()
         if request.provider == "local_file":
             if self.local_adapter is None:
-                raise SourceImportExecutionError("Local source adapter is not configured")
+                raise SourceImportUnavailableError("Local source adapter is not configured")
             record: AnySourceImportJob = LocalSourceImportJob(
                 import_id=f"source-import-{uuid4().hex}",
                 query=request.query.strip(),
@@ -286,7 +291,7 @@ class SourceImportService:
             )
         else:
             if self.adapter is None:
-                raise SourceImportExecutionError("Tomato source adapter is not configured")
+                raise SourceImportUnavailableError("Tomato source adapter is not configured")
             record = SourceImportJob(
                 import_id=f"source-import-{uuid4().hex}",
                 query=request.query.strip(),
@@ -359,7 +364,7 @@ class SourceImportService:
             )
         except (RuntimeError, TypeError, ValueError) as exc:
             raise SourceImportIntegrityError(
-                "source import execution receipt failed integrity validation"
+                "Stored source import execution receipt is invalid"
             ) from exc
 
     def list_attempt_receipts(
@@ -531,6 +536,16 @@ class SourceImportService:
             for event in self._cancel_events.values():
                 event.set()
         self._executor.shutdown(wait=True, cancel_futures=True)
+
+    def reopen(self) -> None:
+        """Resume submissions after close has drained the old database's jobs."""
+        with self._guard:
+            if not self._closed:
+                return
+            self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="zhimeng-source-import")
+            self._futures.clear()
+            self._cancel_events.clear()
+            self._closed = False
 
     def _run(self, import_id: str, cancel_event: threading.Event) -> None:
         request_hash: str | None = None
@@ -896,10 +911,10 @@ class SourceImportService:
     ) -> TomatoSourceAdapter | LocalSourceAdapter:
         if record.provider == "local_file":
             if self.local_adapter is None:
-                raise SourceImportExecutionError("Local source adapter is not configured")
+                raise SourceImportUnavailableError("Local source adapter is not configured")
             return self.local_adapter
         if self.adapter is None:
-            raise SourceImportExecutionError("Tomato source adapter is not configured")
+            raise SourceImportUnavailableError("Tomato source adapter is not configured")
         return self.adapter
 
     def _execution_identity(
@@ -1460,7 +1475,9 @@ class SourceImportService:
                 except (RuntimeError, ValueError) as exc:
                     raise SourceImportStateError(str(exc)) from exc
             else:
-                self.store.save_source_import_job(self._payload(next_record))
+                self.store.save_source_import_job(
+                    self._payload(next_record), expected_payload=self._payload(current),
+                )
             return next_record
 
     @staticmethod

@@ -9,7 +9,6 @@
     "dev:workbench": "npm --workspace @zhimeng/workbench run dev",
     "typecheck": "npm --workspace @zhimeng/workbench run typecheck",
     "test:workbench": "npm --workspace @zhimeng/workbench run test",
-    "test:e2e": "npm --workspace @zhimeng/workbench run test:e2e",
     "lint": "npm --workspace @zhimeng/workbench run lint",
     "build": "npm --workspace @zhimeng/workbench run build"
   }

@@ -1,0 +1,15 @@
+.zm-run-artifacts { margin: 8px 0 14px; font-size: var(--zm-fs-1); min-width: 0; }
+.zm-run-artifacts-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 5px 0; border: 0; background: none; color: var(--zm-fg-2); font: inherit; cursor: pointer; }
+.zm-run-artifacts-toggle:hover { color: var(--zm-fg); }
+.zm-run-artifacts-toggle svg { width: 14px; height: 14px; flex-shrink: 0; }
+.zm-run-artifacts-toggle .is-open { transform: rotate(90deg); }
+.zm-run-artifacts-body { padding: 8px 12px; border-left: 2px solid var(--zm-line); }
+.zm-run-artifacts-body > p { margin: 6px 0 10px; }
+.zm-run-artifacts-controls, .zm-run-artifact-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
+.zm-run-artifacts-controls > span { display: inline-flex; align-items: center; gap: 6px; }
+.zm-run-artifacts-body ul { list-style: none; margin: 8px 0; padding: 0; }
+.zm-run-artifacts-body li { padding: 10px 0; border-top: 1px solid var(--zm-line); }
+.zm-run-artifact-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.zm-run-artifact-path { overflow-wrap: anywhere; flex: 1 1 220px; min-width: 0; }
+.zm-run-artifact-heading > span:last-child { color: var(--zm-fg-2); }
+.zm-run-artifact-heading > .zm-run-artifact-different { color: var(--zm-warn); }

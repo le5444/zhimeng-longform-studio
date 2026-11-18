@@ -1,0 +1,5 @@
+.zm-usage-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 14px; color: var(--zm-fg-2); font-size: var(--zm-fs-1); font-variant-numeric: tabular-nums; }
+.zm-usage-inline > span { white-space: nowrap; }
+.zm-usage-scope { color: var(--zm-fg-3); }
+.zm-step-status[data-outcome="failed"] { color: var(--zm-warn); }
+.zm-step-status[data-outcome="cancelled"] { color: var(--zm-fg-2); }

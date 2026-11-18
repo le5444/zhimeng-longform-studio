@@ -33,6 +33,7 @@ from zhimeng_runtime.skill_models import (
     ManagedSkillLifecycleCatalogResponse,
     ManagedSkillScope,
     ManagedSkillSourceRecord,
+    ManagedSkillUnavailableVersionRecord,
     ManagedSkillValidationRecord,
     ManagedSkillVersionRecord,
     SkillManifest,
@@ -427,11 +428,18 @@ class ManagedSkillService:
                 )
                 for skill_id in skill_ids
             ]
-        versions = [self._version_record(row) for row in receipt_rows]
+        versions: list[ManagedSkillVersionRecord] = []
+        unavailable_versions: list[ManagedSkillUnavailableVersionRecord] = []
+        for row in receipt_rows:
+            if self._registered_snapshot_is_missing(row):
+                unavailable_versions.append(self._unavailable_version_record(row))
+            else:
+                versions.append(self._version_record(row))
         return ManagedSkillLifecycleCatalogResponse(
             schema="zhimeng.managed-skill-lifecycle-catalog.v1",
             scope=scope,
             versions=versions,
+            unavailable_versions=unavailable_versions,
             activations=activations,
         )
 
@@ -470,7 +478,13 @@ class ManagedSkillService:
         self.require_project_binding(project_id)
 
     def recover_imports(self) -> dict[str, int]:
-        """Remove interrupted staging trees and unreferenced owned snapshots."""
+        """Remove interrupted staging trees and incomplete owned snapshots.
+
+        Multiple Runtime databases can legitimately share one state directory during
+        local upgrades and recovery. A complete content-addressed snapshot may still
+        be referenced by one of those databases, so absence from this store alone is
+        not enough evidence that the snapshot is disposable.
+        """
 
         removed_staging = 0
         removed_orphans = 0
@@ -490,6 +504,21 @@ class ManagedSkillService:
             removed_staging += 1
         for child in tuple(self._snapshot_root.iterdir()):
             if child.resolve(strict=False) in referenced:
+                continue
+            try:
+                root = self._validate_directory(
+                    child,
+                    label="unreferenced managed Skill snapshot",
+                )
+                snapshot = self._snapshot_package(root)
+                expected_id = self._version_id(
+                    snapshot.manifest.id,
+                    snapshot.manifest.version,
+                    snapshot.package_fingerprint,
+                )
+            except ManagedSkillPackageError:
+                expected_id = None
+            if expected_id == child.name:
                 continue
             self._remove_owned_tree(child, parent=self._snapshot_root)
             removed_orphans += 1
@@ -779,6 +808,7 @@ class ManagedSkillService:
 
     def _bootstrap_builtin(self, skill_id: str, version_id: str) -> None:
         scope = self._scope()
+        bootstrap_request: ManagedSkillActivationRequest | None = None
         with self._store.connection() as connection:
             existing = connection.execute(
                 """
@@ -795,7 +825,49 @@ class ManagedSkillService:
                     skill_id=skill_id,
                     activation_row=existing,
                 )
-                return
+                active_version_id = (
+                    None
+                    if existing["active_version_id"] is None
+                    else str(existing["active_version_id"])
+                )
+                if (
+                    str(existing["state"]) == "enabled"
+                    and active_version_id is not None
+                    and active_version_id != version_id
+                    and (
+                        self._managed_snapshot_is_missing(
+                            connection,
+                            skill_id=skill_id,
+                            version_id=active_version_id,
+                        )
+                        or self._active_version_is_unmodified_builtin_default(
+                            connection,
+                            skill_id=skill_id,
+                            version_id=active_version_id,
+                            state_revision=int(existing["state_revision"]),
+                        )
+                    )
+                ):
+                    bootstrap_request = ManagedSkillActivationRequest(
+                        action="upgrade",
+                        skill_version_id=version_id,
+                        expected_state_revision=int(existing["state_revision"]),
+                        expected_version_id=active_version_id,
+                    )
+                else:
+                    return
+        if bootstrap_request is not None:
+            try:
+                self._activate(
+                    scope,
+                    skill_id,
+                    bootstrap_request,
+                    action_override="builtin_bootstrap",
+                )
+            except ManagedSkillActivationConflictError:
+                # A concurrent author decision always wins over startup recovery.
+                pass
+            return
         request = ManagedSkillActivationRequest(
             action="enable",
             skill_version_id=version_id,
@@ -820,6 +892,61 @@ class ManagedSkillService:
                 ).fetchone()
             if concurrent is None:
                 raise
+
+    @staticmethod
+    def _active_version_is_unmodified_builtin_default(
+        connection: object,
+        *,
+        skill_id: str,
+        version_id: str,
+        state_revision: int,
+    ) -> bool:
+        """Only advance the bundle default, never an explicit author selection."""
+
+        receipt = connection.execute(  # type: ignore[attr-defined]
+            """
+            SELECT action, next_version_id
+            FROM skill_activation_receipt
+            WHERE scope_key = ? AND skill_id = ? AND state_revision = ?
+            """,
+            (APPLICATION_SCOPE_KEY, skill_id, state_revision),
+        ).fetchone()
+        return bool(
+            receipt is not None
+            and str(receipt["action"]) == "builtin_bootstrap"
+            and str(receipt["next_version_id"]) == version_id
+        )
+
+    def _managed_snapshot_is_missing(
+        self,
+        connection: object,
+        *,
+        skill_id: str,
+        version_id: str,
+    ) -> bool:
+        row = connection.execute(  # type: ignore[attr-defined]
+            """
+            SELECT skill_id, source_path, snapshot_status
+            FROM skill_version
+            WHERE id = ?
+            """,
+            (version_id,),
+        ).fetchone()
+        if row is None or str(row["skill_id"]) != skill_id:
+            raise ManagedSkillPackageDriftError(
+                "builtin Skill activation points at a missing or different version"
+            )
+        if str(row["snapshot_status"]) != "managed":
+            return False
+        expected_manifest = self._snapshot_root / version_id / MANIFEST_NAME
+        source_manifest = Path(str(row["source_path"]))
+        if source_manifest.resolve(strict=False) != expected_manifest.resolve(strict=False):
+            raise ManagedSkillPackageDriftError(
+                "builtin Skill activation points outside its content-addressed snapshot"
+            )
+        # Existing but damaged snapshots still fail closed during normal loading.
+        # Recovery is only for a snapshot directory that has actually disappeared.
+        return not expected_manifest.parent.exists()
 
     def _activate(
         self,
@@ -883,6 +1010,9 @@ class ManagedSkillService:
                         raise ManagedSkillActivationInvalidError(
                             "legacy unmanaged Skill versions cannot be enabled"
                         )
+                    # A database receipt alone is not executable. Refuse to make
+                    # an activation point at a historical snapshot that is gone.
+                    self._load_registered(target)
                 elif not self._scope_has_skill(
                     connection,
                     scope=scope,
@@ -1386,6 +1516,35 @@ class ManagedSkillService:
             validation=receipt.validation,
             imported_at=receipt.created_at,
         )
+
+    def _unavailable_version_record(
+        self,
+        row: object,
+    ) -> ManagedSkillUnavailableVersionRecord:
+        receipt = self._import_receipt_from_row(row)
+        if (
+            receipt.manifest_fingerprint != str(row["manifest_fingerprint"])  # type: ignore[index]
+            or receipt.file_count != int(row["file_count"])  # type: ignore[index]
+            or receipt.total_bytes != int(row["total_bytes"])  # type: ignore[index]
+            or receipt.source.package_fingerprint != str(row["fingerprint"])  # type: ignore[index]
+        ):
+            raise ManagedSkillPackageDriftError(
+                "Skill import receipt does not bind the unavailable snapshot metadata"
+            )
+        return ManagedSkillUnavailableVersionRecord(
+            skill_version_id=str(row["id"]),  # type: ignore[index]
+            skill_id=str(row["skill_id"]),  # type: ignore[index]
+            version=str(row["version"]),  # type: ignore[index]
+            package_fingerprint=str(row["fingerprint"]),  # type: ignore[index]
+            imported_at=receipt.created_at,
+        )
+
+    def _registered_snapshot_is_missing(self, row: object) -> bool:
+        source_path = Path(str(row["source_path"]))  # type: ignore[index]
+        expected_manifest = self._snapshot_root / str(row["id"]) / MANIFEST_NAME  # type: ignore[index]
+        if source_path.resolve(strict=False) != expected_manifest.resolve(strict=False):
+            return False
+        return not expected_manifest.parent.exists()
 
     def _import_receipt_from_row(self, row: object) -> ManagedSkillImportReceipt:
         try:

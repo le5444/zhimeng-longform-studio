@@ -1,0 +1,122 @@
+{
+  "$defs": {
+    "ProjectWriteFileItem": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "maxLength": 8388608,
+          "title": "Content",
+          "type": "string"
+        },
+        "path": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "content"
+      ],
+      "title": "ProjectWriteFileItem",
+      "type": "object"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/tool-write-file-arguments.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "anyOf": [
+    {
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "files": {
+          "type": "null"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "content"
+      ]
+    },
+    {
+      "properties": {
+        "content": {
+          "type": "null"
+        },
+        "files": {
+          "type": "array"
+        },
+        "path": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "files"
+      ]
+    }
+  ],
+  "description": "Create new files or replace whole files.",
+  "properties": {
+    "content": {
+      "anyOf": [
+        {
+          "maxLength": 8388608,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Complete file text, required together with path. An empty string writes an empty file; omission does not.",
+      "title": "Content"
+    },
+    "files": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/ProjectWriteFileItem"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Batch of complete path/content pairs, instead of the top-level path and content.",
+      "title": "Files"
+    },
+    "note": {
+      "default": "",
+      "maxLength": 500,
+      "title": "Note",
+      "type": "string"
+    },
+    "path": {
+      "anyOf": [
+        {
+          "maxLength": 1024,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Single-file destination; supply content together with path. For a batch, use files instead.",
+      "title": "Path"
+    }
+  },
+  "title": "ProjectWriteFileArguments",
+  "type": "object"
+}

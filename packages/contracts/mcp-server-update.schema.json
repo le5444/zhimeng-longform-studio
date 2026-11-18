@@ -1,0 +1,120 @@
+{
+  "$id": "https://zhimeng.local/contracts/mcp-server-update.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "args": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Args",
+      "type": "array"
+    },
+    "command": {
+      "default": "",
+      "title": "Command",
+      "type": "string"
+    },
+    "creation_id": {
+      "anyOf": [
+        {
+          "pattern": "^mcp-[a-f0-9]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Creation Id"
+    },
+    "cwd": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cwd"
+    },
+    "enabled": {
+      "default": true,
+      "title": "Enabled",
+      "type": "boolean"
+    },
+    "env": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Env",
+      "type": "object"
+    },
+    "expected_revision": {
+      "anyOf": [
+        {
+          "pattern": "^(?:[a-f0-9]{64}|missing)$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Revision"
+    },
+    "headers": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Headers",
+      "type": "object"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "remove_env": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Remove Env",
+      "type": "array"
+    },
+    "remove_headers": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Remove Headers",
+      "type": "array"
+    },
+    "transport": {
+      "default": "stdio",
+      "enum": [
+        "stdio",
+        "http"
+      ],
+      "title": "Transport",
+      "type": "string"
+    },
+    "url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Url"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "title": "McpServerUpdate",
+  "type": "object"
+}

@@ -1,0 +1,16 @@
+.zm-result .zm-change-restored-size {
+  flex-wrap: wrap;
+  padding: 6px 12px 0;
+  gap: 12px;
+}
+
+.zm-result .zm-change-inline-diff {
+  margin: 0 6px 8px;
+  border: 1px solid var(--zm-line);
+  border-radius: var(--zm-r-2);
+  overflow: hidden;
+}
+
+.zm-change-inline-diff > .zm-change-summary {
+  padding: 6px 10px;
+}

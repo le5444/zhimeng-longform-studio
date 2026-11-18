@@ -4,19 +4,42 @@ import hashlib
 import json
 import os
 import re
+import stat as stat_module
 import threading
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, replace
 from pathlib import Path
+from collections.abc import Callable
 from typing import Final, Iterable, Mapping
+
+from zhimeng_runtime.project_truth import is_non_truth_project_path
+from zhimeng_runtime.office_reader import OFFICE_SUFFIXES, MAX_ARCHIVE_BYTES, OfficeError, extract_office_bytes, extraction_receipt
+from zhimeng_runtime.text_encoding import decode_project_text
 
 
 READER_SCHEMA: Final = "zhimeng.project-inspection.v1"
-MAX_SCAN_FILES: Final = 20_000
-MAX_SCAN_BYTES: Final = 512 * 1024 * 1024
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+MAX_SCAN_FILES: Final = _env_int("ZHIMENG_READER_MAX_SCAN_FILES", 20_000)
+MAX_SCAN_BYTES: Final = _env_int("ZHIMENG_READER_MAX_SCAN_BYTES", 512 * 1024 * 1024)
 MAX_SCAN_DIRECTORIES: Final = 5_000
 MAX_SCAN_DEPTH: Final = 32
-MAX_TEXT_FILE_BYTES: Final = 8 * 1024 * 1024
+MAX_TEXT_FILE_BYTES: Final = _env_int("ZHIMENG_READER_MAX_TEXT_FILE_BYTES", 8 * 1024 * 1024)
 REPARSE_POINT_ATTRIBUTE: Final = 0x400
+HASH_CHUNK_BYTES: Final = 1024 * 1024
+# 文件状态（大小、修改时间、文件身份、硬链接数）没变就沿用上次算的哈希，和 git 一样。
+# 修改时间离算哈希那一刻不到这么久的不算数：Windows 修改时间约 16 毫秒一跳、FAT 两秒一跳，
+# 同一跳里写两次，状态一样内容不同；过了这个窗口再改，修改时间必然不同。
+RACY_WINDOW_NS: Final = 3_000_000_000
+MAX_REMEMBERED_PATHS: Final = 200_000
 
 SECTION_LABELS: Final = {
     1: "项目定位",
@@ -79,6 +102,20 @@ EXCLUDED_DIRECTORIES: Final = frozenset(
         "隔离区",
     }
 )
+# 打开任意文件夹当项目以后（纠偏 P2，专题《项目即文件夹》第 3 节第 8 条）：点号开头的文件夹（.venv、.next、.cache、
+# 织梦自己的 .runtime 这类）和常见的生成 / 依赖文件夹不进项目快照。只是不列、不算指纹；要看里面的东西照样能用
+# 电脑上的读文件工具按路径读。
+GENERATED_DIRECTORIES: Final = frozenset(
+    {"venv", "dist", "build", "target", "coverage", "site-packages", "bower_components"}
+)
+
+
+def skip_scan_directory(name: str) -> bool:
+    """项目快照里不进去的文件夹：老的排除名单 + 点号开头的 + 常见生成 / 依赖文件夹。"""
+    folded = name.casefold()
+    return folded in EXCLUDED_DIRECTORIES or folded in GENERATED_DIRECTORIES or name.startswith(".")
+
+
 CONTROL_MARKERS: Final = ("控制卡", "control_card", "control-card", "chapter_brief")
 HANDOFF_MARKERS: Final = ("handoff", "交接", "operation_package", "operation-package", "工作包")
 CONTEXT_MARKERS: Final = (
@@ -90,8 +127,28 @@ CONTEXT_MARKERS: Final = (
     "prewrite",
     "scaffold",
 )
-STATUS_MARKERS: Final = ("status", "状态", "gate", "门禁", "health", "健康")
-REVIEW_MARKERS: Final = ("review", "审稿", "校验", "audit", "writeback", "回填")
+STATUS_MARKERS: Final = (
+    "status",
+    "状态",
+    "gate",
+    "门禁",
+    "health",
+    "健康",
+    "写回",
+    "同步",
+)
+REVIEW_MARKERS: Final = (
+    "review",
+    "审稿",
+    "校验",
+    "audit",
+    "writeback",
+    "回填",
+    # These reports sit beside real prose in some of the author's projects.
+    "report",
+    "ai_smell",
+    "cleanliness",
+)
 NON_PROSE_MARKERS: Final = (
     "chapter-brief",
     "chapter_brief",
@@ -139,6 +196,19 @@ PROJECT_FILE_KINDS: Final = frozenset(
     }
 )
 PUBLIC_TEXT_FILE_KINDS: Final = frozenset({"prose", "document", "control", "review"})
+WRITING_CONTEXT_FILE_KINDS: Final = frozenset(
+    {
+        "prose",
+        "document",
+        "control",
+        "handoff",
+        "review",
+        "context",
+        "status",
+        "structured_state",
+        "asset",
+    }
+)
 
 
 class ProjectReaderError(RuntimeError):
@@ -186,6 +256,46 @@ class _ScannedFile:
     mtime_ns: int
 
 
+@dataclass(frozen=True, slots=True)
+class _HashMemo:
+    """上次扫描时这个文件的状态和算出的结果；下次状态一模一样就不再读内容。"""
+
+    device: int
+    inode: int
+    size: int
+    mtime_ns: int
+    links: int
+    hashed_at_ns: int
+    item: _ScannedFile
+
+    @classmethod
+    def remember(cls, item: _ScannedFile, info: os.stat_result, hashed_at_ns: int) -> _HashMemo:
+        return cls(
+            device=int(info.st_dev),
+            inode=int(getattr(info, "st_ino", 0)),
+            size=int(info.st_size),
+            mtime_ns=int(info.st_mtime_ns),
+            links=int(getattr(info, "st_nlink", 1)),
+            hashed_at_ns=hashed_at_ns,
+            item=item,
+        )
+
+    def still_matches(self, info: os.stat_result) -> bool:
+        # 修改时间在不在窗口外、有没有文件身份号，都是「能不能信上次的哈希」的前提。
+        return (
+            self.inode != 0
+            and self.hashed_at_ns - self.mtime_ns >= RACY_WINDOW_NS
+            and (
+                int(info.st_dev),
+                int(getattr(info, "st_ino", 0)),
+                int(info.st_size),
+                int(info.st_mtime_ns),
+                int(getattr(info, "st_nlink", 1)),
+            )
+            == (self.device, self.inode, self.size, self.mtime_ns, self.links)
+        )
+
+
 def _is_within(path: Path, root: Path) -> bool:
     try:
         path.relative_to(root)
@@ -205,6 +315,13 @@ def _is_link_or_reparse(path: Path) -> bool:
     except OSError as exc:
         raise ProjectReaderError(f"cannot inspect path metadata: {path}") from exc
     return bool(attributes & REPARSE_POINT_ATTRIBUTE)
+
+
+def _file_is_link_or_reparse(info: os.stat_result) -> bool:
+    """文件这一项是不是链接 / 重解析点：用一次 lstat 的结果判断（junction 也是重解析点）。"""
+    if stat_module.S_ISLNK(info.st_mode):
+        return True
+    return bool(int(getattr(info, "st_file_attributes", 0)) & REPARSE_POINT_ATTRIBUTE)
 
 
 def _resolve_directory(raw: str | os.PathLike[str], *, label: str) -> Path:
@@ -266,23 +383,29 @@ def _hash_stable_file(
     relative_path: str,
     *,
     max_bytes: int | None = None,
+    before: os.stat_result | None = None,
 ) -> _ScannedFile:
+    """``before`` 是扫描时刚查过的文件状态（普通文件的 lstat 与 stat 相同），给了就不再查一遍。"""
     try:
-        before = path.stat()
+        if before is None:
+            before = path.stat()
         if max_bytes is not None and before.st_size > max_bytes:
             raise ProjectScanLimitError(
                 f"project scan exceeds its remaining {max_bytes} byte budget: {path}"
             )
         digest = hashlib.sha256()
         bytes_read = 0
-        with path.open("rb") as handle:
-            for block in iter(lambda: handle.read(1024 * 1024), b""):
-                bytes_read += len(block)
+        # 缓冲按文件大小开（最多 1MB）、反复用。以前每次 read(1MB) 都新要一块 1MB 内存，
+        # 读到结尾还要再要一次；《拜托》1759 个文件光这一项 3–4 秒，按文件大小读 0.4 秒。
+        buffer = memoryview(bytearray(min(before.st_size + 1, HASH_CHUNK_BYTES)))
+        with path.open("rb", buffering=0) as handle:
+            while count := handle.readinto(buffer):
+                bytes_read += count
                 if max_bytes is not None and bytes_read > max_bytes:
                     raise ProjectScanLimitError(
                         f"project scan exceeds its remaining {max_bytes} byte budget: {path}"
                     )
-                digest.update(block)
+                digest.update(buffer[:count])
         after = path.stat()
     except OSError as exc:
         raise ProjectReaderError(f"cannot read project file: {path}") from exc
@@ -309,8 +432,10 @@ def _read_stable_file_limited(path: Path, max_bytes: int) -> bytes:
             raise ProjectScanLimitError(
                 f"text file exceeds the {max_bytes} byte read limit: {path}"
             )
+        # 按文件实际大小多读一个字节（上面已确认不超上限）：以前每读一个文件都先要 max_bytes（8MB）内存。
+        # 读的过程中文件变长了，下面前后两次状态对不上会报出来。
         with path.open("rb") as handle:
-            content = handle.read(max_bytes + 1)
+            content = handle.read(before.st_size + 1)
         after = path.stat()
     except ProjectReaderError:
         raise
@@ -352,26 +477,31 @@ def _verify_snapshot_manifest(
     directories: Iterable[str],
     *,
     max_files: int,
+    skipped_files: frozenset[str] = frozenset(),
 ) -> None:
     expected_files = {item.relative_path for item in files}
     expected_directories = set(directories)
     actual_files: set[str] = set()
     actual_directories: set[str] = set()
 
+    # 第二遍只比名单：文件夹照旧逐个核「不是链接、还在书里」（文件夹不多）；
+    # 文件只记名字——扫描时每个文件都核过，最后的逐个 stat 核对（大小、时间、身份）
+    # 也会发现「扫完之后被换成了链接」，这里不用再为每个文件解析一遍真实路径。
     for current_raw, dir_names, file_names in os.walk(root, followlinks=False):
         current = Path(current_raw)
-        if len(current.relative_to(root).parts) > MAX_SCAN_DEPTH:
+        current_relative = current.relative_to(root)
+        if len(current_relative.parts) > MAX_SCAN_DEPTH:
             raise ProjectScanLimitError(
                 f"project scan exceeds the {MAX_SCAN_DEPTH} directory depth limit: {current}"
             )
+        prefix = current_relative.as_posix() + "/" if current_relative.parts else ""
         safe_directories: list[str] = []
         for name in sorted(dir_names, key=str.casefold):
             candidate = current / name
+            if skip_scan_directory(name):
+                continue
             if _is_link_or_reparse(candidate):
-                raise ProjectChangedDuringReadError(
-                    f"project link state changed before snapshot completion: {candidate}"
-                )
-            if name.casefold() in EXCLUDED_DIRECTORIES:
+                # 第一遍也跳过了它（没算进 directories）；要是两遍之间才变成链接，下面名单对不上会报「变了」。
                 continue
             resolved = candidate.resolve(strict=True)
             if not _is_within(resolved, root):
@@ -386,24 +516,14 @@ def _verify_snapshot_manifest(
                 )
         dir_names[:] = safe_directories
 
-        for name in sorted(file_names, key=str.casefold):
-            candidate = current / name
-            if _is_link_or_reparse(candidate):
-                raise ProjectChangedDuringReadError(
-                    f"project link state changed before snapshot completion: {candidate}"
-                )
-            resolved = candidate.resolve(strict=True)
-            if not resolved.is_file() or not _is_within(resolved, root):
-                raise UntrustedProjectPathError(
-                    f"project file escapes the trusted project root: {candidate}"
-                )
-            actual_files.add(resolved.relative_to(root).as_posix())
+        for name in file_names:
+            actual_files.add(prefix + name)
             if len(actual_files) > max_files:
                 raise ProjectScanLimitError(
                     f"project scan exceeds the {max_files} file limit: {root}"
                 )
 
-    if actual_files != expected_files or actual_directories != expected_directories:
+    if actual_files - skipped_files != expected_files or actual_directories != expected_directories:
         raise ProjectChangedDuringReadError(
             "project directory entries changed before snapshot completion"
         )
@@ -489,8 +609,53 @@ def _contains_marker(value: str, markers: Iterable[str]) -> bool:
     return any(marker.casefold() in folded for marker in markers)
 
 
+MACHINE_COMPANION_MARKERS: Final = (
+    # 带章号却不是正文的机器伴生文件：控制卡、审稿 / 检测 / 体检报告、AI 味与
+    # 干净度 json 的 md 副本、受管链的交接包与状态文件。全是英文机器词或
+    # 完整的中文报告名，作者给章节起名撞不上它们。
+    *CONTROL_MARKERS,
+    "ai_smell",
+    "cleanliness",
+    "report",
+    "audit",
+    "writeback",
+    "handoff",
+    "operation_package",
+    "operation-package",
+    "prewrite",
+    "scaffold",
+    "route_health",
+    "readiness",
+    "call_list",
+    "审稿报告",
+    "检测报告",
+    "体检报告",
+    "审稿意见",
+)
+
+
+def _prose_stem(stem: str) -> bool:
+    return _contains_marker(stem, PROSE_MARKERS) or any(
+        pattern.fullmatch(stem) for pattern in CHAPTER_PROSE_STEM_PATTERNS
+    )
+
+
 def _file_kind(relative_path: str, section_index: int | None, chapter: int | None) -> str:
     suffix = Path(relative_path).suffix.casefold()
+    stem = Path(relative_path).stem
+    # 带章号的文本文件先按正文判。作者的章名可以叫「交接」「健康的代价」
+    # 「门禁之夜」「上下文」——以前受管链的五组关键词先于章号匹配整条路径，
+    # 这些章要么读不到、要么不算正文（2026-09-22 审阅 A0 §1.1）。
+    # 只有名字里带机器伴生标记（控制卡、审稿报告、ai_smell…）的才不算正文。
+    if (
+        section_index in {None, 5}
+        and chapter is not None
+        and suffix in TEXT_SUFFIXES
+        and not _contains_marker(stem, NON_PROSE_MARKERS)
+        and not _contains_marker(stem, MACHINE_COMPANION_MARKERS)
+        and _prose_stem(stem)
+    ):
+        return "prose"
     if _contains_marker(relative_path, CONTROL_MARKERS):
         return "control"
     if _contains_marker(relative_path, HANDOFF_MARKERS):
@@ -503,13 +668,10 @@ def _file_kind(relative_path: str, section_index: int | None, chapter: int | Non
         return "status"
     if suffix in STRUCTURED_SUFFIXES:
         return "structured_state"
-    if section_index == 5 and chapter is not None and suffix in TEXT_SUFFIXES:
+    if section_index in {None, 5} and chapter is not None and suffix in TEXT_SUFFIXES:
         if _contains_marker(relative_path, NON_PROSE_MARKERS):
             return "document"
-        stem = Path(relative_path).stem
-        if _contains_marker(stem, PROSE_MARKERS) or any(
-            pattern.fullmatch(stem) for pattern in CHAPTER_PROSE_STEM_PATTERNS
-        ):
+        if _prose_stem(stem):
             return "prose"
     if suffix in TEXT_SUFFIXES:
         return "document"
@@ -517,7 +679,7 @@ def _file_kind(relative_path: str, section_index: int | None, chapter: int | Non
 
 
 def classify_project_file_kind(relative_path: str) -> str:
-    """Classify an existing or proposed portable 01-09 project path.
+    """Classify an existing or proposed project path.
 
     ChangeSet creation uses this public helper for files that do not exist in a
     Project Reader snapshot yet. Keeping the path rules here prevents writeback
@@ -531,11 +693,83 @@ def classify_project_file_kind(relative_path: str) -> str:
     chapter_number = _number_from_path(
         relative_path, _chapter_number, CHAPTER_STEM_NUMBER_PATTERN
     )
+    if chapter_number is not None and is_non_truth_project_path(relative_path):
+        # 标着「勿作为真值 / 嵌套项目副本」的夹子是旧稿副本：续写、检查、搜索早就跳过它，
+        # 目录和列文件也别把里面的旧章当正文（2026-09-25 真机：宗门旧归档夹的第 1–3 章排在正文最前面）。
+        chapter_number = None
+    if (
+        chapter_number is not None
+        and len(path.parts) == 1
+        and _chapter_number(path.stem) is None
+        and _root_stem_is_not_a_chapter(path.stem, chapter_number)
+    ):
+        # 书根目录下只靠开头数字的文件：`00_项目总览.md`、`00_标准化迁移说明.md` 是总览和说明，
+        # 不是第 0 章（2026-09-25 真机：目录里冒出「第 000 章 标准化迁移说明」）。根目录的章要么带
+        # 「第 N 章 / CH」这类明确标记，要么是 `001_开篇.md` 这种三位以上的章号。
+        chapter_number = None
     return _file_kind(relative_path, section_index, chapter_number)
 
 
+def _root_stem_is_not_a_chapter(stem: str, chapter_number: int) -> bool:
+    digits = re.match(r"\d+", stem)
+    return chapter_number == 0 or digits is None or len(digits.group(0)) < 3
+
+
+DEFAULT_PROSE_SECTION: Final = "05_正文内容"
+
+
+def prose_directories(project_root: Path) -> list[Path]:
+    """这本书里放正文的夹子，可能有不止一个。
+
+    以前检查、续写、AI 味基线四处写死 `05_正文内容`：作者把夹子改了名，
+    这几处一起静默查空——不报错，只是「一章都没有」。这里统一按
+    默认夹子 → 同号 `05_*` → 名字带正文/初稿/draft 的夹子 → 整本书退让。
+    **默认摆法的书行为一字不变**（第一条就命中）。
+    """
+    root = Path(project_root)
+    default = root / DEFAULT_PROSE_SECTION
+    if default.is_dir():
+        return [default]
+    if not root.is_dir():
+        return []
+    excluded = {name.casefold() for name in EXCLUDED_DIRECTORIES}
+    named: list[Path] = []
+    for entry in sorted(root.iterdir(), key=lambda item: item.name.casefold()):
+        if not entry.is_dir() or entry.name.casefold() in excluded:
+            continue
+        if is_non_truth_project_path(entry.name):
+            continue
+        match = SECTION_PATTERN.match(entry.name)
+        if match is not None:
+            # 别的 0N_ 分区是作者自己标了号的非正文资料，不算正文。
+            if match.group(1) == "5":
+                named.append(entry)
+            continue
+        folded = entry.name.casefold()
+        if any(marker.casefold() in folded for marker in PROSE_MARKERS):
+            named.append(entry)
+    if named:
+        return named
+    # 一个像正文的夹子都没有：章可能直接摆在书根或卷目录下，整本书交给
+    # 文件分类器判断（它只认带章号的文本文件，docx/epub 导出档不算）。
+    return [root]
+
+
+def in_numbered_non_prose_section(relative_path: str) -> bool:
+    """作者自己标了 `0N_` 号、又不在 05_ 里的分区绝不是正文。
+
+    只在整本书兜底扫描时用：`04_剧情大纲/第12章_细纲.md` 带着章号，
+    不挡就会被当成第十二章的正文去查节奏和设定。
+    """
+    parts = relative_path.replace("\\", "/").split("/")
+    if not parts or not parts[0]:
+        return False
+    match = SECTION_PATTERN.match(parts[0])
+    return match is not None and match.group(1) != "5"
+
+
 class ProjectReader:
-    """Inspect explicitly trusted 01-09 projects without writing project state."""
+    """Inspect explicitly trusted project folders without writing project state."""
 
     def __init__(
         self,
@@ -558,6 +792,26 @@ class ProjectReader:
         self.max_bytes = max_bytes
         self._revisions: dict[str, _RevisionState] = {}
         self._revision_lock = threading.Lock()
+        # Agent 每调一次工具都要把整本书扫一遍核对版本；书多半没变。
+        # 按书记住每个文件上次的哈希（状态没变就不再读内容），按路径记住分类结果（只看路径）。
+        self._hash_memo: dict[str, dict[str, _HashMemo]] = {}
+        self._path_facts: dict[str, tuple[int | None, int | None, str]] = {}
+        self._memo_lock = threading.Lock()
+
+    def trust_root(self, raw_root: str | os.PathLike[str]) -> Path:
+        """Dynamically allow a project directory if it was bound by the author."""
+        candidate = Path(raw_root).expanduser().resolve(strict=False)
+        if not any(_is_within(candidate, r) for r in self.trusted_roots):
+            self.trusted_roots = self.trusted_roots + (candidate,)
+        return candidate
+
+    def untrust_root(self, raw_root: str | os.PathLike[str]) -> Path:
+        """设置页移除一个可信文件夹：当场失效（重启后由持久化清单保证不再回来）。"""
+        candidate = Path(raw_root).expanduser().resolve(strict=False)
+        self.trusted_roots = tuple(
+            root for root in self.trusted_roots if root != candidate
+        )
+        return candidate
 
     def resolve(self, raw_root: str | os.PathLike[str]) -> Path:
         candidate = Path(raw_root).expanduser()
@@ -577,10 +831,36 @@ class ProjectReader:
             )
         return resolved
 
-    def _walk(self, root: Path) -> tuple[list[_ScannedFile], list[str]]:
+    def _walk(
+        self,
+        root: Path,
+        progress: Callable[[int, int], None] | None = None,
+    ) -> tuple[list[_ScannedFile], list[str]]:
         scanned: list[_ScannedFile] = []
         directories: list[str] = []
         total_bytes = 0
+        memo_key = os.path.normcase(str(root))
+        with self._memo_lock:
+            previous = self._hash_memo.get(memo_key, {})
+        fresh: dict[str, _HashMemo] = {}
+
+        # 大书导入要有真实进度：先快速数一遍文件总数（只列目录，不读内容），
+        # 哈希阶段每若干个文件回报一次 done/total。
+        total_hint = 0
+        if progress is not None:
+            for _current, hint_dirs, file_names in os.walk(root, followlinks=False):
+                hint_dirs[:] = [name for name in hint_dirs if not skip_scan_directory(name)]
+                total_hint += len(file_names)
+            progress(0, total_hint)
+        # 链接文件、不是普通文件的那几项：不进快照；第二遍核名单时要减掉它们。
+        skipped_files: set[str] = set()
+
+        hashed = 0
+
+        def report() -> None:
+            nonlocal hashed
+            if progress is not None and (hashed == 1 or hashed % 25 == 0):
+                progress(hashed, max(total_hint, hashed))
 
         for current_raw, dir_names, file_names in os.walk(root, followlinks=False):
             current = Path(current_raw)
@@ -589,13 +869,16 @@ class ProjectReader:
                 raise ProjectScanLimitError(
                     f"project scan exceeds the {MAX_SCAN_DEPTH} directory depth limit: {current}"
                 )
+            prefix = current_relative.as_posix() + "/" if current_relative.parts else ""
             safe_directories: list[str] = []
             for name in sorted(dir_names, key=str.casefold):
                 candidate = current / name
+                if skip_scan_directory(name):
+                    continue
                 if _is_link_or_reparse(candidate):
-                    raise UntrustedProjectPathError(
-                        f"links and junctions are not allowed in a project scan: {candidate}"
-                    )
+                    # 链接 / 联接点指向别处：不跟进去、不算进这个项目（以前整个扫描直接失败，
+                    # 「文档」这类带系统联接点的文件夹就打不开）。外面的东西照样一个字都不读。
+                    continue
                 try:
                     resolved = candidate.resolve(strict=True)
                 except OSError as exc:
@@ -604,8 +887,6 @@ class ProjectReader:
                     raise UntrustedProjectPathError(
                         f"project directory escapes the trusted project root: {candidate}"
                     )
-                if name.casefold() in EXCLUDED_DIRECTORIES:
-                    continue
                 safe_directories.append(name)
                 directories.append(resolved.relative_to(root).as_posix())
                 if len(directories) > MAX_SCAN_DIRECTORIES:
@@ -614,42 +895,45 @@ class ProjectReader:
                     )
             dir_names[:] = safe_directories
 
+            # 文件只做一次 lstat：是不是链接 / 重解析点、是不是普通文件、多大，都从这一次里看。
+            # 所在的每一级文件夹上面已经逐个核过「不是链接、还在书里」，所以普通文件
+            # 一定在书里，不用再为每个文件解析一遍真实路径（Windows 上每次解析要开两回句柄，
+            # 九百多章的书光这一项就几秒）。
             for name in sorted(file_names, key=str.casefold):
                 candidate = current / name
-                if _is_link_or_reparse(candidate):
-                    raise UntrustedProjectPathError(
-                        f"links and junctions are not allowed in a project scan: {candidate}"
-                    )
                 try:
-                    resolved = candidate.resolve(strict=True)
+                    info = os.lstat(candidate)
                 except OSError as exc:
-                    raise ProjectReaderError(f"cannot resolve project file: {candidate}") from exc
-                if not resolved.is_file() or not _is_within(resolved, root):
-                    raise UntrustedProjectPathError(
-                        f"project file escapes the trusted project root: {candidate}"
-                    )
+                    raise ProjectReaderError(f"cannot inspect path metadata: {candidate}") from exc
+                if _file_is_link_or_reparse(info) or not stat_module.S_ISREG(info.st_mode):
+                    # 链接文件 / 不是普通文件：不进快照、不读内容（以前整个扫描失败）。
+                    skipped_files.add(prefix + name)
+                    continue
                 if len(scanned) >= self.max_files:
                     raise ProjectScanLimitError(
                         f"project scan exceeds the {self.max_files} file limit: {root}"
                     )
-                relative_path = resolved.relative_to(root).as_posix()
-                try:
-                    candidate_size = resolved.stat().st_size
-                except OSError as exc:
-                    raise ProjectReaderError(
-                        f"cannot inspect project file size: {resolved}"
-                    ) from exc
-                if total_bytes + candidate_size > self.max_bytes:
+                if total_bytes + info.st_size > self.max_bytes:
                     raise ProjectScanLimitError(
                         f"project scan exceeds the {self.max_bytes} byte limit: {root}"
                     )
-                item = _hash_stable_file(
-                    resolved,
-                    relative_path,
-                    max_bytes=self.max_bytes - total_bytes,
-                )
+                relative_path = prefix + name
+                remembered = previous.get(relative_path)
+                if remembered is not None and remembered.still_matches(info):
+                    item = replace(remembered.item, path=candidate)
+                    fresh[relative_path] = remembered
+                else:
+                    item = _hash_stable_file(
+                        candidate,
+                        relative_path,
+                        max_bytes=self.max_bytes - total_bytes,
+                        before=info,
+                    )
+                    fresh[relative_path] = _HashMemo.remember(item, info, time.time_ns())
                 total_bytes += item.size_bytes
                 scanned.append(item)
+                hashed += 1
+                report()
 
         _verify_snapshot_metadata(scanned)
         _verify_snapshot_manifest(
@@ -657,7 +941,11 @@ class ProjectReader:
             scanned,
             directories,
             max_files=self.max_files,
+            skipped_files=frozenset(skipped_files),
         )
+        # 整次扫描核对通过才记下；中途出错的那次不留。
+        with self._memo_lock:
+            self._hash_memo[memo_key] = fresh
         return scanned, sorted(directories, key=str.casefold)
 
     def _next_revision(self, project_id: str, fingerprint: str) -> int:
@@ -672,9 +960,33 @@ class ProjectReader:
             self._revisions[project_id] = _RevisionState(fingerprint, revision)
             return revision
 
-    def inspect(self, raw_root: str | os.PathLike[str]) -> dict[str, object]:
+    def inspect(
+        self,
+        raw_root: str | os.PathLike[str],
+        progress: Callable[[int, int], None] | None = None,
+    ) -> dict[str, object]:
         root = self.resolve(raw_root)
-        scanned, directories = self._walk(root)
+        scanned, directories = self._walk(root, progress)
+
+        creation_mode = "manual"
+        for item in scanned:
+            # 老书看 01_项目定位/01_项目卡片.md，新书（2026-09-24 起）看书根《这本书.md》。
+            if item.relative_path.replace("\\", "/") not in {
+                "01_项目定位/01_项目卡片.md",
+                "这本书.md",
+            }:
+                continue
+            if item.size_bytes > 256 * 1024:
+                break
+            try:
+                project_card = item.path.read_text(encoding="utf-8")
+            except (OSError, UnicodeError):
+                break
+            if "## 现在的想法" in project_card and (
+                "## 已经确定的内容" in project_card or "## 已经定下的事" in project_card
+            ):
+                creation_mode = "agent"
+            break
 
         section_paths: dict[int, str] = {}
         for directory in directories:
@@ -683,8 +995,6 @@ class ProjectReader:
             match = SECTION_PATTERN.match(directory)
             if match:
                 section_paths.setdefault(int(match.group(1)), directory)
-        if not section_paths:
-            raise InvalidNovelProjectError(f"no 01-09 section directories found: {root}")
 
         project_id = _stable_project_id(root)
         hardlinks = [item.path for item in scanned if item.link_count > 1]
@@ -695,15 +1005,21 @@ class ProjectReader:
             )
         files: list[dict[str, object]] = []
         for item in scanned:
-            first_part = Path(item.relative_path).parts[0]
+            first_part = item.relative_path.split("/", 1)[0]
             section_index = next(
                 (index for index, path in section_paths.items() if path == first_part),
                 None,
             )
-            chapter_number = _number_from_path(
-                item.relative_path, _chapter_number, CHAPTER_STEM_NUMBER_PATTERN
-            )
-            volume_number = _number_from_path(item.relative_path, _volume_number)
+            facts = self._path_facts.get(item.relative_path)
+            if facts is None:
+                facts = (
+                    _number_from_path(item.relative_path, _chapter_number, CHAPTER_STEM_NUMBER_PATTERN),
+                    _number_from_path(item.relative_path, _volume_number),
+                    classify_project_file_kind(item.relative_path),
+                )
+                if len(self._path_facts) < MAX_REMEMBERED_PATHS:
+                    self._path_facts[item.relative_path] = facts
+            chapter_number, volume_number, kind = facts
             file_id = _stable_file_id(project_id, item)
             files.append(
                 {
@@ -713,7 +1029,7 @@ class ProjectReader:
                     "section_index": section_index,
                     "chapter_id": (
                         _canonical_chapter_id(chapter_number, volume_number)
-                        if chapter_number is not None
+                        if chapter_number is not None and (section_index == 5 or kind == "prose")
                         else None
                     ),
                     "volume_id": (
@@ -721,7 +1037,7 @@ class ProjectReader:
                         if volume_number is not None
                         else None
                     ),
-                    "kind": classify_project_file_kind(item.relative_path),
+                    "kind": kind,
                     "size_bytes": item.size_bytes,
                     "sha256": item.sha256,
                 }
@@ -786,7 +1102,10 @@ class ProjectReader:
             }
             for index, label in SECTION_LABELS.items()
         ]
-        missing_sections = [index for index in SECTION_LABELS if index not in section_paths]
+        missing_sections = (
+            [index for index in SECTION_LABELS if index not in section_paths]
+            if section_paths else []
+        )
         fingerprint_payload = {
             "schema": READER_SCHEMA,
             "project_id": project_id,
@@ -825,7 +1144,8 @@ class ProjectReader:
                 "project_id": project_id,
                 "display_name": root.name,
                 "root_path": str(root),
-                "format": "01-09",
+                "format": "01-09" if section_paths else "folder",
+                "creation_mode": creation_mode,
                 "revision": revision,
                 "fingerprint": fingerprint,
             },
@@ -846,7 +1166,7 @@ class ProjectReader:
         return self.read_text_file_from_snapshot(
             snapshot,
             file_id,
-            allowed_kinds=PUBLIC_TEXT_FILE_KINDS,
+            allowed_kinds=PROJECT_FILE_KINDS,
         )
 
     def read_text_file_from_snapshot(
@@ -856,7 +1176,7 @@ class ProjectReader:
         *,
         allowed_kinds: Iterable[str],
     ) -> dict[str, object]:
-        """Read one UTF-8 file without rescanning an already inspected project."""
+        """Read a text file without rescanning an already inspected project."""
         allowed = frozenset(allowed_kinds)
         if not allowed:
             raise ValueError("allowed_kinds must contain at least one project file kind")
@@ -924,9 +1244,10 @@ class ProjectReader:
         ):
             raise ProjectReaderError(f"invalid file record in inspection snapshot: {file_id}")
         size_bytes = size_value
-        if size_bytes > MAX_TEXT_FILE_BYTES:
+        read_limit = MAX_ARCHIVE_BYTES if Path(relative_value).suffix.lower() in OFFICE_SUFFIXES else MAX_TEXT_FILE_BYTES
+        if size_bytes > read_limit:
             raise ProjectScanLimitError(
-                f"text file exceeds the {MAX_TEXT_FILE_BYTES} byte read limit: {file_id}"
+                f"file exceeds the {read_limit} byte read limit: {file_id}"
             )
 
         relative_path = Path(relative_value)
@@ -960,7 +1281,7 @@ class ProjectReader:
                 raise UntrustedProjectPathError(
                     f"project file became a hardlink after inspection: {path}"
                 )
-            content_bytes = _read_stable_file_limited(resolved, MAX_TEXT_FILE_BYTES)
+            content_bytes = _read_stable_file_limited(resolved, read_limit)
             if int(getattr(resolved.stat(), "st_nlink", 1)) > 1:
                 raise UntrustedProjectPathError(
                     f"project file became a hardlink while reading: {path}"
@@ -970,12 +1291,25 @@ class ProjectReader:
         digest = hashlib.sha256(content_bytes).hexdigest()
         if len(content_bytes) != size_bytes or digest != expected_sha256:
             raise ProjectChangedDuringReadError(f"project file changed after snapshot: {path}")
+        # File kinds describe the old writing workspace; a source/configuration
+        # file can have kind=asset or structured_state and still be plain text.
+        # Inspect bytes rather than maintaining a second extension allowlist.
+        extraction = None
         try:
-            content = content_bytes.decode("utf-8-sig")
+            if path.suffix.lower() in OFFICE_SUFFIXES:
+                extracted = extract_office_bytes(content_bytes, path.suffix)
+                content = extracted.extracted_text
+                extraction = extraction_receipt(extracted)
+            else:
+                content, _, _ = decode_project_text(content_bytes)
+        except OfficeError as exc:
+            raise UnreadableProjectFileError(str(exc)) from exc
         except UnicodeDecodeError as exc:
             raise UnreadableProjectFileError(
-                f"project text file is not UTF-8: {path}"
+                f"file is not readable text (UTF-8 or Unicode with a byte-order mark): {path}"
             ) from exc
+        except ValueError as exc:
+            raise UnreadableProjectFileError(f"{exc}: {path}") from exc
 
         return {
             "schema": "zhimeng.project-file-content.v1",
@@ -986,4 +1320,5 @@ class ProjectReader:
             "file": dict(file_record),
             "etag": digest,
             "content": content,
+            **({"extraction": extraction} if extraction else {}),
         }

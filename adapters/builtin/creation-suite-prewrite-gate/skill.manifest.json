@@ -4,7 +4,7 @@
   "display_name": "Creation Suite Prewrite Gate",
   "description": "Deterministic prewrite boundary over one immutable Runtime operation package and the prior managed project-audit receipt; v1 never authorizes formal prose.",
   "kind": "deterministic_tool",
-  "version": "2026.07.20-m3e.1",
+  "version": "2026.07.20-m3e.2",
   "source": {
     "type": "builtin_managed",
     "reference": "PROVENANCE.md",

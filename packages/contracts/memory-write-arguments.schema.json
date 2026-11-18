@@ -1,0 +1,50 @@
+{
+  "additionalProperties": false,
+  "description": "Change one entry in user memory or the open folder's AGENTS.md.",
+  "properties": {
+    "action": {
+      "default": "add",
+      "enum": [
+        "add",
+        "replace",
+        "remove"
+      ],
+      "title": "Action",
+      "type": "string"
+    },
+    "text": {
+      "default": "",
+      "maxLength": 500,
+      "title": "Text",
+      "type": "string"
+    },
+    "old_text": {
+      "anyOf": [
+        {
+          "maxLength": 2000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Old Text"
+    },
+    "scope": {
+      "enum": [
+        "user",
+        "project"
+      ],
+      "title": "Scope",
+      "type": "string"
+    }
+  },
+  "required": [
+    "scope"
+  ],
+  "title": "MemoryWriteArguments",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/memory-write-arguments.schema.json"
+}

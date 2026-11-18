@@ -1,0 +1,917 @@
+{
+  "$defs": {
+    "AgentImage": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "exclusiveMinimum": 0,
+          "title": "Height",
+          "type": "integer"
+        },
+        "image_id": {
+          "title": "Image Id",
+          "type": "string"
+        },
+        "mime_type": {
+          "title": "Mime Type",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "width": {
+          "exclusiveMinimum": 0,
+          "title": "Width",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "image_id",
+        "name",
+        "mime_type",
+        "width",
+        "height",
+        "url"
+      ],
+      "title": "AgentImage",
+      "type": "object"
+    },
+    "AgentMessageResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "minLength": 1,
+          "title": "Content",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "format": {
+          "enum": [
+            "plain",
+            "markdown"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "images": {
+          "items": {
+            "$ref": "#/$defs/AgentImage"
+          },
+          "title": "Images",
+          "type": "array"
+        },
+        "message_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Message Id",
+          "type": "string"
+        },
+        "ordinal": {
+          "minimum": 1,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "role": {
+          "enum": [
+            "system",
+            "user",
+            "assistant",
+            "tool"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "run_usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunUsage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "schema": {
+          "const": "zhimeng.agent-message.v1",
+          "default": "zhimeng.agent-message.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usage"
+        }
+      },
+      "required": [
+        "message_id",
+        "session_id",
+        "run_id",
+        "ordinal",
+        "role",
+        "format",
+        "content",
+        "created_at"
+      ],
+      "title": "AgentMessageResponse",
+      "type": "object"
+    },
+    "AgentRunCreateResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "replayed": {
+          "default": false,
+          "title": "Replayed",
+          "type": "boolean"
+        },
+        "run": {
+          "$ref": "#/$defs/Run"
+        },
+        "schema": {
+          "const": "zhimeng.agent-run-create.v1",
+          "default": "zhimeng.agent-run-create.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "user_message": {
+          "$ref": "#/$defs/AgentMessageResponse"
+        }
+      },
+      "required": [
+        "run",
+        "user_message"
+      ],
+      "title": "AgentRunCreateResponse",
+      "type": "object"
+    },
+    "CapabilityExtension": {
+      "additionalProperties": false,
+      "properties": {
+        "config": {
+          "$ref": "#/$defs/JsonValue"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Version"
+        }
+      },
+      "required": [
+        "version",
+        "config"
+      ],
+      "title": "CapabilityExtension",
+      "type": "object"
+    },
+    "CapabilityName": {
+      "enum": [
+        "streaming",
+        "cancel",
+        "resume",
+        "checkpoints",
+        "tool_calls",
+        "file_read",
+        "file_write",
+        "shell",
+        "mcp",
+        "skills",
+        "subagents",
+        "compaction",
+        "approvals",
+        "artifacts"
+      ],
+      "title": "CapabilityName",
+      "type": "string"
+    },
+    "CapabilityProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "extensions": {
+          "patternProperties": {
+            "^x-[a-z0-9][a-z0-9._/-]*$": {
+              "$ref": "#/$defs/CapabilityExtension"
+            }
+          },
+          "propertyNames": {
+            "maxLength": 128,
+            "minLength": 3
+          },
+          "title": "Extensions",
+          "type": "object"
+        },
+        "names": {
+          "items": {
+            "$ref": "#/$defs/CapabilityName"
+          },
+          "title": "Names",
+          "type": "array"
+        },
+        "protocol_version": {
+          "minLength": 1,
+          "title": "Protocol Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "protocol_version",
+        "names",
+        "extensions"
+      ],
+      "title": "CapabilityProfile",
+      "type": "object"
+    },
+    "ErrorDetail": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "details": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Details"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "request_id": {
+          "title": "Request Id",
+          "type": "string"
+        },
+        "retryable": {
+          "title": "Retryable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "request_id",
+        "retryable"
+      ],
+      "title": "ErrorDetail",
+      "type": "object"
+    },
+    "ErrorEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/ErrorDetail"
+        },
+        "schema": {
+          "const": "zhimeng.error.v1",
+          "default": "zhimeng.error.v1",
+          "title": "Schema",
+          "type": "string"
+        }
+      },
+      "required": [
+        "error"
+      ],
+      "title": "ErrorEnvelope",
+      "type": "object"
+    },
+    "ExecutorIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "executor_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Executor Id",
+          "type": "string"
+        },
+        "implementation": {
+          "minLength": 1,
+          "title": "Implementation",
+          "type": "string"
+        },
+        "instance_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Instance Id"
+        },
+        "kind": {
+          "$ref": "#/$defs/ExecutorKind"
+        },
+        "protocol_version": {
+          "minLength": 1,
+          "title": "Protocol Version",
+          "type": "string"
+        },
+        "version": {
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "executor_id",
+        "kind",
+        "implementation",
+        "version",
+        "protocol_version",
+        "instance_id"
+      ],
+      "title": "ExecutorIdentity",
+      "type": "object"
+    },
+    "ExecutorKind": {
+      "enum": [
+        "embedded",
+        "process",
+        "remote"
+      ],
+      "title": "ExecutorKind",
+      "type": "string"
+    },
+    "JsonValue": {},
+    "MessageUsage": {
+      "additionalProperties": false,
+      "properties": {
+        "cached_input_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cached Input Tokens"
+        },
+        "cached_input_tokens_complete": {
+          "default": true,
+          "title": "Cached Input Tokens Complete",
+          "type": "boolean"
+        },
+        "input_tokens": {
+          "minimum": 0,
+          "title": "Input Tokens",
+          "type": "integer"
+        },
+        "input_tokens_reported": {
+          "default": true,
+          "title": "Input Tokens Reported",
+          "type": "boolean"
+        },
+        "output_tokens": {
+          "minimum": 0,
+          "title": "Output Tokens",
+          "type": "integer"
+        },
+        "output_tokens_reported": {
+          "default": true,
+          "title": "Output Tokens Reported",
+          "type": "boolean"
+        },
+        "total_tokens": {
+          "minimum": 0,
+          "title": "Total Tokens",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "input_tokens",
+        "output_tokens",
+        "total_tokens"
+      ],
+      "title": "MessageUsage",
+      "type": "object"
+    },
+    "ProjectRevision": {
+      "additionalProperties": false,
+      "properties": {
+        "fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fingerprint",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "project_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "project_id",
+        "revision",
+        "fingerprint",
+        "observed_at"
+      ],
+      "title": "ProjectRevision",
+      "type": "object"
+    },
+    "QueueItem": {
+      "additionalProperties": false,
+      "properties": {
+        "delivery": {
+          "default": "queued",
+          "enum": [
+            "queued",
+            "steer_pending"
+          ],
+          "title": "Delivery",
+          "type": "string"
+        },
+        "image_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Image Ids",
+          "type": "array"
+        },
+        "item_id": {
+          "pattern": "^[a-zA-Z0-9-]{8,64}$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "manual_file_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Manual File Ids",
+          "type": "array"
+        },
+        "manual_skill_names": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Manual Skill Names",
+          "type": "array"
+        },
+        "message": {
+          "default": "",
+          "maxLength": 100000,
+          "title": "Message",
+          "type": "string"
+        },
+        "open_file_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Open File Path"
+        },
+        "project_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Id"
+        },
+        "sending": {
+          "default": false,
+          "title": "Sending",
+          "type": "boolean"
+        },
+        "steering_run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Steering Run Id"
+        },
+        "writer_mode": {
+          "default": "repair_only",
+          "enum": [
+            "repair_only",
+            "author_review_change_proposal"
+          ],
+          "title": "Writer Mode",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id"
+      ],
+      "title": "QueueItem",
+      "type": "object"
+    },
+    "QueueState": {
+      "properties": {
+        "active_run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Active Run Id"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/QueueItem"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "pause_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "user",
+                "failed",
+                "cancelled",
+                "interrupted",
+                "send_failed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pause Reason"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "integer"
+        },
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "session_id",
+        "revision"
+      ],
+      "title": "QueueState",
+      "type": "object"
+    },
+    "Run": {
+      "additionalProperties": false,
+      "properties": {
+        "capabilities": {
+          "$ref": "#/$defs/CapabilityProfile"
+        },
+        "causation_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Causation Id"
+        },
+        "checkpoint_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Checkpoint Id"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Completed At"
+        },
+        "correlation_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorEnvelope"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "executor": {
+          "$ref": "#/$defs/ExecutorIdentity"
+        },
+        "last_activity_sequence": {
+          "minimum": 0,
+          "title": "Last Activity Sequence",
+          "type": "integer"
+        },
+        "objective": {
+          "minLength": 1,
+          "title": "Objective",
+          "type": "string"
+        },
+        "ordinal": {
+          "minimum": 1,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "origin_kind": {
+          "default": "user",
+          "enum": [
+            "user",
+            "command_completion"
+          ],
+          "title": "Origin Kind",
+          "type": "string"
+        },
+        "project_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProjectRevision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "schema": {
+          "const": "zhimeng.execution-run.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Started At"
+        },
+        "status": {
+          "$ref": "#/$defs/RunStatus"
+        },
+        "stop_generation": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Stop Generation",
+          "type": "integer"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema",
+        "run_id",
+        "session_id",
+        "ordinal",
+        "status",
+        "objective",
+        "created_at",
+        "updated_at",
+        "started_at",
+        "completed_at",
+        "executor",
+        "capabilities",
+        "project_revision",
+        "correlation_id",
+        "causation_id",
+        "last_activity_sequence",
+        "checkpoint_id",
+        "error"
+      ],
+      "title": "Run",
+      "type": "object"
+    },
+    "RunStatus": {
+      "enum": [
+        "queued",
+        "starting",
+        "running",
+        "awaiting_approval",
+        "paused",
+        "cancelling",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "interrupted"
+      ],
+      "title": "RunStatus",
+      "type": "string"
+    },
+    "RunUsage": {
+      "additionalProperties": false,
+      "properties": {
+        "compaction": {
+          "$ref": "#/$defs/UsageGroup"
+        },
+        "main": {
+          "$ref": "#/$defs/UsageGroup"
+        },
+        "scope": {
+          "const": "main_and_tool_compaction",
+          "default": "main_and_tool_compaction",
+          "title": "Scope",
+          "type": "string"
+        },
+        "total": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MessageUsage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "main",
+        "compaction",
+        "total"
+      ],
+      "title": "RunUsage",
+      "type": "object"
+    },
+    "UsageGroup": {
+      "additionalProperties": false,
+      "properties": {
+        "completed": {
+          "minimum": 0,
+          "title": "Completed",
+          "type": "integer"
+        },
+        "requests": {
+          "minimum": 0,
+          "title": "Requests",
+          "type": "integer"
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MessageUsage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "requests",
+        "completed",
+        "usage"
+      ],
+      "title": "UsageGroup",
+      "type": "object"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/agent-queue-dispatch.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "accepted": {
+      "$ref": "#/$defs/AgentRunCreateResponse"
+    },
+    "queue": {
+      "$ref": "#/$defs/QueueState"
+    }
+  },
+  "required": [
+    "queue",
+    "accepted"
+  ],
+  "title": "QueueDispatchResponse",
+  "type": "object"
+}

@@ -1,0 +1,22 @@
+{
+  "$id": "https://zhimeng.local/contracts/session-goal-end-request.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "expected_revision": {
+      "minimum": 1,
+      "title": "Expected Revision",
+      "type": "integer"
+    },
+    "goal_id": {
+      "title": "Goal Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "goal_id",
+    "expected_revision"
+  ],
+  "title": "GoalEndRequest",
+  "type": "object"
+}

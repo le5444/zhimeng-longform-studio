@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "path": {
+      "minLength": 1,
+      "title": "Path",
+      "type": "string"
+    },
+    "revision": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Revision",
+      "type": "string"
+    },
+    "request_id": {
+      "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+      "title": "Request Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "path",
+    "revision",
+    "request_id"
+  ],
+  "title": "CommandRecoveryRequest",
+  "type": "object"
+}

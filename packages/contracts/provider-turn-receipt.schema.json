@@ -3,15 +3,43 @@
     "MessageUsage": {
       "additionalProperties": false,
       "properties": {
+        "cached_input_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cached Input Tokens"
+        },
+        "cached_input_tokens_complete": {
+          "default": true,
+          "title": "Cached Input Tokens Complete",
+          "type": "boolean"
+        },
         "input_tokens": {
           "minimum": 0,
           "title": "Input Tokens",
           "type": "integer"
         },
+        "input_tokens_reported": {
+          "default": true,
+          "title": "Input Tokens Reported",
+          "type": "boolean"
+        },
         "output_tokens": {
           "minimum": 0,
           "title": "Output Tokens",
           "type": "integer"
+        },
+        "output_tokens_reported": {
+          "default": true,
+          "title": "Output Tokens Reported",
+          "type": "boolean"
         },
         "total_tokens": {
           "minimum": 0,

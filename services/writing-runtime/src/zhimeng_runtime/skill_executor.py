@@ -57,6 +57,7 @@ class SkillExecutor:
         *,
         python_executable: str | os.PathLike[str] = sys.executable,
         contracts_root: Path | None = None,
+        four_skills_bundle_root: Path | None = None,
         max_stdout_bytes: int = 2 * 1024 * 1024,
         max_stderr_bytes: int = 64 * 1024,
         max_artifact_bytes: int = 8 * 1024 * 1024,
@@ -74,6 +75,16 @@ class SkillExecutor:
         )
         self._python_executable = executable.resolve(strict=True)
         self._contract_registry = SkillContractRegistry(contract_directory)
+        self._four_skills_bundle_root: Path | None = None
+        if four_skills_bundle_root is not None:
+            candidate = Path(four_skills_bundle_root).expanduser()
+            if (
+                not candidate.is_absolute()
+                or not candidate.is_dir()
+                or candidate.is_symlink()
+            ):
+                raise ValueError("four_skills_bundle_root must be an absolute regular directory")
+            self._four_skills_bundle_root = candidate.resolve(strict=True)
         self._max_stdout_bytes = max_stdout_bytes
         self._max_stderr_bytes = max_stderr_bytes
         self._max_artifact_bytes = max_artifact_bytes
@@ -284,7 +295,29 @@ class SkillExecutor:
         )
         environment = {
             key: os.environ[key]
-            for key in ("SYSTEMROOT", "WINDIR")
+            for key in (
+                "SYSTEMROOT",
+                "WINDIR",
+                # External read-only writing Skills resolve their configured
+                # default roots through Path.home(). These are profile roots,
+                # not credentials; secrets and provider variables remain
+                # deliberately excluded from the child environment.
+                "USERPROFILE",
+                "HOME",
+                "HOMEDRIVE",
+                "HOMEPATH",
+                # Optional explicit roots for the bundled four-family CLI
+                # adapters. These are path pointers only; no credential or
+                # provider environment variable is forwarded.
+                "ZHIMENG_FOUR_SKILLS_SOURCE_INGEST_SCRIPT",
+                "ZHIMENG_FOUR_SKILLS_BUNDLE_ROOT",
+                "ZHIMENG_FOUR_SKILLS_DISTILLATION_SCRIPT",
+                "ZHIMENG_FOUR_SKILLS_DISTILLATION_LIBRARY",
+                "ZHIMENG_FOUR_SKILLS_KB_MANAGER_SCRIPT",
+                "ZHIMENG_FOUR_SKILLS_KB_LIBRARY",
+                "ZHIMENG_FOUR_SKILLS_CREATION_SCRIPT",
+                "ZHIMENG_FOUR_SKILLS_CREATION_LIBRARY",
+            )
             if key in os.environ
         }
         environment.update(
@@ -295,6 +328,10 @@ class SkillExecutor:
                 "PYTHONUTF8": "1",
             }
         )
+        if self._four_skills_bundle_root is not None:
+            environment["ZHIMENG_FOUR_SKILLS_BUNDLE_ROOT"] = str(
+                self._four_skills_bundle_root
+            )
         try:
             process = await asyncio.create_subprocess_exec(
                 str(self._python_executable),

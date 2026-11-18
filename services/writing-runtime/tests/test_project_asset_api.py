@@ -16,6 +16,12 @@ def _create_project(root: Path) -> None:
     (root / "03_人物设定" / "主角.md").write_text("# 青崖\n状态：活跃\n擅长借势破局。关联 [[主线]] 与 [[不存在的证人]]。\n", encoding="utf-8")
     (root / "04_剧情大纲" / "主线.md").write_text("# 主线\n找回证人，并牵动青崖。\n", encoding="utf-8")
     (root / "04_剧情大纲" / "伏笔清单.md").write_text("# 伏笔\n旧港白灯。\n", encoding="utf-8")
+    archived = root / "00_归档_旧结构_勿作为真值" / "03_人物设定"
+    archived.mkdir(parents=True)
+    (archived / "旧主角.md").write_text("# 不该出现的旧主角\n", encoding="utf-8")
+    nested = root / "03_人物设定" / "嵌套项目副本_勿作为真值"
+    nested.mkdir(parents=True)
+    (nested / "重复主角.md").write_text("# 不该出现的重复主角\n", encoding="utf-8")
     volume = root / "05_正文内容" / "第一卷"
     volume.mkdir(parents=True)
     (volume / "CH001.md").write_text("正文不应进入资产索引。\n", encoding="utf-8")
@@ -67,6 +73,14 @@ def test_project_asset_index_rebuild_and_get(tmp_path: Path) -> None:
         assert "plot" in kinds or "foreshadowing" in kinds
         assert all(
             not item["relative_path"].startswith("05_正文内容/")
+            for item in index["assets"]
+        )
+        assert all(
+            "勿作为真值" not in item["relative_path"]
+            for item in index["assets"]
+        )
+        assert not any(
+            item["title"] in {"不该出现的旧主角", "不该出现的重复主角"}
             for item in index["assets"]
         )
         assert "relationship_graph_complete" in body["not_claiming"]

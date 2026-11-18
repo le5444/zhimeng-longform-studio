@@ -4,6 +4,9 @@ from collections.abc import Sequence
 from datetime import datetime
 
 from zhimeng_runtime.context_models import (
+    human_readable_for,
+    include_response_guidance_for,
+    response_guidance_version_for,
     CompletedHistoryMessage,
     ContextAuthority,
     ContextBudget,
@@ -29,7 +32,11 @@ from zhimeng_runtime.context_models import (
 )
 
 
-CONTEXT_COMPILER_VERSION = "context-compiler.v1"
+# v5（2026-09-13）：【回答要求】升到第 3 版（点名禁掉「窗口 / 工具次数 / 回填」这类内部说法，
+# 记账文件里的英文状态词要翻成人话）。渲染格式与 v4 相同（人话版），只是这一段文字不同。
+# 存量 v4 Pack 按 v4 的文字逐字节重渲染，不受影响。
+# v6（2026-09-20）：不再往资料包里编【回答要求】——作者把「口吻规矩」全删了。
+CONTEXT_COMPILER_VERSION = "context-compiler.v6"
 CONTEXT_POLICY_VERSION = "context-selection.v1"
 _PLACEHOLDER_HASH = "0" * 64
 
@@ -39,21 +46,36 @@ def _validate_history(
     *,
     history_through_ordinal: int,
 ) -> tuple[CompletedHistoryMessage, ...]:
+    """校验并规整已完成历史。
+
+    规整规则：连续同角色消息合并成一条（内容拼接、ordinal 取靠后的那条）。
+    合并的起因是「输出被 token 上限截断后自动续写」——同一轮回答会落成两条
+    相邻的 assistant 消息；而 Anthropic 协议要求请求里 user/assistant 严格
+    交替，不合并的话下一轮编资料包必然 503。
+    """
     if isinstance(history_through_ordinal, bool) or history_through_ordinal < 0:
         raise ValueError("history_through_ordinal must be a non-negative integer")
-    ordered = tuple(sorted(history, key=lambda message: message.ordinal))
+    ordered = sorted(history, key=lambda message: message.ordinal)
     ordinals = [message.ordinal for message in ordered]
     if len(ordinals) != len(set(ordinals)):
         raise ValueError("completed history ordinals must be unique")
     if ordinals and ordinals[-1] > history_through_ordinal:
         raise ValueError("completed history exceeds history_through_ordinal")
-    for index, message in enumerate(ordered):
-        expected_role = "user" if index % 2 == 0 else "assistant"
-        if message.role != expected_role:
-            raise ValueError("completed history must alternate user/assistant")
-    if ordered and ordered[-1].role != "assistant":
+    merged: list[CompletedHistoryMessage] = []
+    for message in ordered:
+        if merged and merged[-1].role == message.role:
+            previous = merged[-1]
+            merged[-1] = previous.model_copy(
+                update={
+                    "ordinal": message.ordinal,
+                    "content": previous.content + "\n\n" + message.content,
+                }
+            )
+            continue
+        merged.append(message)
+    if merged and merged[-1].role != "assistant":
         raise ValueError("completed history must end with an assistant message")
-    return ordered
+    return tuple(merged)
 
 
 def _validate_candidates(
@@ -144,6 +166,7 @@ def _provider_messages(
     project_id: str,
     knowledge_fingerprint: str | None,
     included: tuple[ContextIncludedFragment, ...],
+    compiler_version: str,
 ) -> tuple[ContextProviderMessage, ...]:
     system = ContextProviderMessage(
         role="system",
@@ -157,6 +180,9 @@ def _provider_messages(
             profile=request.profile,
             active_chapter_id=request.active_chapter_id,
             included=included,
+            include_response_guidance=include_response_guidance_for(compiler_version),
+            response_guidance_version=response_guidance_version_for(compiler_version),
+            human_readable=human_readable_for(compiler_version),
         ),
     )
     history_messages = tuple(
@@ -210,6 +236,7 @@ def compile_context_pack(
         project_id=project_id,
         knowledge_fingerprint=knowledge_fingerprint,
         included=(),
+        compiler_version=compiler_version,
     )
     base_character_overflow = provider_message_characters(base_messages) > max_characters
     base_token_overflow = (
@@ -274,6 +301,7 @@ def compile_context_pack(
             project_id=project_id,
             knowledge_fingerprint=knowledge_fingerprint,
             included=proposed,
+            compiler_version=compiler_version,
         )
         character_overflow = (
             provider_message_characters(proposed_messages) > max_characters
@@ -315,6 +343,7 @@ def compile_context_pack(
         project_id=project_id,
         knowledge_fingerprint=knowledge_fingerprint,
         included=included_tuple,
+        compiler_version=compiler_version,
     )
     used_characters = provider_message_characters(messages)
     used_tokens = provider_message_tokens(messages)
@@ -336,6 +365,7 @@ def compile_context_pack(
         "project_id": project_id,
         "history_through_ordinal": history_through_ordinal,
         "history_message_count": len(session_history),
+        "include_session_history": request.include_session_history,
         "objective": request.objective,
         "profile": request.profile,
         "active_chapter_id": request.active_chapter_id,

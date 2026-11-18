@@ -1,0 +1,13 @@
+.zm-session-plan { min-width: 0; margin-bottom: 8px; border-bottom: 1px solid var(--zm-line); font-size: var(--zm-fs-1); }
+.zm-session-plan summary { display: flex; align-items: center; gap: 8px; min-height: 34px; cursor: pointer; list-style: none; }
+.zm-session-plan summary::-webkit-details-marker { display: none; }
+.zm-session-plan summary > svg { flex: 0 0 14px; width: 14px; height: 14px; }
+.zm-session-plan summary > span:not(.zm-session-plan-current) { flex-shrink: 0; }
+.zm-session-plan details[open] .zm-session-plan-chevron { transform: rotate(90deg); }
+.zm-session-plan-current { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--zm-fg-2); }
+.zm-session-plan-count { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--zm-fg-2); }
+.zm-session-plan-body { max-height: 220px; overflow: auto; overscroll-behavior: contain; padding: 0 4px 10px 22px; }
+.zm-session-plan-source { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--zm-fg-2); }
+.zm-session-plan-error { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; }
+.zm-session-plan-error > span { min-width: 0; overflow-wrap: anywhere; }
+.zm-session-plan .zm-plan { margin-top: 4px; }

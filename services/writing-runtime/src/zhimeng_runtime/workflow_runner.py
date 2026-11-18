@@ -60,6 +60,91 @@ CREATION_HANDOFF_OUTPUT_SCHEMA = (
 )
 INPUT_BUILDER_VERSION = "1"
 
+# 回喂给模型的 Skill 结果折叠参数（学 grok-build 的有界工具结果 +
+# denova 子代理只回交付物）。完整结果始终在数据库/artifact 里。
+FOLD_MAX_STRING_CHARS = 400
+FOLD_MAX_LIST_ITEMS = 8
+FOLD_MAX_DEPTH = 6
+
+
+def _fold_json_value(value: object, depth: int = 0) -> object:
+    if depth >= FOLD_MAX_DEPTH:
+        return "…（层级过深已折叠）"
+    if isinstance(value, str):
+        if len(value) <= FOLD_MAX_STRING_CHARS:
+            return value
+        return value[:FOLD_MAX_STRING_CHARS] + f"…（共 {len(value)} 字，已折叠）"
+    if isinstance(value, list):
+        folded = [_fold_json_value(item, depth + 1) for item in value[:FOLD_MAX_LIST_ITEMS]]
+        if len(value) > FOLD_MAX_LIST_ITEMS:
+            folded.append(f"…（其余 {len(value) - FOLD_MAX_LIST_ITEMS} 项已折叠）")
+        return folded
+    if isinstance(value, dict):
+        return {
+            key: _fold_json_value(item, depth + 1)
+            for key, item in value.items()
+        }
+    return value
+
+
+def _prewrite_gate_essentials(gate: dict[str, object]) -> dict[str, object]:
+    """写前门禁给模型的要点视角：通过的检查只计数，warning/blocked 逐条带出。
+
+    通用折叠是位置截断（列表留前 8 项）——blocked 的检查排在第 9 位之后时，
+    模型看到的全是 passed，反而看不到被拦原因。借鉴 deepseek-harness
+    spill-policy：内联只留决策要点，全量在数据库/artifact 里。
+    """
+    checks = gate.get("checks")
+    if not isinstance(checks, list):
+        return gate
+    attention = [
+        item
+        for item in checks
+        if isinstance(item, dict) and item.get("status") != "passed"
+    ]
+    shaped = {key: value for key, value in gate.items() if key != "checks"}
+    shaped["checks_total"] = len(checks)
+    shaped["checks_passed"] = len(checks) - len(attention)
+    shaped["checks_attention"] = attention
+    return shaped
+
+
+def _creation_handoff_essentials(handoff: dict[str, object]) -> dict[str, object]:
+    """task_goal（上限 10 万字符）随 WriterTask 交付，不在工具结果里再喂一遍。
+
+    模型在这一步只需要状态、计数和哈希；保留长度与 SHA-256 供证据比对。
+    存储层的完整 task_goal 不动——候选输出重建要从那里恢复。
+    """
+    goal = handoff.get("task_goal")
+    if not isinstance(goal, str):
+        return handoff
+    shaped = {key: value for key, value in handoff.items() if key != "task_goal"}
+    shaped["task_goal_characters"] = len(goal)
+    shaped["task_goal_sha256"] = hashlib.sha256(goal.encode("utf-8")).hexdigest()
+    return shaped
+
+
+def fold_skill_output_for_model(output: dict[str, object]) -> dict[str, object]:
+    """Skill 结果给模型看的折叠视图：状态和要点保留，长文与长清单截断。
+
+    完整结果不受影响——它仍然全量存进 Runtime 数据库和 artifact，
+    审计与作者界面读的都是全量。门禁/交接结果先做语义投影再走通用折叠，
+    免得位置截断把「被拦原因」截掉。
+    """
+    shaped = dict(output)
+    gate = shaped.get("prewrite_gate")
+    if isinstance(gate, dict):
+        shaped["prewrite_gate"] = _prewrite_gate_essentials(gate)
+    handoff = shaped.get("creation_handoff")
+    if isinstance(handoff, dict):
+        shaped["creation_handoff"] = _creation_handoff_essentials(handoff)
+    folded = _fold_json_value(shaped)
+    if not isinstance(folded, dict):  # pragma: no cover - output 合同保证是对象
+        return {"folded": True, "value": folded}
+    if folded != output:
+        folded = {**folded, "folded_for_model": True}
+    return folded
+
 
 class ToolExecutionResultLike(Protocol):
     tool_call: StoredToolCall
@@ -781,8 +866,11 @@ class WorkflowRunner:
                     "type": "function",
                     "function": {
                         "name": "skill_execute",
+                        # 链式输入会把上一步的完整结果塞进下一步参数（实测
+                        # 单个 8.6 万字符）。执行和对账用的是数据库里的全量
+                        # 记录；这里只是给模型看的转写，同样折叠。
                         "arguments": json.dumps(
-                            tool_call.arguments,
+                            fold_skill_output_for_model(tool_call.arguments),
                             ensure_ascii=False,
                             sort_keys=True,
                             separators=(",", ":"),
@@ -793,7 +881,9 @@ class WorkflowRunner:
         }
         payload = {
             "status": tool_call.status,
-            "output": tool_call.output or {},
+            # 完整结果在 Runtime 数据库和 artifact 里；回喂给模型的是折叠
+            # 视图，不然三个 Skill 的全量 JSON 一轮就是十几万 token。
+            "output": fold_skill_output_for_model(tool_call.output or {}),
             "error": (
                 tool_call.error.model_dump(mode="json", by_alias=True)
                 if tool_call.error is not None

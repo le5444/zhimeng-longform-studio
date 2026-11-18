@@ -102,6 +102,24 @@
           "default": null,
           "title": "Literary Quality Receipt Id"
         },
+        "llm_literary_score_receipt_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Llm Literary Score Receipt Id"
+        },
+        "external_blind_review_matrix_ready": {
+          "default": false,
+          "title": "External Blind Review Matrix Ready",
+          "type": "boolean"
+        },
         "post_draft_gate_status": {
           "default": "missing",
           "enum": [
@@ -136,8 +154,11 @@
           "type": "boolean"
         },
         "policy_version": {
-          "const": "local-v1-gate-pipeline-1",
-          "default": "local-v1-gate-pipeline-1",
+          "default": "local-v1-gate-pipeline-2",
+          "enum": [
+            "local-v1-gate-pipeline-1",
+            "local-v1-gate-pipeline-2"
+          ],
           "title": "Policy Version",
           "type": "string"
         },
@@ -237,7 +258,9 @@
       "enum": [
         "post_draft_gate",
         "literary_quality_gate",
-        "hard_fact_gate"
+        "hard_fact_gate",
+        "llm_literary_score",
+        "external_blind_review_matrix"
       ],
       "title": "GatePipelineStepCode",
       "type": "string"
@@ -278,6 +301,8 @@
     "not_claiming": {
       "default": [
         "literary_quality_score",
+        "llm_literary_score_quality_unlock",
+        "external_blind_review_quality_unlock",
         "formal_prose_writeback",
         "formal_draft_authorization_unlock",
         "four_skills_generic_exactly_once",

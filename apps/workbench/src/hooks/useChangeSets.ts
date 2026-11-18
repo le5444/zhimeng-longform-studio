@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   applyChangeSet,
-  getPostDraftGate,
+  applyChangeSetDirect,
+  discardChangeSet,
+  editChangeSetHunk,
   getChangeSet,
   listProjectChangeSets,
   rollbackChangeSet,
-  runPostDraftGate,
   summarizeChangeSet,
   updateHunkDecisions,
   type ChangeSet,
-  type PostDraftGateReceipt,
-  type PostDraftGateResponse,
   type ChangeSetSummary,
   type HunkDecisionUpdate,
 } from '../api/changeSets'
@@ -19,25 +18,11 @@ import { RuntimeApiError } from '../api/runtime'
 export type ChangeSetLoadState = 'idle' | 'loading' | 'ready' | 'error'
 export type ChangeSetAction =
   | { kind: 'decision'; targetId: string }
+  | { kind: 'edit'; targetId: string }
   | { kind: 'apply'; targetId: string }
   | { kind: 'rollback'; targetId: string }
-  | { kind: 'gate'; targetId: string }
+  | { kind: 'discard'; targetId: string }
   | null
-
-export type ChangeSetGateStatus =
-  | 'not_required'
-  | 'missing'
-  | 'stale'
-  | 'passed'
-  | 'blocked'
-  | 'failed'
-
-export interface ChangeSetGateState {
-  required: boolean
-  status: ChangeSetGateStatus
-  receipt: PostDraftGateReceipt | null
-  reviewRevision: number | null
-}
 
 interface ChangeSetErrorInfo {
   message: string
@@ -59,93 +44,16 @@ function changeSetErrorInfo(error: unknown): ChangeSetErrorInfo {
         : error.message
     return {
       message,
-      conflict: error.status === 409 || [
-        'change_set_conflict',
-        'post_draft_gate_stale',
-      ].includes(String(payload?.error?.code ?? '')),
+      conflict: error.status === 409 || payload?.error?.code === 'change_set_conflict',
       retryable: error.status >= 500 || payload?.error?.retryable === true,
       resultUnknown: error.status >= 500 || payload?.error?.retryable === true,
     }
   }
   return {
-    message: error instanceof Error ? error.message : 'ChangeSet 请求失败',
+    message: error instanceof Error ? error.message : '修改记录请求没有成功',
     conflict: false,
     retryable: false,
     resultUnknown: true,
-  }
-}
-
-function embeddedGateResponse(detail: ChangeSet): PostDraftGateResponse {
-  return {
-    schema: 'zhimeng.post-draft-gate-response.v1',
-    change_set_id: detail.change_set_id,
-    project_id: detail.project_id,
-    gate_required: detail.gate_required,
-    review_revision: detail.review_revision,
-    receipt: detail.post_draft_gate,
-  }
-}
-
-export function hasAcceptedPostDraftBody(
-  detail: Pick<ChangeSet, 'changes'> | null,
-): boolean {
-  return detail?.changes.some((change) => (
-    change.post_draft_gate_scope === 'prose_body'
-    && change.operation !== 'delete'
-    && change.hunks.some((hunk) => hunk.decision === 'accepted')
-  )) === true
-}
-
-export function deriveChangeSetGateState(
-  detail: Pick<
-    ChangeSet,
-    | 'change_set_id'
-    | 'project_id'
-    | 'gate_required'
-    | 'review_revision'
-    | 'changes'
-    | 'post_draft_gate'
-  > | null,
-  response: PostDraftGateResponse | null = null,
-): ChangeSetGateState {
-  if (!detail) {
-    return { required: false, status: 'not_required', receipt: null, reviewRevision: null }
-  }
-  const policyRequired = detail.gate_required || response?.gate_required === true
-  const required = policyRequired && hasAcceptedPostDraftBody(detail)
-  const reviewRevision = detail.review_revision
-  const receipt = response === null ? detail.post_draft_gate : response.receipt
-  if (!required) {
-    return { required: false, status: 'not_required', receipt: null, reviewRevision }
-  }
-  if (
-    response !== null
-    && (
-      response.change_set_id !== detail.change_set_id
-      || response.project_id !== detail.project_id
-      || response.review_revision !== reviewRevision
-    )
-  ) {
-    return { required: true, status: 'stale', receipt: null, reviewRevision }
-  }
-  if (!receipt) {
-    return { required: true, status: 'missing', receipt: null, reviewRevision }
-  }
-  if (
-    receipt.change_set_id !== detail.change_set_id
-    || receipt.project_id !== detail.project_id
-    || receipt.review_revision !== reviewRevision
-  ) {
-    return { required: true, status: 'stale', receipt: null, reviewRevision }
-  }
-  if (receipt.execution_status === 'failed' || receipt.status === 'failed') {
-    return { required: true, status: 'failed', receipt, reviewRevision }
-  }
-  return {
-    required: true,
-    status: receipt.status,
-    receipt,
-    reviewRevision,
   }
 }
 
@@ -178,11 +86,16 @@ export function useChangeSets(
   const [detail, setDetail] = useState<ChangeSet | null>(null)
   const [detailState, setDetailState] = useState<ChangeSetLoadState>('idle')
   const [detailError, setDetailError] = useState<string | null>(null)
-  const [gateResponse, setGateResponse] = useState<PostDraftGateResponse | null>(null)
-  const [gateState, setGateState] = useState<ChangeSetLoadState>('idle')
-  const [gateError, setGateError] = useState<string | null>(null)
-  const [action, setAction] = useState<ChangeSetAction>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
+  const [reviewAction, setAction] = useState<ChangeSetAction>(null)
+  const [fileActions, setFileActions] = useState(new Map<string, { action: ChangeSetAction; error: string | null }>())
+  const fileAction = selectedId ? fileActions.get(selectedId) : null
+  const action = fileAction?.action ?? reviewAction
+  const fileRequests = useRef(new Set<string>())
+  const mounted = useRef(true)
+  const projectChanged = useRef(onProjectChanged)
+  projectChanged.current = onProjectChanged
+  const [reviewActionError, setActionError] = useState<string | null>(null)
+  const actionError = fileAction?.error ?? reviewActionError
   const [actionConflict, setActionConflict] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const currentProjectId = useRef(projectId)
@@ -193,6 +106,15 @@ export function useChangeSets(
   if (currentProjectId.current !== projectId) {
     currentProjectId.current = projectId
     actionEpoch.current += 1
+    setRecords([])
+    setSelectedId(null)
+    setDetail(null)
+    setDetailState('idle')
+    setDetailError(null)
+    setAction(null)
+    setActionError(null)
+    setActionConflict(false)
+    appliedPreferredRequest.current = null
   }
   if (currentSelectedId.current !== selectedId) {
     currentSelectedId.current = selectedId
@@ -202,19 +124,9 @@ export function useChangeSets(
   const refresh = useCallback(() => setRefreshKey((value) => value + 1), [])
 
   useEffect(() => {
-    setRecords([])
-    setSelectedId(null)
-    setDetail(null)
-    setDetailState('idle')
-    setDetailError(null)
-    setGateResponse(null)
-    setGateState('idle')
-    setGateError(null)
-    setAction(null)
-    setActionError(null)
-    setActionConflict(false)
-    appliedPreferredRequest.current = null
-  }, [projectId])
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
 
   useEffect(() => {
     if (preferredChangeSetId === null) appliedPreferredRequest.current = null
@@ -233,9 +145,6 @@ export function useChangeSets(
       setDetail(null)
       setDetailState('idle')
       setDetailError(null)
-      setGateResponse(null)
-      setGateState('idle')
-      setGateError(null)
       setActionError(null)
       setActionConflict(false)
       return
@@ -248,22 +157,19 @@ export function useChangeSets(
       .then((nextRecords) => {
         if (cancelled) return
         if (nextRecords.some((record) => record.project_id !== projectId)) {
-          throw new Error('ChangeSet 队列包含其他项目的数据')
+          throw new Error('修改记录里混进了别的项目的数据')
         }
         setRecords(nextRecords)
         setSelectedId((current) => {
-          if (current && nextRecords.some((record) => record.change_set_id === current)) {
-            return current
-          }
+          // A refreshed list may lag behind a chat card. Keep its target and let
+          // the detail request report a missing record instead of choosing another.
+          if (current) return current
           return preferredChangeSet(nextRecords, preferredChangeSetId)?.change_set_id ?? null
         })
-        if (nextRecords.length === 0) {
+        if (nextRecords.length === 0 && !currentSelectedId.current) {
           setDetail(null)
           setDetailState('idle')
           setDetailError(null)
-          setGateResponse(null)
-          setGateState('idle')
-          setGateError(null)
         }
         setListState('ready')
       })
@@ -300,9 +206,6 @@ export function useChangeSets(
       setDetail(null)
       setDetailState('idle')
       setDetailError(null)
-      setGateResponse(null)
-      setGateState('idle')
-      setGateError(null)
       return
     }
 
@@ -310,51 +213,28 @@ export function useChangeSets(
     setDetail(null)
     setDetailState('loading')
     setDetailError(null)
-    setGateResponse(null)
-    setGateState('loading')
-    setGateError(null)
     setActionError(null)
     setActionConflict(false)
     void getChangeSet(selectedId)
       .then((nextDetail) => {
         if (cancelled) return
         if (nextDetail.project_id !== projectId) {
-          setDetailError('ChangeSet 不属于当前项目')
+          setDetailError('这条修改不属于现在这个项目')
+          setDetailState('error')
+          return
+        }
+        if (nextDetail.change_set_id !== selectedId) {
+          setDetailError('修改详情与当前选中的记录不一致，请重新加载。')
           setDetailState('error')
           return
         }
         setDetail(nextDetail)
         setDetailState('ready')
-        const embedded = embeddedGateResponse(nextDetail)
-        setGateResponse(embedded)
-        if (!deriveChangeSetGateState(nextDetail, embedded).required) {
-          setGateState('ready')
-          return
-        }
-        void getPostDraftGate(selectedId)
-          .then((nextGate) => {
-            if (cancelled) return
-            if (
-              nextGate.change_set_id !== nextDetail.change_set_id
-              || nextGate.project_id !== nextDetail.project_id
-            ) {
-              throw new Error('Gate 响应身份与当前 ChangeSet 不一致')
-            }
-            setGateResponse(nextGate)
-            setGateState('ready')
-            setGateError(null)
-          })
-          .catch((error) => {
-            if (cancelled) return
-            setGateError(changeSetErrorInfo(error).message)
-            setGateState('error')
-          })
       })
       .catch((error) => {
         if (cancelled) return
         setDetailError(changeSetErrorInfo(error).message)
         setDetailState('error')
-        setGateState('idle')
       })
     return () => {
       cancelled = true
@@ -375,23 +255,6 @@ export function useChangeSets(
   const storeUpdated = useCallback((updated: ChangeSet) => {
     const summary = summarizeChangeSet(updated)
     setDetail((current) => current?.change_set_id === updated.change_set_id ? updated : current)
-    setGateResponse((current) => {
-      if (currentSelectedId.current !== updated.change_set_id) return current
-      const embedded = embeddedGateResponse(updated)
-      if (
-        embedded.receipt === null
-        && current?.change_set_id === updated.change_set_id
-        && current.receipt !== null
-        && current.receipt.review_revision !== updated.review_revision
-      ) {
-        return { ...embedded, receipt: current.receipt }
-      }
-      return embedded
-    })
-    if (currentSelectedId.current === updated.change_set_id) {
-      setGateState('ready')
-      setGateError(null)
-    }
     setRecords((current) => {
       const found = current.some((record) => record.change_set_id === updated.change_set_id)
       return found
@@ -411,7 +274,7 @@ export function useChangeSets(
     epoch: number,
     expectedProjectId: string,
     expectedChangeSetId: string,
-  ) => actionEpoch.current === epoch
+  ) => mounted.current && actionEpoch.current === epoch
     && currentProjectId.current === expectedProjectId
     && currentSelectedId.current === expectedChangeSetId, [])
 
@@ -433,6 +296,21 @@ export function useChangeSets(
     }
   }, [actionIsCurrent, responseMatches, storeUpdated])
 
+  const finishFileAction = useCallback((expectedProjectId: string, changeSetId: string, epoch: number, error: string | null) => {
+    fileRequests.current.delete(changeSetId)
+    if (!mounted.current) return
+    setFileActions((value) => {
+      const next = new Map(value)
+      if (error) next.set(changeSetId, { action: null, error })
+      else next.delete(changeSetId)
+      return next
+    })
+    if (currentProjectId.current !== expectedProjectId) return
+    // 切换页面只改变查看对象，已经发出的写入仍然需要同步结果。
+    if (!actionIsCurrent(epoch, expectedProjectId, changeSetId)) refresh()
+    projectChanged.current?.()
+  }, [actionIsCurrent, refresh])
+
   const decide = useCallback(async (decision: HunkDecisionUpdate) => {
     if (!detail || action) return
     const expectedProjectId = detail.project_id
@@ -449,7 +327,7 @@ export function useChangeSets(
       )
       if (!actionIsCurrent(epoch, expectedProjectId, expectedChangeSetId)) return
       if (!responseMatches(updated, expectedProjectId, expectedChangeSetId)) {
-        throw new Error('ChangeSet 响应身份与当前操作不一致')
+        throw new Error('修改记录的返回结果对不上这次操作')
       }
       storeUpdated(updated)
     } catch (error) {
@@ -469,7 +347,7 @@ export function useChangeSets(
   }, [action, actionIsCurrent, detail, responseMatches, storeUpdated, syncLatest])
 
   const decideMany = useCallback(async (decisions: HunkDecisionUpdate[]) => {
-    if (!detail || action || decisions.length === 0) return
+    if (!detail || action || decisions.length === 0) return null
     const expectedProjectId = detail.project_id
     const expectedChangeSetId = detail.change_set_id
     const epoch = ++actionEpoch.current
@@ -484,9 +362,10 @@ export function useChangeSets(
       )
       if (!actionIsCurrent(epoch, expectedProjectId, expectedChangeSetId)) return
       if (!responseMatches(updated, expectedProjectId, expectedChangeSetId)) {
-        throw new Error('ChangeSet 响应身份与当前操作不一致')
+        throw new Error('修改记录的返回结果对不上这次操作')
       }
       storeUpdated(updated)
+      return updated
     } catch (error) {
       if (!actionIsCurrent(epoch, expectedProjectId, expectedChangeSetId)) return
       const info = changeSetErrorInfo(error)
@@ -498,96 +377,99 @@ export function useChangeSets(
         setActionError(info.message)
         setActionConflict(info.conflict)
       }
+      return null
     } finally {
       if (actionIsCurrent(epoch, expectedProjectId, expectedChangeSetId)) setAction(null)
     }
   }, [action, actionIsCurrent, detail, responseMatches, storeUpdated, syncLatest])
 
-  const runGate = useCallback(async () => {
-    if (!detail || action || detail.status !== 'ready') return
-    if (!deriveChangeSetGateState(detail, gateResponse).required) return
+  const editHunk = useCallback(async (hunkId: string, afterText: string) => {
+    if (!detail || action) return null
     const expectedProjectId = detail.project_id
     const expectedChangeSetId = detail.change_set_id
     const epoch = ++actionEpoch.current
-    setAction({ kind: 'gate', targetId: expectedChangeSetId })
+    setAction({ kind: 'edit', targetId: hunkId })
     setActionError(null)
     setActionConflict(false)
-    setGateError(null)
-    setGateState('loading')
     try {
-      const updated = await runPostDraftGate(
+      const updated = await editChangeSetHunk(
         expectedChangeSetId,
+        hunkId,
         detail.review_revision,
+        afterText,
       )
-      if (!actionIsCurrent(epoch, expectedProjectId, expectedChangeSetId)) return
+      if (!actionIsCurrent(epoch, expectedProjectId, expectedChangeSetId)) return null
       if (!responseMatches(updated, expectedProjectId, expectedChangeSetId)) {
-        throw new Error('Gate 响应身份与当前操作不一致')
+        throw new Error('返回的修改和现在这个项目对不上')
       }
       storeUpdated(updated)
+      return updated
     } catch (error) {
-      if (!actionIsCurrent(epoch, expectedProjectId, expectedChangeSetId)) return
+      if (!actionIsCurrent(epoch, expectedProjectId, expectedChangeSetId)) return null
       const info = changeSetErrorInfo(error)
       if (info.conflict || info.retryable || info.resultUnknown) {
         await syncLatest(expectedChangeSetId, expectedProjectId, epoch)
       }
-      if (!actionIsCurrent(epoch, expectedProjectId, expectedChangeSetId)) return
-      setGateState('error')
-      setGateError(info.message)
+      if (!actionIsCurrent(epoch, expectedProjectId, expectedChangeSetId)) return null
       if (currentSelectedId.current === expectedChangeSetId) {
         setActionError(info.message)
         setActionConflict(info.conflict)
       }
+      return null
     } finally {
       if (actionIsCurrent(epoch, expectedProjectId, expectedChangeSetId)) setAction(null)
     }
-  }, [action, actionIsCurrent, detail, gateResponse, responseMatches, storeUpdated, syncLatest])
+  }, [action, actionIsCurrent, detail, responseMatches, storeUpdated, syncLatest])
 
-  const apply = useCallback(async () => {
-    if (!detail || action) return
-    const gate = deriveChangeSetGateState(detail, gateResponse)
-    if (gate.required && gate.status !== 'passed') return
+  const apply = useCallback(async (acceptPending = false) => {
+    if (!detail || action || fileRequests.current.has(detail.change_set_id)) return
     const expectedProjectId = detail.project_id
     const expectedChangeSetId = detail.change_set_id
     const epoch = ++actionEpoch.current
-    setAction({ kind: 'apply', targetId: expectedChangeSetId })
+    fileRequests.current.add(expectedChangeSetId)
+    setFileActions((value) => new Map(value).set(expectedChangeSetId, { action: { kind: 'apply', targetId: expectedChangeSetId }, error: null }))
     setActionError(null)
     setActionConflict(false)
+    let fileError: string | null = null
     try {
-      const updated = await applyChangeSet(
+      // 接受和写入由同一次后端请求完成，浏览器离开后不再依赖下一次请求。
+      const save = acceptPending ? applyChangeSetDirect : applyChangeSet
+      const updated = await save(
         expectedChangeSetId,
         detail.review_revision,
       )
-      if (!actionIsCurrent(epoch, expectedProjectId, expectedChangeSetId)) return
       if (!responseMatches(updated, expectedProjectId, expectedChangeSetId)) {
-        throw new Error('ChangeSet 响应身份与当前操作不一致')
+        throw new Error('修改记录的返回结果对不上这次操作')
       }
+      if (!actionIsCurrent(epoch, expectedProjectId, expectedChangeSetId)) return
       storeUpdated(updated)
-      onProjectChanged?.()
     } catch (error) {
+      fileError = changeSetErrorInfo(error).message
       if (!actionIsCurrent(epoch, expectedProjectId, expectedChangeSetId)) return
       const info = changeSetErrorInfo(error)
       if (info.conflict || info.retryable || info.resultUnknown) {
         await syncLatest(expectedChangeSetId, expectedProjectId, epoch)
       }
       if (!actionIsCurrent(epoch, expectedProjectId, expectedChangeSetId)) return
-      if (info.conflict || info.resultUnknown) onProjectChanged?.()
       if (currentSelectedId.current === expectedChangeSetId) {
         setActionError(info.message)
         setActionConflict(info.conflict)
       }
     } finally {
-      if (actionIsCurrent(epoch, expectedProjectId, expectedChangeSetId)) setAction(null)
+      finishFileAction(expectedProjectId, expectedChangeSetId, epoch, fileError)
     }
-  }, [action, actionIsCurrent, detail, gateResponse, onProjectChanged, responseMatches, storeUpdated, syncLatest])
+  }, [action, actionIsCurrent, detail, finishFileAction, responseMatches, storeUpdated, syncLatest])
 
   const rollback = useCallback(async () => {
-    if (!detail || action) return
+    if (!detail || action || fileRequests.current.has(detail.change_set_id)) return
     const expectedProjectId = detail.project_id
     const expectedChangeSetId = detail.change_set_id
     const epoch = ++actionEpoch.current
-    setAction({ kind: 'rollback', targetId: expectedChangeSetId })
+    fileRequests.current.add(expectedChangeSetId)
+    setFileActions((value) => new Map(value).set(expectedChangeSetId, { action: { kind: 'rollback', targetId: expectedChangeSetId }, error: null }))
     setActionError(null)
     setActionConflict(false)
+    let fileError: string | null = null
     try {
       const updated = await rollbackChangeSet(
         expectedChangeSetId,
@@ -595,26 +477,78 @@ export function useChangeSets(
       )
       if (!actionIsCurrent(epoch, expectedProjectId, expectedChangeSetId)) return
       if (!responseMatches(updated, expectedProjectId, expectedChangeSetId)) {
-        throw new Error('ChangeSet 响应身份与当前操作不一致')
+        throw new Error('修改记录的返回结果对不上这次操作')
       }
       storeUpdated(updated)
-      onProjectChanged?.()
     } catch (error) {
+      fileError = changeSetErrorInfo(error).message
       if (!actionIsCurrent(epoch, expectedProjectId, expectedChangeSetId)) return
       const info = changeSetErrorInfo(error)
       if (info.conflict || info.retryable || info.resultUnknown) {
         await syncLatest(expectedChangeSetId, expectedProjectId, epoch)
       }
       if (!actionIsCurrent(epoch, expectedProjectId, expectedChangeSetId)) return
-      if (info.conflict || info.resultUnknown) onProjectChanged?.()
       if (currentSelectedId.current === expectedChangeSetId) {
         setActionError(info.message)
         setActionConflict(info.conflict)
       }
     } finally {
-      if (actionIsCurrent(epoch, expectedProjectId, expectedChangeSetId)) setAction(null)
+      finishFileAction(expectedProjectId, expectedChangeSetId, epoch, fileError)
     }
-  }, [action, actionIsCurrent, detail, onProjectChanged, responseMatches, storeUpdated, syncLatest])
+  }, [action, actionIsCurrent, detail, finishFileAction, responseMatches, storeUpdated, syncLatest])
+
+  // 批量作废：主要给「清掉过期提案」用。书已经往前走了、永远应用不了的
+  // 旧候选不该一直挂在作者眼前，一键全部丢弃。
+  // 不走 actionIsCurrent 的选中守卫：批量目标通常不是当前选中的那条，
+  // 只用 epoch + 项目判断，中途切书就立刻停手。
+  const discardByIds = useCallback(async (
+    items: Array<{ changeSetId: string; expectedReviewRevision: number }>,
+  ) => {
+    if (action || items.length === 0) return
+    const projectIdOfFirst = records.find(
+      (record) => record.change_set_id === items[0].changeSetId,
+    )?.project_id ?? null
+    if (!projectIdOfFirst) return
+    const myEpoch = ++actionEpoch.current
+    // 批量期间切换了书 / 换了选中项，就立刻停手。
+    const batchAlive = () =>
+      actionEpoch.current === myEpoch
+      && currentProjectId.current === projectIdOfFirst
+    setAction({ kind: 'discard', targetId: items[0].changeSetId })
+    setActionError(null)
+    setActionConflict(false)
+    let processed = 0
+    // 各目标互相独立：某一条撞上 409（比如它的 revision 被并发操作顶过）
+    // 不该让剩下的全部放弃，逐条尝试，最后汇总第一处错误。
+    let firstError: ReturnType<typeof changeSetErrorInfo> | null = null
+    for (const item of items) {
+      if (!batchAlive()) return
+      try {
+        const updated = await discardChangeSet(item.changeSetId, item.expectedReviewRevision)
+        if (!batchAlive()) return
+        if (!responseMatches(updated, projectIdOfFirst, item.changeSetId)) {
+          throw new Error('修改记录的返回结果对不上这次操作')
+        }
+        storeUpdated(updated)
+        processed += 1
+      } catch (error) {
+        if (!batchAlive()) return
+        const info = changeSetErrorInfo(error)
+        if (!firstError) firstError = info
+      }
+    }
+    if (firstError) {
+      if (firstError.conflict || firstError.retryable || firstError.resultUnknown) refresh()
+      setActionError(
+        processed > 0
+          ? `已清掉 ${processed} 条，还有 ${items.length - processed} 条没处理：${firstError.message}`
+          : firstError.message,
+      )
+    } else {
+      onProjectChanged?.()
+    }
+    setAction(null)
+  }, [action, onProjectChanged, records, refresh, responseMatches, storeUpdated])
 
   return {
     records,
@@ -627,18 +561,13 @@ export function useChangeSets(
     action,
     actionError,
     actionConflict,
-    gateResponse,
-    gateState,
-    gateError,
-    gate: deriveChangeSetGateState(detail, gateResponse),
     select,
     decide,
     decideMany,
-    runGate,
+    editHunk,
     apply,
     rollback,
+    discardByIds,
     refresh,
   }
 }
-
-export type ChangeSetReviewState = ReturnType<typeof useChangeSets>

@@ -18,7 +18,7 @@ from zhimeng_runtime.knowledge_scope_models import (
 )
 
 
-SCHEMA_VERSION = 23
+SCHEMA_VERSION = 33
 
 LEGACY_EXECUTOR = {
     "executor_id": "executor.migrated-legacy",
@@ -73,10 +73,30 @@ REQUIRED_TABLES = frozenset(
         "knowledge_scope_card",
         "skill_handoff_run",
         "context_handoff_run",
+        "file_change",
+        "run_transcript",
+        "session_queue",
+        "session_goal",
+        "goal_event",
+        "session_steering",
+        "session_admission_withdrawal",
+        "agent_image",
+        "command_completion",
+        "command_completion_scope",
     }
 )
 
 REQUIRED_COLUMNS = {
+    "session_goal": frozenset({"goal_id", "session_id", "objective", "status", "revision", "run_id", "stage_count", "progress", "evidence", "pause_reason", "requested_status", "created_at", "updated_at", "status_source"}),
+    "goal_event": frozenset({"goal_id", "revision", "kind", "state_json", "created_at"}),
+    "file_change": frozenset({"apply_phase"}),
+    "command_completion": frozenset({"sequence", "event_id", "command_session_id", "owner_session_id", "owner_run_id", "status", "exit_code", "ended_at", "payload_json", "delivery_state", "delivered_run_id", "stop_generation", "created_at"}),
+    "command_completion_scope": frozenset({"session_id", "stop_generation"}),
+    "agent_image": frozenset({"id", "session_id", "name", "mime_type", "width", "height", "data", "created_at"}),
+    "session_admission_withdrawal": frozenset({"session_id", "idempotency_key", "created_at"}),
+    "session_steering": frozenset({"session_id", "item_id", "run_id", "input_json", "status", "message_id"}),
+    "run_transcript": frozenset({"run_id", "session_id", "messages_json", "through_message_ordinal"}),
+    "session_queue": frozenset({"session_id", "revision", "state_json"}),
     "project_binding": frozenset(
         {
             "id",
@@ -104,6 +124,8 @@ REQUIRED_COLUMNS = {
             "last_activity_sequence",
             "request_hash",
             "context_pack_id",
+            "origin_kind",
+            "stop_generation",
         }
     ),
     "execution_session": frozenset(
@@ -111,6 +133,7 @@ REQUIRED_COLUMNS = {
             "id",
             "project_binding_id",
             "title",
+            "pinned",
             "status",
             "revision",
             "latest_project_revision",
@@ -398,6 +421,7 @@ REQUIRED_COLUMNS = {
             "ordinal",
             "role",
             "format",
+            "images_json",
             "created_at",
         }
     ),
@@ -916,6 +940,7 @@ CREATE TABLE IF NOT EXISTS execution_session (
     id TEXT PRIMARY KEY,
     project_binding_id TEXT REFERENCES project_binding(id) ON DELETE RESTRICT,
     title TEXT NOT NULL,
+    pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1)),
     status TEXT NOT NULL CHECK (
         status IN ('active', 'idle', 'closing', 'closed', 'interrupted')
     ),
@@ -1038,10 +1063,12 @@ CREATE TABLE IF NOT EXISTS prewrite_operation_package (
 CREATE TABLE IF NOT EXISTS run (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL REFERENCES execution_session(id) ON DELETE CASCADE,
-    project_binding_id TEXT NOT NULL REFERENCES project_binding(id) ON DELETE RESTRICT,
+    project_binding_id TEXT REFERENCES project_binding(id) ON DELETE RESTRICT,
     context_pack_id TEXT REFERENCES context_pack(id) ON DELETE RESTRICT,
     ordinal INTEGER NOT NULL CHECK (ordinal >= 1),
     run_type TEXT NOT NULL,
+    origin_kind TEXT NOT NULL DEFAULT 'user',
+    stop_generation INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL CHECK (
         status IN (
             'queued', 'starting', 'running', 'awaiting_approval', 'paused',
@@ -1051,8 +1078,10 @@ CREATE TABLE IF NOT EXISTS run (
     objective TEXT NOT NULL,
     idempotency_key TEXT NOT NULL,
     request_hash TEXT NOT NULL CHECK (length(request_hash) = 64),
-    project_revision INTEGER NOT NULL CHECK (project_revision >= 1),
-    project_fingerprint TEXT NOT NULL CHECK (length(project_fingerprint) = 64),
+    project_revision INTEGER CHECK (project_revision IS NULL OR project_revision >= 1),
+    project_fingerprint TEXT CHECK (
+        project_fingerprint IS NULL OR length(project_fingerprint) = 64
+    ),
     executor_json TEXT NOT NULL,
     capabilities_json TEXT NOT NULL,
     correlation_id TEXT NOT NULL,
@@ -1085,8 +1114,10 @@ CREATE TABLE IF NOT EXISTS activity (
     sequence INTEGER NOT NULL CHECK (sequence >= 1),
     kind TEXT NOT NULL,
     payload_json TEXT NOT NULL,
-    project_revision INTEGER NOT NULL CHECK (project_revision >= 1),
-    project_fingerprint TEXT NOT NULL CHECK (length(project_fingerprint) = 64),
+    project_revision INTEGER CHECK (project_revision IS NULL OR project_revision >= 1),
+    project_fingerprint TEXT CHECK (
+        project_fingerprint IS NULL OR length(project_fingerprint) = 64
+    ),
     correlation_id TEXT NOT NULL,
     causation_id TEXT,
     created_at TEXT NOT NULL,
@@ -1103,6 +1134,19 @@ CREATE TABLE IF NOT EXISTS session_message (
     format TEXT NOT NULL CHECK (format IN ('plain', 'markdown')),
     created_at TEXT NOT NULL,
     UNIQUE (session_id, ordinal)
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS session_checkpoint (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES execution_session(id) ON DELETE CASCADE,
+    run_id TEXT REFERENCES run(id) ON DELETE SET NULL,
+    through_ordinal INTEGER NOT NULL CHECK (through_ordinal >= 2),
+    source_message_count INTEGER NOT NULL CHECK (source_message_count >= 2),
+    content TEXT NOT NULL,
+    content_hash TEXT NOT NULL CHECK (length(content_hash) = 64),
+    reported_model TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE (session_id, through_ordinal)
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS artifact (
@@ -1781,6 +1825,133 @@ CREATE INDEX IF NOT EXISTS idx_prewrite_package_project_readiness
 CREATE INDEX IF NOT EXISTS idx_nlcl_route_execution_run
     ON nlcl_route_execution_receipt(run_id, created_at DESC);
 
+-- 打开的文件夹以外的写入（没打开文件夹时的写入也算）：写文件工具在这里一文件一行留痕，
+-- 写之前的原内容备份在状态目录 file-history/，可以撤回（file_journal.py）。
+CREATE TABLE IF NOT EXISTS file_change (
+    change_id TEXT NOT NULL,
+    seq INTEGER NOT NULL CHECK (seq >= 0),
+    session_id TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    tool_call_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    operation TEXT NOT NULL CHECK (operation IN ('create', 'update', 'delete', 'move', 'mkdir')),
+    path TEXT NOT NULL,
+    target_path TEXT,
+    before_sha256 TEXT,
+    after_sha256 TEXT,
+    backup_path TEXT,
+    created_dirs_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    undone_at TEXT,
+    apply_phase TEXT NOT NULL DEFAULT 'legacy' CHECK (apply_phase IN ('legacy', 'pending', 'applied', 'failed')),
+    PRIMARY KEY (change_id, seq)
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_file_change_session
+    ON file_change(session_id, created_at DESC);
+
+-- 一轮答完以后，这一轮发给模型的那一段（作者的话后面：附言、工具调用和结果、补话，最后是回答），照模型当时看到的样子存一份。
+-- 下一轮拼历史时原样放回（ZCode 档案 12.2），模型看得见上一轮自己读过什么、改过什么，下一轮开头也和上一轮最后一步一字不差。
+CREATE TABLE IF NOT EXISTS run_transcript (
+    run_id TEXT PRIMARY KEY REFERENCES run(id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL REFERENCES execution_session(id) ON DELETE CASCADE,
+    messages_json TEXT NOT NULL,
+    estimated_tokens INTEGER NOT NULL CHECK (estimated_tokens >= 0),
+    through_message_ordinal INTEGER,
+    created_at TEXT NOT NULL
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_run_transcript_session
+    ON run_transcript(session_id);
+
+CREATE TABLE IF NOT EXISTS session_goal (
+    goal_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES execution_session(id) ON DELETE CASCADE,
+    objective TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('active','paused','blocked','completed','ended')),
+    revision INTEGER NOT NULL CHECK(revision >= 1),
+    run_id TEXT NOT NULL UNIQUE REFERENCES run(id),
+    stage_count INTEGER NOT NULL DEFAULT 0,
+    progress TEXT NOT NULL,
+    evidence TEXT NOT NULL,
+    pause_reason TEXT,
+    requested_status TEXT CHECK(requested_status IN ('completed','blocked')),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    status_source TEXT NOT NULL CHECK(status_source IN ('agent','user','runtime'))
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_session_goal_session ON session_goal(session_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_session_goal_unfinished ON session_goal(session_id)
+    WHERE status IN ('active','paused','blocked');
+CREATE TABLE IF NOT EXISTS goal_event (
+    goal_id TEXT NOT NULL REFERENCES session_goal(goal_id) ON DELETE CASCADE,
+    revision INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    state_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY(goal_id,revision)
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS session_queue (
+    session_id TEXT PRIMARY KEY REFERENCES execution_session(id) ON DELETE CASCADE,
+    revision INTEGER NOT NULL DEFAULT 0,
+    state_json TEXT NOT NULL
+);
+
+-- 用户把排队消息插入当前运行：接收和消费分别留痕，重启及重复请求不会丢失或重发。
+CREATE TABLE IF NOT EXISTS session_steering (
+    session_id TEXT NOT NULL REFERENCES execution_session(id) ON DELETE CASCADE,
+    item_id TEXT NOT NULL,
+    run_id TEXT NOT NULL REFERENCES run(id) ON DELETE CASCADE,
+    input_json TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('pending', 'consumed', 'released')),
+    message_id TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY(session_id, item_id)
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_session_steering_pending ON session_steering(run_id, status, created_at);
+
+-- An unsent identity can be withdrawn atomically before a delayed POST arrives.
+CREATE TABLE IF NOT EXISTS session_admission_withdrawal (
+    session_id TEXT NOT NULL REFERENCES execution_session(id) ON DELETE CASCADE,
+    idempotency_key TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY(session_id, idempotency_key)
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS command_completion_scope (
+    session_id TEXT PRIMARY KEY REFERENCES execution_session(id) ON DELETE CASCADE,
+    stop_generation INTEGER NOT NULL DEFAULT 0
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS command_completion (
+    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT NOT NULL UNIQUE,
+    command_session_id TEXT NOT NULL UNIQUE,
+    owner_session_id TEXT NOT NULL REFERENCES execution_session(id) ON DELETE CASCADE,
+    owner_run_id TEXT NOT NULL REFERENCES run(id) ON DELETE CASCADE,
+    status TEXT NOT NULL CHECK (status IN ('exited','cancelled','interrupted')),
+    exit_code INTEGER,
+    ended_at REAL,
+    payload_json TEXT NOT NULL,
+    delivery_state TEXT NOT NULL CHECK (delivery_state IN ('pending','delivered','suppressed')),
+    delivered_run_id TEXT REFERENCES run(id) ON DELETE SET NULL,
+    stop_generation INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_command_completion_pending ON command_completion(owner_session_id, delivery_state, sequence);
+
+CREATE TABLE IF NOT EXISTS agent_image (
+    id TEXT PRIMARY KEY,
+    session_id TEXT REFERENCES execution_session(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    width INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    data BLOB NOT NULL,
+    created_at TEXT NOT NULL
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_agent_image_session ON agent_image(session_id);
+
 COMMIT;
 """
 
@@ -2265,8 +2436,107 @@ class ProjectBindingRecord:
     updated_at: str
 
 
+def latest_own_write_pin(
+    connection: sqlite3.Connection,
+    run_id: str,
+) -> tuple[int, str] | None:
+    """这场对话最近一次自己落盘（或执行命令）后的版本钉子。
+
+    落盘必然让 run.project_revision（本回合资料包的基准）落后。Agent 写完要
+    读回来核对、要在同一场对话里接着改或接着提案，基准只能取这里，不能拿
+    资料包钉子卡它。放在 database 层是因为 agent_tools 与 change_set_service
+    两边都要用，而前者 import 后者，反向会成环。
+    """
+    # 9-26 起写文件工具改了中性名字（write_file…），旧对话里记的是旧名字（project_write_file…），两套都认。
+    watched = (
+        "computer_run_command",
+        "command_session",
+        "write_file",
+        "edit_file",
+        "delete_file",
+        "move_file",
+        "make_folder",
+        "undo_change",
+        "project_edit_file",
+        "project_write_file",
+        "project_delete_file",
+        "project_move_file",
+        "project_mkdir",
+        "project_undo_change",
+    )
+    placeholders = ", ".join("?" for _ in watched)
+    rows = connection.execute(
+        f"""
+        SELECT tool_name, output_json FROM tool_call
+        WHERE run_id = ? AND (
+          (status = 'succeeded' AND tool_name IN ({placeholders}))
+          OR (status IN ('succeeded', 'failed', 'cancelled') AND tool_name GLOB 'mcp__*')
+        )
+        ORDER BY rowid DESC
+        LIMIT 200
+        """,
+        (run_id, *watched),
+    ).fetchall()
+    # 往前找最近一次带版本号的：写到打开的文件夹以外、「内容本来就这样」这类结果没有版本号，
+    # 以前只看最后一条，最后一条恰好是它们时钉子就丢了，后面再改书里的文件会被当成「书被别人改过」拒掉。
+    pin: tuple[int, str] | None = None
+    for row in rows:
+        if not row["output_json"]:
+            continue
+        try:
+            output = json.loads(str(row["output_json"]))
+        except ValueError:
+            continue
+        if str(row["tool_name"]).startswith("mcp__") and (
+            not isinstance(output, dict) or output.get("source_mcp") is not True or output.get("read_only") is not False
+        ):
+            continue
+        revision = output.get("result_revision") if isinstance(output, dict) else None
+        fingerprint = output.get("result_fingerprint") if isinstance(output, dict) else None
+        if isinstance(revision, int) and not isinstance(revision, bool) and isinstance(fingerprint, str):
+            if pin is None or revision > pin[0]:
+                pin = revision, fingerprint
+    # A background command can finish between tools without a new tool_call.
+    # Its consumer persists a fresh project observation in the same transaction
+    # as delivery/transcript. Project binding revisions are monotonic per
+    # project; use that fact instead of racing timestamps from different paths.
+    observations = connection.execute(
+        "SELECT metadata_json FROM artifact WHERE run_id=? AND artifact_type='command_completion_observation' ORDER BY rowid DESC",
+        (run_id,),
+    ).fetchall()
+    for row in observations:
+        try:
+            observation = json.loads(str(row["metadata_json"]))
+        except (TypeError, ValueError):
+            continue
+        revision = observation.get("result_revision") if isinstance(observation, dict) else None
+        fingerprint = observation.get("result_fingerprint") if isinstance(observation, dict) else None
+        if isinstance(revision, int) and not isinstance(revision, bool) and isinstance(fingerprint, str):
+            if pin is None or revision > pin[0]:
+                pin = revision, fingerprint
+    return pin
+
+
 class SqliteStore:
     """Small connection factory and schema bootstrap for runtime metadata."""
+
+    @staticmethod
+    def _proposal_base_matches(
+        expected_revision: int,
+        expected_fingerprint: str,
+        base_revision: int,
+        base_fingerprint: str,
+        own_pin: tuple[int, str] | None,
+    ) -> bool:
+        """提案基准 = 资料包钉子，或本场 Run 自己落盘推进过的钉子。
+
+        直接写落盘后资料包钉子必然落后一格；同一场对话「先存一份、再提一份」
+        是合法工作流，第三道建档校验不能拿旧钉子把它拦死。own_pin 之外的
+        任何基准一律照旧拒绝。
+        """
+        if base_revision == expected_revision and base_fingerprint == expected_fingerprint:
+            return True
+        return own_pin is not None and (base_revision, base_fingerprint) == own_pin
 
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -2400,6 +2670,86 @@ class SqliteStore:
             ).fetchall()
         return [self._project_binding_from_row(row) for row in rows]
 
+    def update_project_binding_display_name(
+        self,
+        project_id: str,
+        display_name: str,
+    ) -> ProjectBindingRecord | None:
+        now = datetime.now(UTC).isoformat()
+        with self.connection() as connection:
+            connection.execute(
+                """
+                UPDATE project_binding
+                SET display_name = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (display_name.strip(), now, project_id),
+            )
+            connection.commit()
+            row = connection.execute(
+                "SELECT * FROM project_binding WHERE id = ?",
+                (project_id,),
+            ).fetchone()
+        return None if row is None else self._project_binding_from_row(row)
+
+    def delete_project_binding(self, project_id: str) -> bool:
+        with self.connection() as connection:
+            # 动态发现所有引用 project_binding 的表并先清子行：
+            # 这些外键大多是 ON DELETE RESTRICT，直接删绑定会让作者"删除作品"
+            # 变成 500 报错 + 一堆孤儿数据。子表之间还有嵌套外键，按多轮迭代
+            # 删除直到清干净（每轮删掉能删的，被更深子行挡住的下一轮再删）。
+            # 递归清理：先找到所有直接引用 project_binding 的表，再顺着外键图
+            # 一层层把引用这些行的孙子行（run → session、artifact → run …）也删掉。
+            # 以前只删一层，会话下面还挂着 run / 消息时删绑定就 500，作者连一条
+            # 指向已归档文件夹的死绑定都摘不掉（2026-09-24 真机 13 条）。
+            graph: dict[str, list[tuple[str, str, str]]] = {}
+            for (table_name,) in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            ).fetchall():
+                for fk in connection.execute(
+                    f'PRAGMA foreign_key_list("{table_name}")'
+                ).fetchall():
+                    # (id, seq, referenced_table, from_column, to_column, ...)
+                    parent, from_column, to_column = str(fk[2]), fk[3], fk[4]
+                    if not from_column:
+                        continue
+                    graph.setdefault(parent, []).append(
+                        (str(table_name), str(from_column), str(to_column or "id"))
+                    )
+
+            def purge(table: str, column: str, values: list[object], depth: int) -> None:
+                if not values or depth > 16:
+                    return
+                for offset in range(0, len(values), 400):
+                    chunk = values[offset : offset + 400]
+                    marks = ",".join("?" for _ in chunk)
+                    for child_table, child_column, parent_column in graph.get(table, []):
+                        if child_table == table:
+                            # 自引用（父子 run）在同一条 DELETE 里一起删。
+                            continue
+                        parent_values = [
+                            row[0]
+                            for row in connection.execute(
+                                f'SELECT "{parent_column}" FROM "{table}" WHERE "{column}" IN ({marks})',
+                                chunk,
+                            ).fetchall()
+                            if row[0] is not None
+                        ]
+                        purge(child_table, child_column, parent_values, depth + 1)
+                    connection.execute(
+                        f'DELETE FROM "{table}" WHERE "{column}" IN ({marks})',
+                        chunk,
+                    )
+
+            for child_table, child_column, _parent_column in graph.get("project_binding", []):
+                purge(child_table, child_column, [project_id], 1)
+            cursor = connection.execute(
+                "DELETE FROM project_binding WHERE id = ?",
+                (project_id,),
+            )
+            connection.commit()
+            return cursor.rowcount > 0
+
     def create_change_set(self, payload: dict[str, object]) -> None:
         encoded = self._encode_payload(payload)
         with self.connection() as connection:
@@ -2513,18 +2863,29 @@ class SqliteStore:
                     or str(tool_call["status"]) not in {"pending", "running", "succeeded"}
                 ):
                     raise RuntimeError("change set provenance does not match its ToolCall")
+                own_pin = latest_own_write_pin(connection, run_id)
                 if (
                     str(run["project_binding_id"]) != project_id
-                    or int(run["project_revision"]) != project_revision
-                    or str(run["project_fingerprint"]) != project_fingerprint
                     or str(run["context_pack_id"] or "") != context_pack_id
+                    or not self._proposal_base_matches(
+                        int(run["project_revision"]),
+                        str(run["project_fingerprint"]),
+                        project_revision,
+                        project_fingerprint,
+                        own_pin,
+                    )
                 ):
                     raise RuntimeError("change set provenance does not match its Run")
                 if (
                     str(context_pack["session_id"]) != str(run["session_id"])
                     or str(context_pack["project_binding_id"]) != project_id
-                    or int(context_pack["project_revision"]) != project_revision
-                    or str(context_pack["project_fingerprint"]) != project_fingerprint
+                    or not self._proposal_base_matches(
+                        int(context_pack["project_revision"]),
+                        str(context_pack["project_fingerprint"]),
+                        project_revision,
+                        project_fingerprint,
+                        own_pin,
+                    )
                 ):
                     raise RuntimeError("change set provenance does not match its Context Pack")
 
@@ -2971,9 +3332,27 @@ class SqliteStore:
             except sqlite3.IntegrityError as exc:
                 raise RuntimeError("source import identity already exists") from exc
 
-    def save_source_import_job(self, payload: dict[str, object]) -> None:
+    def save_source_import_job(
+        self, payload: dict[str, object], *, expected_payload: dict[str, object] | None = None,
+    ) -> None:
+        from zhimeng_runtime.source_import_receipt_models import source_import_request_from_payload
+
         encoded = self._encode_payload(payload)
         with self.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            current = connection.execute(
+                "SELECT * FROM source_import_job WHERE id = ?", (payload["import_id"],),
+            ).fetchone()
+            if current is None:
+                raise RuntimeError("source import was not found while saving")
+            current_payload = self._source_import_job_payload_from_row(current)
+            if expected_payload is not None and current_payload != expected_payload:
+                # A progress update must not restore the earlier request or state
+                # over a concurrent edit. Compare and write under one DB lock;
+                # the service's in-process lock cannot cover another connection.
+                if source_import_request_from_payload(current_payload) != source_import_request_from_payload(expected_payload):
+                    raise RuntimeError("source import job request changed while saving progress")
+                raise RuntimeError("source import changed before its state was saved")
             result = connection.execute(
                 """
                 UPDATE source_import_job
@@ -2987,8 +3366,9 @@ class SqliteStore:
                     payload["import_id"],
                 ),
             )
-        if result.rowcount != 1:
-            raise RuntimeError("source import was not found while saving")
+            if result.rowcount != 1:
+                raise RuntimeError("source import was not found while saving")
+            connection.commit()
 
     def save_source_import_job_with_execution_receipt(
         self,
@@ -3885,14 +4265,16 @@ class SqliteStore:
 
     @contextmanager
     def connection(self) -> Iterator[sqlite3.Connection]:
+        # 等写锁最多 30 秒：2026-09-13 真机上作者点「撤回」时 Agent 正在整理这本书的资料索引
+        # （一个长写事务），5 秒就放弃直接 500 "database is locked"，撤回失败。宁可多等几秒。
         connection = sqlite3.connect(
             self.path,
-            timeout=5.0,
+            timeout=30.0,
             isolation_level=None,
         )
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("PRAGMA busy_timeout = 5000")
+        connection.execute("PRAGMA busy_timeout = 30000")
         try:
             yield connection
         finally:
@@ -3918,8 +4300,22 @@ class SqliteStore:
                 raise RuntimeError(
                     "project_binding is missing fingerprint at schema version 2"
                 )
+            session_columns = SqliteStore._table_columns(
+                connection,
+                "execution_session",
+            )
+            if "pinned" not in session_columns:
+                if current_version >= 24:
+                    raise RuntimeError(
+                        "execution_session is missing pinned at schema version 24"
+                    )
+                connection.execute(
+                    "ALTER TABLE execution_session "
+                    "ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0 "
+                    "CHECK (pinned IN (0, 1))"
+                )
             run_columns = SqliteStore._table_columns(connection, "run")
-            pre_context_run_columns = REQUIRED_COLUMNS["run"] - {"context_pack_id"}
+            pre_context_run_columns = REQUIRED_COLUMNS["run"] - {"context_pack_id", "origin_kind", "stop_generation"}
             if not pre_context_run_columns.issubset(run_columns):
                 SqliteStore._rebuild_run_schema_v6(connection, run_columns)
             elif "context_pack_id" not in run_columns:
@@ -4115,6 +4511,21 @@ class SqliteStore:
             SqliteStore._migrate_distillation_invocations_v21(connection)
             if current_version < 23:
                 SqliteStore._migrate_source_import_feedback_provider_v23(connection)
+            if current_version < 25:
+                SqliteStore._migrate_agent_casual_run_v25(connection)
+            if "through_message_ordinal" not in SqliteStore._table_columns(connection, "run_transcript"):
+                connection.execute("ALTER TABLE run_transcript ADD COLUMN through_message_ordinal INTEGER")
+            if "images_json" not in SqliteStore._table_columns(connection, "session_message"):
+                connection.execute("ALTER TABLE session_message ADD COLUMN images_json TEXT NOT NULL DEFAULT '[]'")
+            for column, declaration in (("origin_kind", "TEXT NOT NULL DEFAULT 'user'"), ("stop_generation", "INTEGER NOT NULL DEFAULT 0")):
+                if column not in SqliteStore._table_columns(connection, "run"):
+                    if current_version >= 31:
+                        raise RuntimeError(f"run is missing {column} at schema version 31")
+                    connection.execute(f"ALTER TABLE run ADD COLUMN {column} {declaration}")
+            if "apply_phase" not in SqliteStore._table_columns(connection, "file_change"):
+                if current_version >= 32:
+                    raise RuntimeError("file_change is missing apply_phase at schema version 32")
+                connection.execute("ALTER TABLE file_change ADD COLUMN apply_phase TEXT NOT NULL DEFAULT 'legacy' CHECK (apply_phase IN ('legacy', 'pending', 'applied', 'failed'))")
             connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             violations = connection.execute("PRAGMA foreign_key_check").fetchall()
             if violations:
@@ -4132,6 +4543,142 @@ class SqliteStore:
             str(row[1])
             for row in connection.execute(f"PRAGMA table_info({table_name})").fetchall()
         }
+
+    @staticmethod
+    def _migrate_agent_casual_run_v25(connection: sqlite3.Connection) -> None:
+        """放行无项目 Run（「随便聊」会话）。
+
+        闲聊会话不绑定小说项目，其 Run 没有项目身份；旧约束要求 run 表的
+        project_binding_id / project_revision / project_fingerprint 全部非空。
+        SQLite 无法就地放宽 NOT NULL，按库内既有做法整表重建：既有行三列
+        均有值，逐行原样搬运，形状之外零改动。
+        """
+        info = connection.execute("PRAGMA table_info(run)").fetchall()
+        if not info:
+            # 极旧库还没有 run 表：SCHEMA_SQL 已按新形状建好，无需迁移。
+            return
+        notnull_by_name = {str(row[1]): int(row[3]) for row in info}
+        if notnull_by_name.get("project_binding_id") == 0 and notnull_by_name.get(
+            "project_revision"
+        ) == 0:
+            # 全新库由 SCHEMA_SQL 直接建成新形状，无需重建。
+            return
+        connection.execute(
+            """
+            CREATE TABLE run_v25 (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL REFERENCES execution_session(id) ON DELETE CASCADE,
+                project_binding_id TEXT REFERENCES project_binding(id) ON DELETE RESTRICT,
+                context_pack_id TEXT REFERENCES context_pack(id) ON DELETE RESTRICT,
+                ordinal INTEGER NOT NULL CHECK (ordinal >= 1),
+                run_type TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (
+                    status IN (
+                        'queued', 'starting', 'running', 'awaiting_approval', 'paused',
+                        'cancelling', 'succeeded', 'failed', 'cancelled', 'interrupted'
+                    )
+                ),
+                objective TEXT NOT NULL,
+                idempotency_key TEXT NOT NULL,
+                request_hash TEXT NOT NULL CHECK (length(request_hash) = 64),
+                project_revision INTEGER CHECK (
+                    project_revision IS NULL OR project_revision >= 1
+                ),
+                project_fingerprint TEXT CHECK (
+                    project_fingerprint IS NULL OR length(project_fingerprint) = 64
+                ),
+                executor_json TEXT NOT NULL,
+                capabilities_json TEXT NOT NULL,
+                correlation_id TEXT NOT NULL,
+                causation_id TEXT,
+                last_activity_sequence INTEGER NOT NULL DEFAULT 0
+                    CHECK (last_activity_sequence >= 0),
+                error_json TEXT,
+                created_at TEXT NOT NULL,
+                started_at TEXT,
+                updated_at TEXT NOT NULL,
+                completed_at TEXT,
+                UNIQUE (session_id, ordinal),
+                UNIQUE (session_id, idempotency_key)
+            ) STRICT
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO run_v25 (
+                id, session_id, project_binding_id, context_pack_id, ordinal,
+                run_type, status, objective, idempotency_key, request_hash,
+                project_revision, project_fingerprint, executor_json,
+                capabilities_json, correlation_id, causation_id,
+                last_activity_sequence, error_json, created_at, started_at,
+                updated_at, completed_at
+            )
+            SELECT
+                id, session_id, project_binding_id, context_pack_id, ordinal,
+                run_type, status, objective, idempotency_key, request_hash,
+                project_revision, project_fingerprint, executor_json,
+                capabilities_json, correlation_id, causation_id,
+                last_activity_sequence, error_json, created_at, started_at,
+                updated_at, completed_at
+            FROM run
+            """
+        )
+        connection.execute("DROP TABLE run")
+        connection.execute("ALTER TABLE run_v25 RENAME TO run")
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_run_project_status "
+            "ON run(project_binding_id, status, created_at)"
+        )
+        connection.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_run_context_pack_unique "
+            "ON run(context_pack_id) WHERE context_pack_id IS NOT NULL"
+        )
+        # activity 表同样放行无项目身份（「随便聊」Run 也会产生活动流）。
+        connection.execute(
+            """
+            CREATE TABLE activity_v25 (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL REFERENCES execution_session(id) ON DELETE CASCADE,
+                run_id TEXT NOT NULL REFERENCES run(id) ON DELETE CASCADE,
+                sequence INTEGER NOT NULL CHECK (sequence >= 1),
+                kind TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                project_revision INTEGER CHECK (
+                    project_revision IS NULL OR project_revision >= 1
+                ),
+                project_fingerprint TEXT CHECK (
+                    project_fingerprint IS NULL OR length(project_fingerprint) = 64
+                ),
+                correlation_id TEXT NOT NULL,
+                causation_id TEXT,
+                created_at TEXT NOT NULL,
+                UNIQUE (run_id, sequence)
+            ) STRICT
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO activity_v25 (
+                id, session_id, run_id, sequence, kind, payload_json,
+                project_revision, project_fingerprint, correlation_id,
+                causation_id, created_at
+            )
+            SELECT
+                id, session_id, run_id, sequence, kind, payload_json,
+                project_revision, project_fingerprint, correlation_id,
+                causation_id, created_at
+            FROM activity
+            """
+        )
+        connection.execute("DROP TABLE activity")
+        connection.execute("ALTER TABLE activity_v25 RENAME TO activity")
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_activity_run_sequence "
+            "ON activity(run_id, sequence)"
+        )
+        # context_pack 的绑定触发器（v20 自愈逻辑）随 DROP run 之外独立存在，
+        # 但重建期间保持幂等：这里主动跑一遍，别等下一次重启。
+        SqliteStore._migrate_project_kb_bindings_v20(connection)
 
     @staticmethod
     def _migrate_project_kb_bindings_v20(connection: sqlite3.Connection) -> None:

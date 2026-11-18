@@ -1,0 +1,19 @@
+.zm-session-goal { min-width: 0; font-size: var(--zm-fs-2); }
+.zm-session-goal.is-idle { margin-left: auto; }
+.zm-session-goal.is-idle .zm-goal-actions > button { min-height: 30px; padding: 3px 8px; border-radius: var(--zm-r-1); }
+.zm-session-goal.is-idle .zm-goal-actions > button:hover:not(:disabled) { background: var(--zm-bg-hover); }
+.zm-session-goal.has-goal, .zm-session-goal.has-error { flex-basis: 100%; border-top: 1px solid var(--zm-line); padding-top: 4px; }
+.zm-session-goal.has-goal { display: flex; flex-wrap: wrap; align-items: start; gap: 0 16px; }
+.zm-session-goal.has-goal > details { flex: 1 1 220px; min-width: 0; }
+.zm-session-goal.has-goal > details[open] { flex-basis: 100%; }
+.zm-session-goal .zm-goal-error { flex-basis: 100%; color: var(--zm-warn); }
+.zm-session-goal summary { display: flex; align-items: center; gap: 10px; cursor: pointer; min-height: 30px; }
+.zm-session-goal summary > span:first-child { flex-shrink: 0; color: var(--zm-fg); }
+.zm-goal-objective { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--zm-fg-2); }
+.zm-goal-body { max-height: 220px; overflow: auto; overscroll-behavior: contain; }
+.zm-goal-body p { margin: 6px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.zm-goal-actions { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; min-height: 28px; }
+.zm-goal-note { color: var(--zm-fg-2); }
+.zm-goal-error { overflow-wrap: anywhere; }
+
+.zm-goal-actions > button:disabled { opacity: .45; cursor: default; }

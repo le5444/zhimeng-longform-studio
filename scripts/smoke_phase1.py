@@ -34,7 +34,7 @@ def main() -> int:
     with urllib.request.urlopen(f"{WORKBENCH}/", timeout=5) as response:
         page = response.read().decode("utf-8")
         check("workbench_http", response.status == 200, response.status)
-        check("workbench_title", "织梦作者工作台" in page, len(page))
+        check("workbench_title", "<title>织梦</title>" in page, len(page))
 
     request = urllib.request.Request(
         f"{RUNTIME}/api/v1/events/stream",

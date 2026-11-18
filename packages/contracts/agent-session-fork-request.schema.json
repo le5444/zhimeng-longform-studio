@@ -1,0 +1,29 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "up_to_message_id": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Up To Message Id",
+      "type": "string"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "maxLength": 120,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Title"
+    }
+  },
+  "required": [
+    "up_to_message_id"
+  ],
+  "title": "AgentSessionForkRequest",
+  "type": "object"
+}

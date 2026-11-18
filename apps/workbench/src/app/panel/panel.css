@@ -1,0 +1,182 @@
+/* 右栏：文件 / 修改，与对话顶栏保持同一基线。 */
+.zm-panel-head { display: flex; flex: none; flex-direction: column; justify-content: space-between; min-height: var(--zm-head-h); padding: 4px 12px 0; border-bottom: 1px solid var(--zm-line); background: var(--zm-bg); }
+.zm-panel-context { display: flex; align-items: center; gap: 4px; min-width: 0; height: 28px; }
+.zm-panel-context > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--zm-fg-3); font-size: var(--zm-fs-1); }
+.zm-panel-tabs { display: flex; gap: 16px; min-width: 0; }
+.zm-panel-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 4px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--zm-fg-3);
+  font-size: var(--zm-fs-2);
+  cursor: pointer;
+}
+.zm-panel-tab svg { width: 14px; height: 14px; }
+.zm-panel-tab:hover { color: var(--zm-fg); }
+.zm-panel-tab.is-active { border-bottom-color: var(--zm-accent); color: var(--zm-fg); font-weight: 600; }
+.zm-panel-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.zm-muted { margin: 12px; color: var(--zm-fg-3); font-size: var(--zm-fs-2); line-height: 1.6; }
+
+/* ---------- 文件树 ---------- */
+.zm-files { display: flex; flex-direction: column; gap: 4px; padding: 12px; }
+.zm-files-search {
+  width: 100%;
+  height: 32px;
+  margin-bottom: 4px;
+  padding: 0 10px;
+  border: 1px solid var(--zm-line-2);
+  border-radius: var(--zm-r-2);
+  background: var(--zm-bg);
+  color: var(--zm-fg);
+  font-size: var(--zm-fs-2);
+}
+.zm-files-search:focus { outline: none; border-color: var(--zm-fg-3); }
+.zm-tree { list-style: none; margin: 0; padding: 0; }
+.zm-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--zm-r-1);
+  background: transparent;
+  color: var(--zm-fg-2);
+  font-size: var(--zm-fs-2);
+  text-align: left;
+  cursor: pointer;
+}
+.zm-tree-row:hover { background: var(--zm-bg-hover); color: var(--zm-fg); }
+.zm-tree-row svg { width: 14px; height: 14px; flex: none; color: var(--zm-fg-3); }
+.zm-tree-row.is-folder { color: var(--zm-fg); }
+.zm-tree-spacer { width: 14px; flex: none; }
+.zm-tree-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- 看文件 / 改文件 ---------- */
+.zm-file { display: flex; flex-direction: column; flex: 1 0 auto; min-width: 0; min-height: 100%; }
+.zm-file-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--zm-line);
+  background: var(--zm-bg);
+}
+.zm-file-head.is-file-view { align-items: stretch; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--zm-bg-side); }
+.zm-file-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
+.zm-file-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.zm-file-actions .zm-btn { flex: none; }
+.zm-file-identity { flex: 1; min-width: 60px; padding: 0 4px; }
+.zm-file-name { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.zm-file-name svg { width: 15px; height: 15px; flex: none; color: var(--zm-fg-3); }
+.zm-file-name h3 { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--zm-fs-3); font-weight: 600; }
+.zm-file-path { margin-top: 5px; color: var(--zm-fg-3); font-size: var(--zm-fs-1); line-height: 1.5; overflow-wrap: anywhere; }
+.zm-file-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding-left: 4px; color: var(--zm-fg-3); font-size: var(--zm-fs-1); }
+.zm-file-meta .zm-segment { margin-left: auto; }
+.zm-file-selection { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; padding: 4px 0 0; border-top: 1px solid var(--zm-line); color: var(--zm-fg-2); font-size: var(--zm-fs-1); }
+.zm-file-selection > svg { width: 14px; height: 14px; flex: none; color: var(--zm-accent); }
+.zm-file-selection > span { flex: 1; min-width: 0; }
+.zm-file-state { padding: 2px 6px; border-radius: var(--zm-r-1); background: var(--zm-bg-sunken); color: var(--zm-fg-2); }
+.zm-file-state.is-dirty { color: var(--zm-accent); background: var(--zm-accent-soft); }
+.zm-file-wrap { padding: 2px 6px; border: 1px solid var(--zm-line); border-radius: var(--zm-r-1); background: transparent; color: var(--zm-fg-3); font: inherit; cursor: pointer; }
+.zm-file-wrap:hover { color: var(--zm-fg); border-color: var(--zm-fg-3); }
+.zm-file-wrap[aria-pressed="true"] { border-color: transparent; background: var(--zm-accent-soft); color: var(--zm-accent); }
+.zm-file-wrap:focus-visible { outline: 2px solid var(--zm-accent); outline-offset: 2px; }
+.zm-file-body { flex: 1; min-width: 0; padding: 16px 16px 40px; }
+.zm-file-extraction { padding: 10px 12px; margin-bottom: 14px; border: 1px solid var(--zm-line); border-radius: var(--zm-r-2); color: var(--zm-fg-2); font-size: var(--zm-fs-2); }
+.zm-file-extraction p { margin: 0; line-height: 1.6; }
+.zm-file-extraction p + p { margin-top: 4px; }
+.zm-file-prose { max-width: 720px; margin: 0 auto; }
+.zm-file-prose .zm-md { font-size: calc(var(--zm-ui) + 2px); line-height: 1.9; }
+.zm-file-code { max-width: 100%; min-width: 0; overflow: auto; border: 1px solid var(--zm-line); border-radius: var(--zm-r-2); background: var(--zm-bg); }
+.zm-file-code:focus-visible { outline: 2px solid var(--zm-accent); outline-offset: 2px; }
+.zm-file-location { color: inherit; background: color-mix(in srgb, var(--zm-accent) 20%, transparent); outline: 1px solid color-mix(in srgb, var(--zm-accent) 45%, transparent); }
+.zm-file-location:empty { display: inline-block; min-width: .4em; height: 1em; vertical-align: text-bottom; }
+.zm-file-code-inner { display: grid; grid-template-columns: max-content minmax(0, 1fr); width: max-content; min-width: 100%; }
+.zm-file-code.is-wrapped .zm-file-code-inner { display: block; width: auto; }
+.zm-file-code.is-wrapped .zm-file-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.zm-file-text, .zm-file-line-numbers { margin: 0; font-family: var(--zm-mono); font-size: var(--zm-fs-2); line-height: 1.75; white-space: pre; tab-size: 4; }
+.zm-file-text { padding: 12px 14px; color: var(--zm-fg); }
+.zm-file-text code { font: inherit; white-space: inherit; }
+.zm-file-line-numbers { position: sticky; left: 0; padding: 12px 10px; min-width: 3.25em; text-align: right; border-right: 1px solid var(--zm-line); background: var(--zm-bg-sunken); color: var(--zm-fg-3); user-select: none; }
+.zm-file-empty { margin: 0; padding: 28px 16px; border: 1px dashed var(--zm-line); border-radius: var(--zm-r-2); text-align: center; color: var(--zm-fg-3); font-size: var(--zm-fs-2); }
+.zm-file-editor {
+  display: block;
+  width: 100%;
+  min-height: 60vh;
+  field-sizing: content;
+  padding: 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--zm-fg);
+  font-size: var(--zm-fs-4);
+  line-height: 1.85;
+}
+.zm-file-editor.is-code { font-family: var(--zm-mono); font-size: var(--zm-fs-2); line-height: 1.75; tab-size: 4; overflow-x: auto; }
+
+/* ---------- 修改 ---------- */
+.zm-changes { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.zm-change-list { list-style: none; margin: 0; padding: 6px; }
+.zm-change-row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--zm-r-2);
+  background: transparent;
+  color: var(--zm-fg);
+  text-align: left;
+  cursor: pointer;
+}
+.zm-change-row:hover { background: var(--zm-bg-hover); }
+.zm-change-row.is-active { background: var(--zm-bg-active); }
+.zm-change-row .zm-dot { grid-row: 1; margin-top: 7px; }
+.zm-change-row-title { font-size: var(--zm-fs-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zm-change-row-detail { grid-column: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--zm-fg-2); font-size: var(--zm-fs-2); }
+.zm-change-row-meta { grid-column: 2; color: var(--zm-fg-3); font-size: var(--zm-fs-1); }
+.zm-dot { display: inline-block; width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--zm-fg-3); }
+.zm-dot.is-applied { background: var(--zm-ok); }
+.zm-dot.is-reviewing, .zm-dot.is-ready { background: var(--zm-accent); }
+.zm-dot.is-conflicted, .zm-dot.is-failed { background: var(--zm-danger); }
+.zm-dot.is-rolled_back, .zm-dot.is-discarded { background: var(--zm-line-2); }
+.zm-changes-body { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 32px; }
+.zm-changes-title { font-size: var(--zm-fs-4); font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.zm-changes-body > .zm-btn { align-self: flex-start; }
+.zm-changes-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--zm-fg-3); font-size: var(--zm-fs-2); }
+.zm-changes-meta .is-del { color: var(--zm-danger); font-family: var(--zm-mono); }
+.zm-changes-meta .is-add { color: var(--zm-ok); font-family: var(--zm-mono); }
+.zm-changes-detail { color: var(--zm-fg); font-size: var(--zm-fs-3); line-height: 1.6; }
+.zm-changes-summary { color: var(--zm-fg-2); font-size: var(--zm-fs-3); line-height: 1.7; }
+.zm-changes .zm-diff-head svg { width: 13px; height: 13px; }
+.zm-changes .zm-diff-lines { max-height: none; }
+
+.zm-session-changes-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--zm-line); }
+.zm-session-changes-head h3 { font-size: var(--zm-fs-3); font-weight: 600; }
+.zm-file-change-path { color: var(--zm-fg-2); font-family: var(--zm-mono); font-size: var(--zm-fs-1); overflow-wrap: anywhere; min-width: 0; }
+.zm-file-change-note { padding: 10px 12px; border-radius: var(--zm-r-2); background: var(--zm-bg-sunken); color: var(--zm-fg-2); font-size: var(--zm-fs-2); line-height: 1.7; overflow-wrap: anywhere; }
+.zm-file-change-current { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 6px 10px; padding: 12px; border: 1px solid color-mix(in oklab, var(--zm-warn) 30%, var(--zm-line)); border-radius: var(--zm-r-2); background: var(--zm-warn-soft); font-size: var(--zm-fs-2); line-height: 1.7; }
+.zm-file-change-current > svg { width: 16px; height: 16px; margin-top: 4px; color: var(--zm-warn); }
+.zm-file-change-current > div { min-width: 0; overflow-wrap: anywhere; }
+.zm-file-change-current strong { color: var(--zm-fg); font-weight: 600; }
+.zm-file-change-current p { margin: 4px 0 0; color: var(--zm-fg-2); }
+.zm-file-change-current > .zm-btn { grid-column: 2; justify-self: start; }
+.zm-change-row-meta { overflow-wrap: anywhere; }
+.zm-change-source { min-width: 0; border-block: 1px solid var(--zm-line); padding-block: 10px; font-size: var(--zm-fs-2); }
+.zm-change-source summary { cursor: pointer; color: var(--zm-fg-2); }
+.zm-change-source pre { margin-top: 8px; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.7; }

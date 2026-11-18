@@ -15,6 +15,19 @@ function streamResponse(chunks: string[]): Response {
 }
 
 describe('fetchRuntimeSse', () => {
+  it('分页传输块包含多帧并跨UTF8分段时逐条保留事件编号和正文', async () => {
+    const frames = Array.from({ length: 753 }, (_, i) => `id: replay:${i + 1}\nevent: activity\ndata: ${JSON.stringify({ delta: `采购${i}元` })}\n\n`)
+    const bytes = new TextEncoder().encode(frames.join(''))
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(new ReadableStream({ start(controller) {
+      for (let i = 0; i < bytes.length; i += 397) controller.enqueue(bytes.slice(i, i + 397))
+      controller.close()
+    } }), { headers: { 'Content-Type': 'text/event-stream' } }))
+    const events: Array<{ id?: string; data: string }> = []
+    await fetchRuntimeSse('/events', { fetcher, signal: new AbortController().signal, onEvent: e => events.push(e) })
+    expect(events.map(e => e.id)).toEqual(frames.map((_, i) => `replay:${i + 1}`))
+    expect(events.map(e => JSON.parse(e.data).delta)).toEqual(frames.map((_, i) => `采购${i}元`))
+  })
+
   it('parses fragmented CRLF and multiline SSE while forwarding the replay cursor', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
       streamResponse([

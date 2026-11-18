@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
 from pydantic import ValidationError
 
-from zhimeng_runtime.context_compiler import compile_context_pack
+from zhimeng_runtime.context_compiler import CONTEXT_COMPILER_VERSION, compile_context_pack
 from zhimeng_runtime.context_models import (
     CompletedHistoryMessage,
     ContextAuthority,
@@ -13,6 +14,7 @@ from zhimeng_runtime.context_models import (
     ContextCreateRequest,
     ContextPack,
     ContextReadiness,
+    canonical_json,
     canonical_json_hash,
 )
 
@@ -124,6 +126,220 @@ def test_compilation_is_deterministic_and_provider_messages_are_exact() -> None:
     ]
     assert first.exact_provider_messages[-1].content == request().objective
     assert first.readiness is ContextReadiness.READY
+
+
+def test_v5_chat_pack_keeps_response_guidance_but_current_version_has_none() -> None:
+    """v5 及以前的聊天资料包带【回答要求】，逐字节校验要求它们一个字不变；
+    当前版本（v6 起）不再带：作者 2026-09-20 把「口吻规矩」全删了。"""
+    chat_request = request().model_copy(update={"profile": "chat"})
+
+    def _pack(version: str, pack_id: str):
+        return compile_context_pack(
+            context_pack_id=pack_id,
+            session_id="session-context-1",
+            project_id="project-context-1",
+            history_through_ordinal=4,
+            request=chat_request,
+            history=history(),
+            candidates=(),
+            max_characters=100_000,
+            max_tokens=100_000,
+            created_at=datetime(2026, 7, 20, tzinfo=timezone.utc),
+            compiler_version=version,
+        )
+
+    legacy = _pack("context-compiler.v5", "context-pack-chat-v5").exact_provider_messages[0].content
+    assert "【回答要求】" in legacy
+    assert "简体中文" in legacy
+    assert "思考与操作记录" in legacy
+    assert "工程术语" in legacy
+
+    current = _pack(CONTEXT_COMPILER_VERSION, "context-pack-chat").exact_provider_messages[0].content
+    assert "【回答要求】" not in current
+    assert "工程术语" not in current
+    assert "【上下文说明】" in current
+    assert "【回答要求】" not in compile_pack().exact_provider_messages[0].content
+
+
+def test_chat_pack_created_by_v1_remains_readable_after_response_guidance_upgrade() -> None:
+    chat_request = request().model_copy(update={"profile": "chat"})
+    old_pack = compile_context_pack(
+        context_pack_id="context-pack-chat-v1",
+        session_id="session-context-1",
+        project_id="project-context-1",
+        history_through_ordinal=4,
+        request=chat_request,
+        history=history(),
+        candidates=(),
+        max_characters=100_000,
+        max_tokens=100_000,
+        created_at=datetime(2026, 7, 19, tzinfo=timezone.utc),
+        compiler_version="context-compiler.v1",
+    )
+
+    restored = ContextPack.model_validate_json(old_pack.model_dump_json())
+    system_payload = json.loads(restored.exact_provider_messages[0].content)
+
+    assert restored.compiler_version == "context-compiler.v1"
+    assert "response_guidance" not in system_payload
+
+
+def test_chat_pack_created_by_v2_keeps_its_original_response_guidance() -> None:
+    chat_request = request().model_copy(update={"profile": "chat"})
+    old_pack = compile_context_pack(
+        context_pack_id="context-pack-chat-v2",
+        session_id="session-context-1",
+        project_id="project-context-1",
+        history_through_ordinal=4,
+        request=chat_request,
+        history=history(),
+        candidates=(),
+        max_characters=100_000,
+        max_tokens=100_000,
+        created_at=datetime(2026, 7, 20, tzinfo=timezone.utc),
+        compiler_version="context-compiler.v2",
+    )
+
+    restored = ContextPack.model_validate(old_pack.model_dump(mode="json"))
+    system_payload = json.loads(restored.exact_provider_messages[0].content)
+
+    assert restored.compiler_version == "context-compiler.v2"
+    assert "思考过程" in system_payload["response_guidance"]
+    assert "工程术语" not in system_payload["response_guidance"]
+
+
+def test_pack_created_by_v3_keeps_its_original_json_system_context() -> None:
+    old_pack = compile_context_pack(
+        context_pack_id="context-pack-v3",
+        session_id="session-context-1",
+        project_id="project-context-1",
+        history_through_ordinal=4,
+        request=request().model_copy(update={"profile": "chat"}),
+        history=history(),
+        candidates=(
+            candidate("project-character", mandatory=True, priority=1),
+            candidate(
+                "knowledge-card-1",
+                authority=ContextAuthority.FORMAL_KNOWLEDGE,
+                content="开篇先给主角一个具体动作。",
+            ),
+        ),
+        max_characters=100_000,
+        max_tokens=100_000,
+        created_at=datetime(2026, 7, 21, tzinfo=timezone.utc),
+        compiler_version="context-compiler.v3",
+        knowledge_fingerprint=canonical_json_hash({"knowledge": "v1"}),
+    )
+
+    restored = ContextPack.model_validate_json(old_pack.model_dump_json())
+    system_content = restored.exact_provider_messages[0].content
+    system_payload = json.loads(system_content)
+
+    assert restored.compiler_version == "context-compiler.v3"
+    assert system_payload["schema"] == "zhimeng.provider-system-context.v1"
+    assert "工程术语" in system_payload["response_guidance"]
+    assert system_content == canonical_json(system_payload)
+    fragment_payloads = system_payload["fragments"]
+    assert [item["source_id"] for item in fragment_payloads] == [
+        "project-character",
+        "knowledge-card-1",
+    ]
+    for key in (
+        "source_hash",
+        "fragment_hash",
+        "version",
+        "priority",
+        "mandatory",
+    ):
+        assert key in fragment_payloads[0]
+
+
+def test_v4_system_context_is_chinese_sections_without_engineering_fields() -> None:
+    knowledge = candidate(
+        "knowledge-card-1",
+        authority=ContextAuthority.FORMAL_KNOWLEDGE,
+        content="开篇先给主角一个具体动作。",
+        priority=900,
+    )
+    reference = candidate(
+        "reference-note",
+        authority=ContextAuthority.REFERENCE,
+        content="作者提过想试试倒叙。",
+        priority=800,
+    )
+    project = candidate(
+        "project-character",
+        content="人物在上一章拒绝了交易。",
+        priority=100,
+    )
+
+    first = compile_pack(
+        candidates=(project, reference, knowledge),
+        knowledge_fingerprint=canonical_json_hash({"knowledge": "v1"}),
+    )
+    second = compile_pack(
+        context_pack_id="context-pack-2",
+        created_at=datetime(2026, 7, 22, tzinfo=timezone.utc),
+        candidates=(knowledge, project, reference),
+        knowledge_fingerprint=canonical_json_hash({"knowledge": "v1"}),
+    )
+    restored = ContextPack.model_validate_json(first.model_dump_json())
+    system_content = restored.exact_provider_messages[0].content
+
+    assert restored.compiler_version == "context-compiler.v6"
+    assert system_content == second.exact_provider_messages[0].content
+    assert first.pack_hash == second.pack_hash
+    assert not system_content.startswith("{")
+    assert "【上下文说明】" in system_content
+    assert "【作品】" in system_content
+    assert "当前章节：VOL001-CH007" in system_content
+    assert "【写作知识版本】" in system_content
+    assert (
+        "【作品内容】\n■ Context project-character\n人物在上一章拒绝了交易。"
+        in system_content
+    )
+    assert (
+        "【写作知识】\n■ Context knowledge-card-1\n开篇先给主角一个具体动作。"
+        in system_content
+    )
+    assert (
+        "【参考资料】\n■ Context reference-note\n作者提过想试试倒叙。"
+        in system_content
+    )
+    assert system_content.index("【作品内容】") < system_content.index("【写作知识】")
+    assert system_content.index("【写作知识】") < system_content.index("【参考资料】")
+    for noise in (
+        "source_hash",
+        "fragment_hash",
+        "priority",
+        "mandatory",
+        "revision-7",
+        PROJECT_FINGERPRINT,
+        "project_truth",
+        "formal_knowledge",
+        '"fragments"',
+    ):
+        assert noise not in system_content
+
+
+def test_v4_system_context_omits_chapter_line_when_no_active_chapter() -> None:
+    chapter_request = request().model_copy(update={"active_chapter_id": None})
+    pack = compile_context_pack(
+        context_pack_id="context-pack-no-chapter",
+        session_id="session-context-1",
+        project_id="project-context-1",
+        history_through_ordinal=4,
+        request=chapter_request,
+        history=history(),
+        candidates=(),
+        max_characters=100_000,
+        max_tokens=100_000,
+        created_at=datetime(2026, 7, 20, tzinfo=timezone.utc),
+    )
+
+    system_content = pack.exact_provider_messages[0].content
+    assert "当前章节" not in system_content
+    assert "【作品内容】" not in system_content
 
 
 def test_budget_excludes_optional_and_blocks_missing_mandatory_fragment() -> None:
@@ -334,3 +550,56 @@ def test_knowledge_fingerprint_binds_messages_injection_and_pack_hash() -> None:
     assert first.provider_messages_hash != second.provider_messages_hash
     assert first.injection_hash != second.injection_hash
     assert first.pack_hash != second.pack_hash
+
+
+def test_consecutive_assistant_history_is_merged_not_rejected() -> None:
+    """输出截断续写后，同一轮回答会落成两条相邻的 assistant 消息。
+
+    以前历史必须严格一问一答，撞上就 503；现在合并成一条（内容都在、
+    ordinal 取靠后的），下一轮资料包照常编译。
+    """
+    history = (
+        CompletedHistoryMessage(ordinal=1, role="user", content="把开头写紧凑一点。"),
+        CompletedHistoryMessage(ordinal=2, role="assistant", content="故事从旧港开始，"),
+        CompletedHistoryMessage(ordinal=3, role="assistant", content="然后风向变了。"),
+        CompletedHistoryMessage(ordinal=4, role="user", content="很好，继续第三章。"),
+        CompletedHistoryMessage(ordinal=5, role="assistant", content="第三章开始。"),
+    )
+    def merged_pack(*, history, through):
+        return compile_context_pack(
+            context_pack_id="context-pack-merged",
+            session_id="session-context-1",
+            project_id="project-context-1",
+            history_through_ordinal=through,
+            request=request(),
+            history=history,
+            candidates=(),
+            max_characters=100_000,
+            max_tokens=100_000,
+            created_at=datetime(2026, 7, 20, tzinfo=timezone.utc),
+        )
+
+    history = (
+        CompletedHistoryMessage(ordinal=1, role="user", content="把开头写紧凑一点。"),
+        CompletedHistoryMessage(ordinal=2, role="assistant", content="故事从旧港开始，"),
+        CompletedHistoryMessage(ordinal=3, role="assistant", content="然后风向变了。"),
+        CompletedHistoryMessage(ordinal=4, role="user", content="很好，继续第三章。"),
+        CompletedHistoryMessage(ordinal=5, role="assistant", content="第三章开始。"),
+    )
+    first = merged_pack(history=history, through=5)
+    second = merged_pack(
+        history=(
+            CompletedHistoryMessage(ordinal=1, role="user", content="把开头写紧凑一点。"),
+            CompletedHistoryMessage(
+                ordinal=3,
+                role="assistant",
+                content="故事从旧港开始，\n\n然后风向变了。",
+            ),
+            CompletedHistoryMessage(ordinal=4, role="user", content="很好，继续第三章。"),
+            CompletedHistoryMessage(ordinal=5, role="assistant", content="第三章开始。"),
+        ),
+        through=5,
+    )
+    # 合并正确性：两条相邻 assistant 与「本来就该是一条消息」的历史，
+    # 编译出完全相同的请求（内容不丢、请求形态合规）
+    assert first.provider_messages_hash == second.provider_messages_hash

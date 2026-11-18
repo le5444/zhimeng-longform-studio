@@ -56,7 +56,8 @@ class ProjectSummary(ProjectApiModel):
     project_id: str = Field(pattern=r"^project-[0-9a-f]{24}$")
     display_name: str
     root_path: str
-    format: Literal["01-09"]
+    format: Literal["01-09", "folder"]
+    creation_mode: Literal["manual", "agent"] = "manual"
     revision: int = Field(ge=1)
     fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
 
@@ -201,6 +202,15 @@ class TextProjectImportResponse(ProjectApiModel):
     inspection: ProjectInspectionResponse
 
 
+class FileTextExtraction(ProjectApiModel):
+    format: Literal["docx", "xlsx", "docm", "xlsm"]
+    parser: Literal["openxml-text-v1"]
+    read_only: Literal[True]
+    source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_bytes: int = Field(ge=0)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class ProjectFileContentResponse(ProjectApiModel):
     schema_id: Literal["zhimeng.project-file-content.v1"] = Field(
         default="zhimeng.project-file-content.v1",
@@ -213,3 +223,97 @@ class ProjectFileContentResponse(ProjectApiModel):
     file: ProjectFile
     etag: str = Field(pattern=r"^[0-9a-f]{64}$")
     content: str
+    extraction: FileTextExtraction | None = None
+
+
+class ProjectCreateRequest(ProjectApiModel):
+    schema_id: Literal["zhimeng.project-create-request.v1"] = Field(
+        default="zhimeng.project-create-request.v1",
+        alias="schema",
+    )
+    title: str = Field(min_length=1, max_length=120)
+    author: str | None = Field(default=None, max_length=80)
+    genre: str | None = Field(default=None, max_length=80)
+    summary: str | None = Field(default=None, max_length=5000)
+    style_preset: str | None = Field(default=None, max_length=80)
+    style_rules: list[str] = Field(default_factory=list)
+    creation_mode: Literal["manual", "agent"] = "manual"
+
+
+class ProjectUpdateRequest(ProjectApiModel):
+    display_name: str = Field(min_length=1, max_length=120)
+
+
+class ProjectCoverUploadRequest(ProjectApiModel):
+    image_data: str = Field(min_length=1)  # base64 data url or base64 string
+
+
+class ProjectGenerateCoverRequest(ProjectApiModel):
+    prompt: str | None = Field(default=None, max_length=1000)
+
+
+class ProjectGenerateCoverResponse(ProjectApiModel):
+    schema_id: Literal["zhimeng.project-generate-cover-response.v1"] = Field(
+        default="zhimeng.project-generate-cover-response.v1",
+        alias="schema",
+    )
+    ok: bool
+    prompt: str
+    cover_url: str | None = None
+    message: str | None = None
+
+
+class ProjectGenerateSynopsisCandidate(ProjectApiModel):
+    tag: str
+    content: str
+    highlights: list[str] = Field(default_factory=list)
+
+
+class ProjectGenerateSynopsisRequest(ProjectApiModel):
+    title: str = Field(min_length=1, max_length=120)
+    genre: str | None = Field(default=None, max_length=80)
+    keywords: str | None = Field(default=None, max_length=500)
+    style: str | None = Field(default=None, max_length=50)
+
+
+class ProjectGenerateSynopsisResponse(ProjectApiModel):
+    schema_id: Literal["zhimeng.project-generate-synopsis-response.v1"] = Field(
+        default="zhimeng.project-generate-synopsis-response.v1",
+        alias="schema",
+    )
+    ok: bool
+    title: str
+    genre: str
+    candidates: list[ProjectGenerateSynopsisCandidate]
+    message: str | None = None
+
+
+class MatchedDistillationCard(ProjectApiModel):
+    card_id: str
+    title: str
+    card_type: str
+    summary: str
+    rule: str | None = None
+    tags: list[str] = Field(default_factory=list)
+
+
+class ProjectGenerateInspirationRequest(ProjectApiModel):
+    idea: str = Field(min_length=1, max_length=500)
+    genre: str | None = None
+
+
+class ProjectGenerateInspirationResponse(ProjectApiModel):
+    schema_id: Literal["zhimeng.project-generate-inspiration-response.v1"] = Field(
+        default="zhimeng.project-generate-inspiration-response.v1",
+        alias="schema",
+    )
+    ok: bool
+    idea: str
+    recommended_titles: list[str] = Field(default_factory=list)
+    recommended_genre: str = ""
+    recommended_style: str = ""
+    recommended_style_rules: list[str] = Field(default_factory=list)
+    synopsis_candidates: list[ProjectGenerateSynopsisCandidate] = Field(default_factory=list)
+    golden_opening_hook: str | None = None
+    matched_cards: list[MatchedDistillationCard] = Field(default_factory=list)
+    message: str | None = None

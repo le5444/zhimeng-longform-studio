@@ -204,6 +204,9 @@ class SearchHit(SearchModel):
     version: NonEmptyText = Field(max_length=240)
     source_hash: Sha256
     snippet: str = Field(max_length=1024)
+    line_number: int | None = Field(default=None, ge=1)
+    line_text: str | None = Field(default=None, max_length=1024)
+    context: str | None = Field(default=None, max_length=2048)
     reason: NonEmptyText = Field(max_length=512)
     score: float = Field(ge=0.0)
     updated_at: datetime | None = None

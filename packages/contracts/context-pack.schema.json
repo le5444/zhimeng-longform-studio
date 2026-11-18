@@ -645,6 +645,11 @@
       "title": "History Through Ordinal",
       "type": "integer"
     },
+    "include_session_history": {
+      "default": false,
+      "title": "Include Session History",
+      "type": "boolean"
+    },
     "included": {
       "items": {
         "$ref": "#/$defs/ContextIncludedFragment"

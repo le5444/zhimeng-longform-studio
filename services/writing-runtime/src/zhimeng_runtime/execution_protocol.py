@@ -156,7 +156,9 @@ class ExecutionSession(StrictModel):
     updated_at: datetime
     executor: ExecutorIdentity
     capabilities: CapabilityProfile
-    project_revision: ProjectRevision
+    # 「随便聊」会话不绑定小说项目，project_revision 为空；绑定项目的
+    # 会话照旧携带快照身份。
+    project_revision: ProjectRevision | None
     correlation_id: StableId
 
     @model_validator(mode="after")
@@ -183,13 +185,16 @@ class Run(StrictModel):
     ordinal: int = Field(ge=1)
     status: RunStatus
     objective: NonEmptyString
+    origin_kind: Literal["user", "command_completion"] = "user"
+    stop_generation: int = Field(default=0, ge=0)
     created_at: datetime
     updated_at: datetime
     started_at: datetime | None
     completed_at: datetime | None
     executor: ExecutorIdentity
     capabilities: CapabilityProfile
-    project_revision: ProjectRevision
+    # 无项目 Run（随便聊）为空；项目 Run 携带快照身份。
+    project_revision: ProjectRevision | None
     correlation_id: StableId
     causation_id: StableId | None
     last_activity_sequence: int = Field(ge=0)
@@ -231,6 +236,13 @@ class MessageUsage(StrictModel):
     input_tokens: int = Field(ge=0)
     output_tokens: int = Field(ge=0)
     total_tokens: int = Field(ge=0)
+    # DeepSeek/OpenAI 兼容线路的前缀缓存命中（input 的子集）。旧数据无此字段。
+    cached_input_tokens: int | None = Field(default=None, ge=0)
+    # 聚合用量只相加已报告数字；False 表示至少一次调用没有报告该项。
+    # 旧记录没有完整性元数据，保留其现有解释。
+    input_tokens_reported: bool = True
+    output_tokens_reported: bool = True
+    cached_input_tokens_complete: bool = True
 
     @model_validator(mode="after")
     def validate_total(self) -> "MessageUsage":
@@ -275,6 +287,19 @@ class ReasoningPayload(StrictModel):
     summary: NonEmptyString
     content: str | None
     visibility: Literal["summary", "full", "redacted"]
+    block_id: StableId | None = None
+    phase: Literal["delta", "completed", "interrupted"] = "completed"
+    delta: str | None = None
+    source: Literal["model", "runtime"] = "model"
+
+    @model_validator(mode="after")
+    def validate_stream_phase(self) -> ReasoningPayload:
+        if self.phase == "delta":
+            if self.block_id is None or self.delta is None or self.content is not None:
+                raise ValueError("reasoning deltas require block_id, delta and no content")
+        elif self.delta is not None:
+            raise ValueError("finished reasoning uses a content snapshot, not a delta")
+        return self
 
 
 class ToolCallPayload(StrictModel):
@@ -447,7 +472,8 @@ class ActivityItemBase(StrictModel):
     run_id: StableId
     sequence: int = Field(ge=1)
     created_at: datetime
-    project_revision: ProjectRevision
+    # 无项目 Run（随便聊）的活动没有项目身份。
+    project_revision: ProjectRevision | None
     correlation_id: StableId
     causation_id: StableId | None
 

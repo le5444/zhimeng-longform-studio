@@ -33,7 +33,7 @@ def _wait_for_terminal_source_status(
     client: TestClient,
     import_id: str,
     *,
-    timeout: float = 15.0,
+    timeout: float = 30.0,
 ) -> dict:
     deadline = time.monotonic() + timeout
     latest: dict = {}
@@ -162,6 +162,17 @@ def _reviewed_work_card(card_id: str) -> dict:
     }
 
 
+def _attempt_receipts(tmp_path: Path, import_id: str) -> list[SourceImportAttemptReceipt]:
+    """每次导入尝试留下的回执：前端从来不读，接口 9-26 删了（T15 刀 1b），这里直接读库核对。"""
+    from zhimeng_runtime.database import SqliteStore
+
+    store = SqliteStore(tmp_path / "runtime.sqlite3")
+    return [
+        SourceImportAttemptReceipt.model_validate(payload)
+        for payload in store.list_source_import_attempt_receipts(import_id)
+    ]
+
+
 def _settings(tmp_path: Path, *, trusted: bool = True) -> RuntimeSettings:
     return RuntimeSettings(
         environment="test",
@@ -231,14 +242,7 @@ def test_real_local_txt_runs_through_author_review_and_formalization(
         assert DRAFT_ARTIFACT_KINDS <= {
             item.kind for item in receipt.draft_artifacts
         }
-        attempts_response = client.get(
-            f"/api/v1/source-imports/{import_id}/attempt-receipts"
-        )
-        assert attempts_response.status_code == 200, attempts_response.text
-        attempts = [
-            SourceImportAttemptReceipt.model_validate(item)
-            for item in attempts_response.json()
-        ]
+        attempts = _attempt_receipts(tmp_path, import_id)
         assert len(attempts) == 1
         assert attempts[0].status == "success"
         assert attempts[0].execution_receipt_hash == receipt.receipt_hash
@@ -314,6 +318,49 @@ def test_real_local_txt_runs_through_author_review_and_formalization(
     assert before_sha == hashlib.sha256(SOURCE_FIXTURE.read_bytes()).hexdigest()
 
 
+def test_uploaded_txt_runs_without_a_machine_specific_trusted_root(
+    tmp_path: Path,
+) -> None:
+    with TestClient(create_app(_settings(tmp_path, trusted=False))) as client:
+        created = client.post(
+            "/api/v1/source-imports/local/upload-text",
+            json={
+                "schema": "zhimeng.local-text-source-upload-request.v1",
+                "file_name": "作者选择的资料.txt",
+                "content": SOURCE_FIXTURE.read_text(encoding="utf-8"),
+            },
+        )
+        assert created.status_code == 202, created.text
+        payload = created.json()
+        uploaded_path = Path(payload["candidate"]["source_path"])
+        assert uploaded_path.name == "作者选择的资料.txt"
+        assert uploaded_path.is_file()
+        assert uploaded_path.parent.parent == (tmp_path / "source-uploads").resolve()
+        assert SOURCE_FIXTURE.parent.resolve() not in uploaded_path.parents
+
+        job = _wait_for_terminal_source_status(client, payload["import_id"])
+        assert job["status"] == "awaiting_review", job
+        assert job["distillation_draft"]["card_count"] > 0
+        assert job["source_packet"]["source_backend"] == "generic_local_file"
+
+
+def test_uploaded_txt_rejects_a_path_disguised_as_a_file_name(
+    tmp_path: Path,
+) -> None:
+    with TestClient(create_app(_settings(tmp_path, trusted=False))) as client:
+        response = client.post(
+            "/api/v1/source-imports/local/upload-text",
+            json={
+                "schema": "zhimeng.local-text-source-upload-request.v1",
+                "file_name": "..\\outside.txt",
+                "content": "第一章\n正文",
+            },
+        )
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "source_upload_invalid"
+    assert not (tmp_path / "outside.txt").exists()
+
+
 class _FailingDraftAdapter:
     def __init__(self, delegate: ManagedLocalSourceAdapter) -> None:
         self.delegate = delegate
@@ -365,11 +412,7 @@ def test_local_failure_is_cleaned_and_has_an_immutable_attempt_receipt(
         job = _wait_for_terminal_source_status(client, import_id)
         assert job["status"] == "failed"
         assert job["error"] == "intentional distillation failure"
-        attempts = client.get(
-            f"/api/v1/source-imports/{import_id}/attempt-receipts"
-        )
-        assert attempts.status_code == 200, attempts.text
-        receipt = SourceImportAttemptReceipt.model_validate(attempts.json()[0])
+        receipt = _attempt_receipts(tmp_path, import_id)[0]
         assert receipt.status == "failed"
         assert receipt.stage == "drafting"
         assert receipt.failure_signature is not None

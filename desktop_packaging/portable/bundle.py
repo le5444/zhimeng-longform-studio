@@ -91,7 +91,13 @@ def _require_runtime_src(runtime_src_root: Path) -> None:
         )
 
 
-def _write_launchers(bundle_dir: Path, *, product_version: str) -> None:
+def _write_launchers(
+    bundle_dir: Path,
+    *,
+    product_version: str,
+    includes_four_skills_runtime: bool,
+    includes_skill_contracts: bool = False,
+) -> None:
     launch = bundle_dir / "launch"
     launch.mkdir(parents=True, exist_ok=True)
     (launch / "start-runtime.ps1").write_text(
@@ -104,6 +110,18 @@ def _write_launchers(bundle_dir: Path, *, product_version: str) -> None:
                 f"$ProductVersion = '{product_version}'",
                 "$AppDir = Split-Path -Parent $PSScriptRoot",
                 "$RuntimeSrc = Join-Path $AppDir 'runtime\\src'",
+                "$ContractsRoot = Join-Path $AppDir 'contracts'",
+                "if (Test-Path -LiteralPath $ContractsRoot) {",
+                "  $env:ZHIMENG_SKILL_CONTRACTS_ROOT = $ContractsRoot",
+                "}",
+                "$FourSkillsRoot = Join-Path $AppDir 'four-skills-runtime'",
+                "if (Test-Path -LiteralPath $FourSkillsRoot) {",
+                "  $env:ZHIMENG_FOUR_SKILLS_BUNDLE_ROOT = $FourSkillsRoot",
+                "  $TomatoRoot = Join-Path $FourSkillsRoot 'tomato-novel-auto-distill'",
+                "  if (Test-Path -LiteralPath $TomatoRoot) {",
+                "    $env:ZHIMENG_TOMATO_SKILL_ROOT = $TomatoRoot",
+                "  }",
+                "}",
                 "$EnvFile = Join-Path $PortableRoot 'runtime.env'",
                 "if (Test-Path -LiteralPath $EnvFile) {",
                 "  Get-Content -LiteralPath $EnvFile | ForEach-Object {",
@@ -141,6 +159,8 @@ def assemble_portable_bundle(
     workbench_dist: Path,
     runtime_src_root: Path,
     managed_skills_source: Path | None = None,
+    four_skills_runtime_source: Path | None = None,
+    skill_contracts_source: Path | None = None,
     git_commit: str | None = None,
     extra_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -163,7 +183,23 @@ def assemble_portable_bundle(
             candidate = runtime_src_root.parent / name
             if candidate.is_file():
                 shutil.copy2(candidate, output_dir / "runtime" / name)
-        _write_launchers(output_dir, product_version=product_version)
+        # Skill contract schemas. The registry's fallback guesses
+        # <package>/../../../../packages/contracts, which resolves outside the
+        # bundle, so the launcher points ZHIMENG_SKILL_CONTRACTS_ROOT here.
+        if skill_contracts_source is not None:
+            if not skill_contracts_source.is_dir():
+                raise BundleStateError(
+                    f"skill contracts source is not a directory: {skill_contracts_source}"
+                )
+            _copy_tree(skill_contracts_source, output_dir / "contracts")
+        if four_skills_runtime_source is not None:
+            _copy_tree(four_skills_runtime_source, output_dir / "four-skills-runtime")
+        _write_launchers(
+            output_dir,
+            product_version=product_version,
+            includes_four_skills_runtime=four_skills_runtime_source is not None,
+            includes_skill_contracts=skill_contracts_source is not None,
+        )
         managed_skill_names: list[str] = []
         if managed_skills_source is not None:
             if not managed_skills_source.is_dir():
@@ -181,7 +217,12 @@ def assemble_portable_bundle(
                 has_skill = (
                     (child / "SKILL.md").is_file()
                     or (child / "skill.json").is_file()
+                    # four-skills-family-* 与其它内置包声明的是 skill.manifest.json。
+                    # 漏掉这一种会让它们被静默跳过：包照样构建成功，但运行时
+                    # app.py 的 BUILTIN_MANAGED_SKILL_PACKAGES 少了四个 family 壳。
+                    or (child / "skill.manifest.json").is_file()
                     or any(child.glob("**/SKILL.md"))
+                    or any(child.glob("**/skill.manifest.json"))
                 )
                 if not has_skill:
                     continue
@@ -222,6 +263,12 @@ def assemble_portable_bundle(
                     "source": None if managed_skills_source is None else str(managed_skills_source),
                     "entry": "managed-skills",
                     "package_names": managed_skill_names,
+                },
+                "four_skills_runtime": {
+                    "kind": "domain_cli_bundle",
+                    "source": None if four_skills_runtime_source is None else str(four_skills_runtime_source),
+                    "entry": "four-skills-runtime",
+                    "portable": four_skills_runtime_source is not None,
                 },
             },
             "files": files,
@@ -298,6 +345,8 @@ def default_repo_paths(repo_root: Path) -> dict[str, Path]:
         "runtime_src_root": repo_root / "services" / "writing-runtime" / "src",
         "runtime_project": repo_root / "services" / "writing-runtime",
         "managed_skills_source": repo_root / "adapters" / "builtin",
+        "skill_contracts_source": repo_root / "packages" / "contracts",
+        "four_skills_runtime_source": repo_root / "desktop_packaging" / "resources" / "four-skills-runtime",
     }
 
 

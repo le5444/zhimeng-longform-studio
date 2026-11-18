@@ -13,6 +13,10 @@ import json
 import re
 from datetime import UTC, datetime
 from pathlib import Path
+
+from zhimeng_runtime.state_roots import ensure_state_root
+from zhimeng_runtime.project_truth import is_non_truth_project_path
+from zhimeng_runtime.project_reader import classify_project_file_kind, prose_directories
 from typing import Any, Literal
 
 
@@ -174,8 +178,7 @@ def _extract_relationships(
 
 class ProjectAssetService:
     def __init__(self, *, state_root: Path) -> None:
-        self.state_root = Path(state_root)
-        self.state_root.mkdir(parents=True, exist_ok=True)
+        self.state_root = ensure_state_root(Path(state_root))
 
     def rebuild(self, *, project_id: str, project_root: Path) -> dict[str, Any]:
         project_root = Path(project_root)
@@ -183,16 +186,24 @@ class ProjectAssetService:
             raise ProjectAssetNotFound(f"project root missing: {project_root}")
         assets: list[dict[str, Any]] = []
         texts: dict[str, str] = {}
+        # 正文不进资产索引：按这本书实际的正文夹（05_正文内容 / 正文 / …）和文件分类判，
+        # 不再写死一个夹子名。
+        prose_prefixes = tuple(
+            folder.relative_to(project_root).as_posix() + "/"
+            for folder in prose_directories(project_root)
+            if folder != project_root
+        )
         for path in sorted(project_root.rglob("*.md")):
             relative = path.relative_to(project_root).as_posix()
-            if relative.startswith("05_正文内容/"):
-                continue
-            kind = _kind_for_path(relative)
-            if kind == "other" and not any(
-                marker in relative
-                for marker in ("01_项目定位", "02_世界观", "03_人物", "04_剧情", "06_写作", "08_", "09_")
+            if (
+                relative.startswith(prose_prefixes)
+                or is_non_truth_project_path(relative)
+                or classify_project_file_kind(relative) == "prose"
             ):
                 continue
+            # 不再按 01–09 编号夹白名单挑文件：不在正文夹、不在排除夹的 .md 都索引，
+            # 作者随便怎么摆夹子（设定/、大纲/、素材/…）都找得到。
+            kind = _kind_for_path(relative)
             text = path.read_text(encoding="utf-8", errors="replace")
             title = path.stem
             first_heading = re.search(r"^#\s+(.+)$", text, flags=re.M)
@@ -203,7 +214,7 @@ class ProjectAssetService:
             status_info = _extract_status(text)
             asset = {
                 "asset_id": asset_id,
-                "kind": kind if kind != "other" else "plot",
+                "kind": kind,
                 "title": title[:200],
                 "relative_path": relative,
                 "content_hash": content_hash,
@@ -241,7 +252,7 @@ class ProjectAssetService:
             "relationship_graph_complete": False,
             "status_tracking_complete": False,
             "formal_draft_allowed": False,
-            "policy_version": "local-v1-project-assets-4",
+            "policy_version": "local-v1-project-assets-5",
             "generated_at": generated_at.isoformat(),
         }
         material["index_id"] = "project-asset-index-" + _sha256_text(

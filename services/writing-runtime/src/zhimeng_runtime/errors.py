@@ -44,12 +44,14 @@ class ApiError(RuntimeError):
         status_code: int,
         code: str,
         details: Any | None = None,
+        headers: dict[str, str] | None = None,
         retryable: bool = False,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.code = code
         self.details = details
+        self.headers = headers
         self.retryable = retryable
 
 
@@ -65,6 +67,7 @@ def install_exception_handlers(app: FastAPI) -> None:
             code=exc.code,
             message=str(exc),
             details=exc.details,
+            headers=exc.headers,
             retryable=exc.retryable,
         )
 

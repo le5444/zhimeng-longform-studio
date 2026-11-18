@@ -1,0 +1,102 @@
+{
+  "$defs": {
+    "MemoryChangeRecord": {
+      "properties": {
+        "action": {
+          "default": "add",
+          "enum": [
+            "add",
+            "replace",
+            "remove"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "text": {
+          "default": "",
+          "title": "Text",
+          "type": "string"
+        },
+        "old_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Old Text"
+        },
+        "source_message_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Message Id"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence"
+        },
+        "origin": {
+          "title": "Origin",
+          "type": "string"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "origin",
+        "created_at"
+      ],
+      "title": "MemoryChangeRecord",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "changes": {
+      "additionalProperties": {
+        "items": {
+          "$ref": "#/$defs/MemoryChangeRecord"
+        },
+        "type": "array"
+      },
+      "title": "Changes",
+      "type": "object"
+    },
+    "pending": {
+      "title": "Pending",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "session_id",
+    "changes",
+    "pending"
+  ],
+  "title": "MemoryChangesResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/memory-changes-response.schema.json"
+}

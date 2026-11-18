@@ -1236,20 +1236,11 @@ def test_project_batch_formalizes_work_voice_validator_into_context_and_nlcl(
             if item["source_type"].startswith("native_knowledge_card:")
         )
 
+        # NLCL 路由回执不再为对话白建（2026-09-24）：只读路由还在，卡的选择结果看资料包 included 就够了。
         route = client.get(
             f"/api/v1/agent/context-packs/{pack['context_pack_id']}/nlcl-route"
         )
         assert route.status_code == 200, route.text
-        assert route.json()["source"] == "native_knowledge"
-        assert {item["card_type"] for item in route.json()["selected_cards"]} == {
-            "work",
-            "voice",
-            "validator",
-        }
-        assert all(
-            item["knowledge_provenance"]["source_import_id"] == source_import_id
-            for item in route.json()["selected_cards"]
-        )
         replayed_selector = client.post(
             f"/api/v1/agent/sessions/{session.session_id}/context-packs",
             headers={"Idempotency-Key": "typed-native-context-0001"},
@@ -1385,12 +1376,23 @@ def test_project_batch_formalizes_work_voice_validator_into_context_and_nlcl(
         excluded_by_id = {
             item["source_id"]: item for item in blocked_pack["excluded"]
         }
-        assert {
+        included_by_id = {
+            item["source_id"]: item for item in blocked_pack["included"]
+        }
+        selected_card_ids = {
             f"knowledge-card:{item['card_id']}" for item in formal_selector["cards"]
-        }.issubset(excluded_by_id)
+        }
+        # Fail closed means "never silently dropped": every card the author
+        # explicitly selected must be visible either inside the pack or in the
+        # excluded list. The v4 human-readable system context is compact
+        # enough that part of the selection now fits the 2000-character
+        # budget, so the pack stays blocked but includes what fits.
+        assert selected_card_ids.issubset(included_by_id.keys() | excluded_by_id.keys())
+        dropped_card_ids = selected_card_ids & excluded_by_id.keys()
+        assert dropped_card_ids
         assert all(
-            excluded_by_id[f"knowledge-card:{item['card_id']}"]["mandatory"] is True
-            for item in formal_selector["cards"]
+            excluded_by_id[card_id]["mandatory"] is True
+            for card_id in dropped_card_ids
         )
 
 

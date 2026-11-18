@@ -1,0 +1,29 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.runtime-restore-request.v1",
+      "default": "zhimeng.runtime-restore-request.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "backup_id": {
+      "pattern": "^runtime-backup-[0-9a-f]{32}$",
+      "title": "Backup Id",
+      "type": "string"
+    },
+    "expected_manifest_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Manifest Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "backup_id",
+    "expected_manifest_hash"
+  ],
+  "title": "RuntimeRestoreRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/runtime-restore-request.schema.json"
+}

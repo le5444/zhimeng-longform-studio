@@ -4,7 +4,7 @@
   "display_name": "Knowledge Context Family Step",
   "description": "Deterministic four-skills family runner for knowledge_context. Used by generic managed execution after instruction-chain probe.",
   "kind": "deterministic_tool",
-  "version": "2026.07.26-m3au.1",
+  "version": "2026.08.07-m3av.1",
   "source": {
     "type": "builtin_managed",
     "reference": "PROVENANCE.md",

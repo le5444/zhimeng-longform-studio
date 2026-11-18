@@ -1,0 +1,169 @@
+{
+  "$defs": {
+    "SourceMessage": {
+      "properties": {
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        },
+        "session_title": {
+          "title": "Session Title",
+          "type": "string"
+        },
+        "project_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Project Id"
+        },
+        "project_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Project Name"
+        },
+        "message_id": {
+          "title": "Message Id",
+          "type": "string"
+        },
+        "ordinal": {
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "role": {
+          "enum": [
+            "user",
+            "assistant"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "run_status": {
+          "title": "Run Status",
+          "type": "string"
+        },
+        "origin_kind": {
+          "title": "Origin Kind",
+          "type": "string"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "start_offset": {
+          "title": "Start Offset",
+          "type": "integer"
+        },
+        "end_offset": {
+          "title": "End Offset",
+          "type": "integer"
+        },
+        "total_characters": {
+          "title": "Total Characters",
+          "type": "integer"
+        },
+        "next_start_offset": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Next Start Offset"
+        },
+        "masked_secrets": {
+          "title": "Masked Secrets",
+          "type": "integer"
+        },
+        "offset_basis": {
+          "const": "masked_text",
+          "title": "Offset Basis",
+          "type": "string"
+        }
+      },
+      "required": [
+        "session_id",
+        "session_title",
+        "project_id",
+        "project_name",
+        "message_id",
+        "ordinal",
+        "role",
+        "created_at",
+        "run_id",
+        "run_status",
+        "origin_kind",
+        "content",
+        "start_offset",
+        "end_offset",
+        "total_characters",
+        "next_start_offset",
+        "masked_secrets",
+        "offset_basis"
+      ],
+      "title": "SourceMessage",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "message": {
+      "$ref": "#/$defs/SourceMessage"
+    },
+    "content_hash": {
+      "title": "Content Hash",
+      "type": "string"
+    },
+    "previous_message_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Previous Message Id"
+    },
+    "next_message_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Next Message Id"
+    }
+  },
+  "required": [
+    "message",
+    "content_hash",
+    "previous_message_id",
+    "next_message_id"
+  ],
+  "title": "SessionSourceResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/session-source-response.schema.json"
+}

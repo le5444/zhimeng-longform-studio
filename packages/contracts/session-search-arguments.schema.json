@@ -1,0 +1,73 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "query": {
+      "default": "",
+      "description": "Literal terms separated by spaces; all must match. Empty browses recent messages.",
+      "maxLength": 500,
+      "title": "Query",
+      "type": "string"
+    },
+    "scope": {
+      "default": "project",
+      "description": "project searches the current folder, or unbound chats when no folder is open. all searches all conversations.",
+      "enum": [
+        "project",
+        "all"
+      ],
+      "title": "Scope",
+      "type": "string"
+    },
+    "session_id": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Search only this conversation; overrides scope. 'current' selects this conversation.",
+      "title": "Session Id"
+    },
+    "role": {
+      "default": "all",
+      "enum": [
+        "all",
+        "user",
+        "assistant"
+      ],
+      "title": "Role",
+      "type": "string"
+    },
+    "limit": {
+      "default": 10,
+      "maximum": 50,
+      "minimum": 1,
+      "title": "Limit",
+      "type": "integer"
+    },
+    "before_message_id": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Use next_before_message_id from the previous result to continue with the same query and scope.",
+      "title": "Before Message Id"
+    }
+  },
+  "title": "SessionSearchArguments",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/session-search-arguments.schema.json"
+}

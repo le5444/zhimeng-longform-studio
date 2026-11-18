@@ -18,6 +18,7 @@ from pydantic import (
 Sha256 = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 SourceImportProvider: TypeAlias = Literal["tomato", "local_file", "feedback_experience"]
 LocalSourceFormat: TypeAlias = Literal["txt", "epub"]
+MAX_UPLOADED_SOURCE_CHARACTERS = 8 * 1024 * 1024
 
 
 class SourceImportModel(BaseModel):
@@ -150,6 +151,27 @@ class LocalSourceInspectRequest(SourceImportModel):
         normalized = value.strip()
         if not normalized or any(ord(character) < 32 for character in normalized):
             raise ValueError("local source path must not be blank or contain controls")
+        return normalized
+
+
+class LocalTextSourceUploadRequest(SourceImportModel):
+    schema_id: Literal["zhimeng.local-text-source-upload-request.v1"] = Field(
+        default="zhimeng.local-text-source-upload-request.v1",
+        alias="schema",
+    )
+    file_name: str = Field(min_length=1, max_length=255, strict=True)
+    content: str = Field(
+        min_length=1,
+        max_length=MAX_UPLOADED_SOURCE_CHARACTERS,
+        strict=True,
+    )
+
+    @field_validator("file_name")
+    @classmethod
+    def normalize_file_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized or any(ord(character) < 32 for character in normalized):
+            raise ValueError("uploaded source file name is invalid")
         return normalized
 
 
@@ -512,8 +534,10 @@ __all__ = [
     "LocalFileSourceCandidate",
     "LocalSourceFormat",
     "LocalSourceInspectRequest",
+    "LocalTextSourceUploadRequest",
     "LocalSourceImportCreateRequest",
     "LocalSourceImportJob",
+    "MAX_UPLOADED_SOURCE_CHARACTERS",
     "PreparedLocalSourcePacket",
     "PreparedSourcePacket",
     "SourceArtifact",

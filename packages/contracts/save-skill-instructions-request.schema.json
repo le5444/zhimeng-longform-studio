@@ -1,0 +1,28 @@
+{
+  "properties": {
+    "content": {
+      "maxLength": 262144,
+      "minLength": 1,
+      "title": "Content",
+      "type": "string"
+    },
+    "expected_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Sha256"
+    }
+  },
+  "required": [
+    "content"
+  ],
+  "title": "SaveSkillInstructionsRequest",
+  "type": "object"
+}

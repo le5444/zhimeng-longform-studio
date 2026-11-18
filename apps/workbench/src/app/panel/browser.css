@@ -1,0 +1,14 @@
+.zm-browser { display: flex; flex-direction: column; flex: 1; min-height: 240px; min-width: 0; }
+.zm-browser-tabs { display: flex; align-items: center; gap: 4px; padding: 8px; overflow-x: auto; border-bottom: 1px solid var(--zm-line); }
+.zm-browser-tabs > button:not(.zm-icon-btn) { max-width: 160px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 6px 10px; color: var(--zm-fg-2); border: 1px solid var(--zm-line); border-radius: var(--zm-r-1); background: var(--zm-bg); cursor: pointer; }
+.zm-browser-tabs > button[aria-pressed="true"] { color: var(--zm-accent); background: var(--zm-bg-hover); }
+.zm-browser-address { display: flex; align-items: center; gap: 2px; padding: 6px; }
+.zm-browser-address input { flex: 1; min-width: 40px; height: 30px; padding: 0 8px; background: var(--zm-bg); color: var(--zm-fg); border: 1px solid var(--zm-line); border-radius: var(--zm-r-1); }
+.zm-browser-control { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 2px 12px 8px; font-size: var(--zm-fs-1); color: var(--zm-fg-3); }
+.zm-browser-note, .zm-browser-error { margin: 0; padding: 6px 12px; font-size: var(--zm-fs-1); overflow-wrap: anywhere; }
+.zm-browser-error { color: var(--zm-danger, #b34a40); }
+.zm-browser-page { flex: 1; min-height: 100px; background: #fff; }
+.zm-browser-page p, .zm-browser-empty { padding: 16px; color: var(--zm-fg-3); line-height: 1.8; }
+.zm-browser-downloads { max-height: 180px; flex-shrink: 0; overflow: auto; padding: 8px 12px; border-top: 1px solid var(--zm-line); font-size: var(--zm-fs-1); }
+.zm-browser-downloads summary { cursor: pointer; }
+.zm-browser-downloads > div { display: flex; flex-direction: column; gap: 3px; padding: 8px 0; overflow-wrap: anywhere; }

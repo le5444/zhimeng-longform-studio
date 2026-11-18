@@ -4,7 +4,7 @@
   "display_name": "Novel KB Manager assemble-context Handoff",
   "description": "Managed thin adapter that consumes the O2-D distillation_index handoff and produces an assemble-context intent without copying full card text or authorizing prose writeback.",
   "kind": "deterministic_tool",
-  "version": "2026.07.23-o2e.1",
+  "version": "2026.07.23-o2e.2",
   "source": {
     "type": "builtin_managed",
     "reference": "PROVENANCE.md",

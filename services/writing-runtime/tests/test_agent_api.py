@@ -26,9 +26,24 @@ from zhimeng_runtime.agent_provider import (
     ProviderCompleted,
     ProviderEvent,
     ProviderTextDelta,
+    ProviderToolCall,
     ProviderToolDefinition,
 )
 from zhimeng_runtime.app import create_app
+from zhimeng_runtime.agent_service import _SESSION_TITLE_PROMPT
+from zhimeng_runtime.agent_tools import (
+    AI_SMELL_TOOL_NAMES,
+    COMMAND_TOOL_NAMES,
+    COMPUTER_TOOL_NAMES,
+    DIRECT_WRITE_TOOL_NAMES,
+    HISTORY_TOOL_NAMES,
+    MEMORY_TOOL_NAMES,
+    PLAN_TOOL_NAMES,
+    GOAL_TOOL_NAMES,
+    SKILL_FILE_TOOL_NAMES,
+    WEB_TOOL_NAMES,
+)
+from zhimeng_runtime.project_reader import SECTION_LABELS
 from zhimeng_runtime.config import RuntimeSettings
 from zhimeng_runtime.context_compiler import compile_context_pack
 from zhimeng_runtime.context_models import ContextCreateRequest
@@ -206,7 +221,9 @@ def create_run(client: TestClient, session_id: str) -> str:
 
 
 def wait_for_success(client: TestClient, run_id: str) -> dict[str, object]:
-    for _ in range(100):
+    # 1 秒的窗口在这台机器高负载下不够（9 轮工具调用外加一次收尾起名），
+    # 放宽到 10 秒；断言的语义不变。
+    for _ in range(1000):
         payload = client.get(f"/api/v1/agent/runs/{run_id}").json()["run"]
         if payload["status"] in {"succeeded", "failed", "cancelled", "interrupted"}:
             return payload
@@ -527,6 +544,44 @@ def test_agent_api_is_explicitly_unavailable_without_provider(
         ).json()["sessions"] == []
 
 
+def test_agent_api_manages_persisted_conversation_history(
+    settings: RuntimeSettings,
+) -> None:
+    app = create_app(settings, agent_provider=ApiProvider())
+    with TestClient(app) as client:
+        bind_project(client)
+        session_id = create_session(client)
+
+        updated = client.patch(
+            f"/api/v1/agent/sessions/{session_id}",
+            json={"title": "  第一章重写  ", "pinned": True},
+        )
+        assert updated.status_code == 200, updated.text
+        assert updated.json()["title"] == "第一章重写"
+        assert updated.json()["pinned"] is True
+
+        listed = client.get(
+            f"/api/v1/projects/{PROJECT_ID}/agent/sessions"
+        )
+        assert listed.status_code == 200, listed.text
+        assert listed.json()["sessions"][0]["session_id"] == session_id
+
+        removed = client.delete(f"/api/v1/agent/sessions/{session_id}")
+        assert removed.status_code == 204, removed.text
+        assert client.get(
+            f"/api/v1/projects/{PROJECT_ID}/agent/sessions"
+        ).json()["sessions"] == []
+        assert client.get(
+            f"/api/v1/agent/sessions/{session_id}"
+        ).json()["status"] == "closed"
+
+        empty_update = client.patch(
+            f"/api/v1/agent/sessions/{session_id}",
+            json={},
+        )
+        assert empty_update.status_code == 422
+
+
 def test_agent_api_uses_workbench_provider_settings_without_restart(
     settings: RuntimeSettings,
 ) -> None:
@@ -542,10 +597,12 @@ def test_agent_api_uses_workbench_provider_settings_without_restart(
                 "base_url": "https://provider.example/v1",
                 "model": "author-selected-model",
                 "api_key": secret,
+                "reasoning_effort": "high",
             },
         )
         assert saved.status_code == 200, saved.text
         assert saved.json()["configured"] is True
+        assert saved.json()["reasoning_effort"] == "high"
         assert secret not in saved.text
 
         status_response = client.get("/api/v1/agent/status")
@@ -563,6 +620,174 @@ def test_agent_api_uses_workbench_provider_settings_without_restart(
         )
         assert session.status_code == 201, session.text
         assert session.json()["executor"] == status_payload["executor"]
+        session_id = str(session.json()["session_id"])
+
+        changed = client.put(
+            "/api/v1/settings/provider",
+            json={"reasoning_effort": "low"},
+        )
+        assert changed.status_code == 200, changed.text
+        assert changed.json()["reasoning_effort"] == "low"
+        changed_executor = client.get("/api/v1/agent/status").json()["executor"]
+        assert changed_executor != status_payload["executor"]
+
+        # 切换模型配置不是新开聊天：当前会话只更新下一次运行的 Provider 绑定。
+        rebound = client.patch(
+            f"/api/v1/agent/sessions/{session_id}",
+            json={"rebind_provider": True},
+        )
+        assert rebound.status_code == 200, rebound.text
+        assert rebound.json()["session_id"] == session_id
+        assert rebound.json()["executor"] == changed_executor
+        sessions = client.get(f"/api/v1/projects/{PROJECT_ID}/agent/sessions")
+        assert sessions.status_code == 200, sessions.text
+        assert [item["session_id"] for item in sessions.json()["sessions"]] == [session_id]
+
+
+def test_agent_api_keeps_model_preference_on_each_conversation(
+    settings: RuntimeSettings,
+) -> None:
+    app = create_app(settings)
+    with TestClient(app) as client:
+        bind_project(client)
+        first_settings = client.put(
+            "/api/v1/settings/provider",
+            json={
+                "base_url": "https://provider.example/v1",
+                "model": "model-for-first-chat",
+                "api_key": "conversation-scoped-secret",
+                "reasoning_effort": "high",
+            },
+        )
+        assert first_settings.status_code == 200, first_settings.text
+        first = client.post(
+            f"/api/v1/projects/{PROJECT_ID}/agent/sessions",
+            json={"title": "第一条对话"},
+        )
+        assert first.status_code == 201, first.text
+
+        second_settings = client.put(
+            "/api/v1/settings/provider",
+            json={
+                "model": "model-for-second-chat",
+                "reasoning_effort": "low",
+            },
+        )
+        assert second_settings.status_code == 200, second_settings.text
+        second = client.post(
+            f"/api/v1/projects/{PROJECT_ID}/agent/sessions",
+            json={"title": "第二条对话"},
+        )
+        assert second.status_code == 201, second.text
+
+        first_id = str(first.json()["session_id"])
+        second_id = str(second.json()["session_id"])
+        switched = client.patch(
+            f"/api/v1/agent/sessions/{first_id}",
+            json={
+                "rebind_provider": True,
+                "model": "model-for-first-chat-next",
+                "reasoning_effort": "xhigh",
+            },
+        )
+        assert switched.status_code == 200, switched.text
+        assert switched.json()["session_id"] == first_id
+
+        sessions = client.get(f"/api/v1/projects/{PROJECT_ID}/agent/sessions")
+        assert sessions.status_code == 200, sessions.text
+        by_id = {item["session_id"]: item for item in sessions.json()["sessions"]}
+        first_preference = by_id[first_id]["capabilities"]["extensions"][
+            "x-zhimeng.provider-preference"
+        ]["config"]
+        second_preference = by_id[second_id]["capabilities"]["extensions"][
+            "x-zhimeng.provider-preference"
+        ]["config"]
+        assert first_preference == {
+            "provider_id": "default",
+            "model": "model-for-first-chat-next",
+            "reasoning_effort": "xhigh",
+        }
+        assert second_preference == {
+            "provider_id": "default",
+            "model": "model-for-second-chat",
+            "reasoning_effort": "low",
+        }
+
+
+def test_agent_api_switches_saved_provider_without_opening_a_new_conversation(
+    settings: RuntimeSettings,
+) -> None:
+    app = create_app(settings)
+    with TestClient(app) as client:
+        bind_project(client)
+        first = client.put(
+            "/api/v1/settings/providers",
+            json={
+                "provider_id": "primary-line",
+                "name": "主力线路",
+                "base_url": "https://primary.example/v1",
+                "model": "primary-writer",
+                "selected_models": ["primary-writer", "primary-reader"],
+                "api_key": "primary-secret",
+                "reasoning_effort": "high",
+                "make_active": True,
+            },
+        )
+        assert first.status_code == 200, first.text
+        second = client.put(
+            "/api/v1/settings/providers",
+            json={
+                "provider_id": "backup-line",
+                "name": "备用线路",
+                "base_url": "https://backup.example/v1",
+                "model": "backup-writer",
+                "selected_models": ["backup-writer"],
+                "api_key": "backup-secret",
+                "reasoning_effort": "auto",
+                "make_active": False,
+            },
+        )
+        assert second.status_code == 200, second.text
+
+        catalog = client.get("/api/v1/settings/providers")
+        assert catalog.status_code == 200, catalog.text
+        assert catalog.json()["active_provider_id"] == "primary-line"
+        assert [item["provider_id"] for item in catalog.json()["providers"]] == [
+            "primary-line",
+            "backup-line",
+        ]
+        assert "primary-secret" not in catalog.text
+        assert "backup-secret" not in catalog.text
+
+        created = client.post(
+            f"/api/v1/projects/{PROJECT_ID}/agent/sessions",
+            json={"title": "同一条对话换线路"},
+        )
+        assert created.status_code == 201, created.text
+        session_id = str(created.json()["session_id"])
+        assert created.json()["capabilities"]["extensions"][
+            "x-zhimeng.provider-preference"
+        ]["config"]["provider_id"] == "primary-line"
+
+        switched = client.patch(
+            f"/api/v1/agent/sessions/{session_id}",
+            json={
+                "provider_id": "backup-line",
+                "model": "backup-writer",
+                "reasoning_effort": "low",
+            },
+        )
+        assert switched.status_code == 200, switched.text
+        assert switched.json()["session_id"] == session_id
+        preference = switched.json()["capabilities"]["extensions"][
+            "x-zhimeng.provider-preference"
+        ]["config"]
+        assert preference == {
+            "provider_id": "backup-line",
+            "model": "backup-writer",
+            "reasoning_effort": "low",
+        }
+        assert client.get("/api/v1/settings/provider").json()["provider_id"] == "primary-line"
 
 
 def test_agent_api_reports_unavailable_context_source_as_retryable_503(
@@ -689,6 +914,64 @@ def test_agent_api_reports_provider_identity_drift_as_nonretryable_conflict(
         assert response.json()["error"]["code"] == "workflow_executor_changed"
         assert response.json()["error"]["retryable"] is False
         assert second_client.app.state.agent_service.store.list_runs(session_id) == []
+
+
+def test_agent_api_rebinds_provider_without_creating_a_new_session(
+    settings: RuntimeSettings,
+) -> None:
+    first_app = create_app(settings, agent_provider=ApiProvider())
+    with TestClient(first_app) as first_client:
+        bind_project(first_client)
+        session_id = create_session(first_client)
+        first_run = create_run(first_client, session_id)
+        assert wait_for_success(first_client, first_run)["status"] == "succeeded"
+        before_rebind_messages = first_client.app.state.agent_service.store.list_messages(
+            session_id
+        )
+        assert [message.content for message in before_rebind_messages] == [
+            "收紧开头",
+            "第一段第二段",
+        ]
+
+    second_app = create_app(settings, agent_provider=ChangedApiProvider())
+    with TestClient(second_app) as second_client:
+        assert [
+            message.content
+            for message in second_client.app.state.agent_service.store.list_messages(
+                session_id
+            )
+        ] == ["收紧开头", "第一段第二段"]
+
+        rebound = second_client.patch(
+            f"/api/v1/agent/sessions/{session_id}",
+            json={"rebind_provider": True},
+        )
+
+        assert rebound.status_code == 200, rebound.text
+        assert rebound.json()["session_id"] == session_id
+        assert rebound.json()["executor"]["instance_id"] == "provider-config-" + "b" * 64
+
+        started = second_client.post(
+            f"/api/v1/agent/sessions/{session_id}/runs",
+            headers={"Idempotency-Key": "turn-after-rebind"},
+            json={
+                "message": "继续当前对话",
+                "expected_project_revision": 1,
+                "expected_project_fingerprint": FINGERPRINT,
+                "active_chapter_id": "chapter-001",
+            },
+        )
+        assert started.status_code == 202, started.text
+        assert started.json()["run"]["session_id"] == session_id
+        assert wait_for_success(second_client, str(started.json()["run"]["run_id"]))[
+            "status"
+        ] == "succeeded"
+        assert [
+            message.content
+            for message in second_client.app.state.agent_service.store.list_messages(
+                session_id
+            )
+        ] == ["收紧开头", "第一段第二段", "继续当前对话", "第一段第二段"]
 
 
 def test_agent_api_rejects_cursor_from_another_run(settings: RuntimeSettings) -> None:
@@ -1023,3 +1306,516 @@ def test_provider_recovery_api_maps_stale_cas_to_nonretryable_409(
     assert response.json()["error"]["code"] == "provider_recovery_stale"
     assert response.json()["error"]["retryable"] is False
     assert verifier.calls == 0
+
+
+def test_unbound_casual_session_runs_pure_chat_without_project(
+    settings: RuntimeSettings,
+) -> None:
+    """「随便聊」：不绑定小说项目的会话走同一个 Agent 核心，纯回答即完成。"""
+    app = create_app(settings, agent_provider=ApiProvider())
+    with TestClient(app) as client:
+        created = client.post("/api/v1/agent/sessions", json={"title": "随便聊聊"})
+        assert created.status_code == 201, created.text
+        session_payload = created.json()
+        assert session_payload["project_revision"] is None
+        session_id = str(session_payload["session_id"])
+
+        listed = client.get("/api/v1/agent/sessions").json()
+        assert [item["session_id"] for item in listed["sessions"]] == [session_id]
+        assert listed["sessions"][0]["project_revision"] is None
+
+        # 项目会话清单不该混进闲聊会话。
+        bind_project(client)
+        project_sessions = client.get(
+            f"/api/v1/projects/{PROJECT_ID}/agent/sessions"
+        ).json()
+        assert project_sessions["sessions"] == []
+
+        started = client.post(
+            f"/api/v1/agent/sessions/{session_id}/runs",
+            headers={"Idempotency-Key": "casual-00000001"},
+            json={"message": "聊聊怎么把开篇写得不拖沓"},
+        )
+        assert started.status_code == 202, started.text
+        run_id = str(started.json()["run"]["run_id"])
+
+        run = wait_for_success(client, run_id)
+        assert run["status"] == "succeeded", run["error"]
+        assert run["project_revision"] is None
+
+        messages = client.get(
+            f"/api/v1/agent/sessions/{session_id}/messages"
+        ).json()["messages"]
+        assert [message["role"] for message in messages] == ["user", "assistant"]
+        assert messages[-1]["content"] == "第一段第二段"
+
+        activities = client.get(f"/api/v1/agent/runs/{run_id}/activities").json()
+        activity_items = activities.get("activities", [])
+        assert activity_items
+        assert all(item["project_revision"] is None for item in activity_items)
+
+        # 会话改名（rebind/更名路由按会话寻址）照常可用。
+        renamed = client.patch(
+            f"/api/v1/agent/sessions/{session_id}", json={"title": "灵感草稿"}
+        )
+        assert renamed.status_code == 200, renamed.text
+        assert renamed.json()["title"] == "灵感草稿"
+
+
+class RecordingApiProvider(ApiProvider):
+    """记录每次 provider 请求拿到的消息与工具名，供断言提示词装配。"""
+
+    def __init__(self) -> None:
+        self.requests: list[tuple[list[dict[str, object]], list[str]]] = []
+
+    async def stream_chat(
+        self,
+        messages: Sequence[Mapping[str, str]],
+        *,
+        cancel_event: asyncio.Event,
+        tools: Sequence[ProviderToolDefinition] = (),
+    ) -> AsyncIterator[ProviderEvent]:
+        self.requests.append(
+            ([dict(message) for message in messages], [tool.name for tool in tools])
+        )
+        async for event in super().stream_chat(messages, cancel_event=cancel_event, tools=tools):
+            yield event
+
+
+def test_casual_chat_can_consult_the_authors_skill_folders(
+    settings: RuntimeSettings,
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """随便聊挂着技能翻阅工具，但不再往提示词里塞技能菜单——模型想用自己去发现。"""
+    skills_root = tmp_path / "author-skills"
+    folder = skills_root / "网文知识库"
+    folder.mkdir(parents=True)
+    (folder / "SKILL.md").write_text(
+        "---\nname: 网文知识库\n"
+        "description: 网文写作机制卡库，玄幻开篇钩子、场景写法、书名章名都能查\n---\n\n"
+        "# 网文知识库\n\n先 skill_search 再 skill_read_file。\n",
+        encoding="utf-8",
+    )
+    (folder / "类型规律").mkdir()
+    (folder / "类型规律" / "玄幻开篇.md").write_text("# 玄幻开篇\n\n钩子前置。\n", encoding="utf-8")
+    monkeypatch.setenv("ZHIMENG_USER_SKILLS_ROOT", str(skills_root))
+    provider = RecordingApiProvider()
+    app = create_app(settings, agent_provider=provider)
+    with TestClient(app) as client:
+        created = client.post("/api/v1/agent/sessions", json={"title": "随便聊聊"})
+        assert created.status_code == 201, created.text
+        session_id = str(created.json()["session_id"])
+        started = client.post(
+            f"/api/v1/agent/sessions/{session_id}/runs",
+            headers={"Idempotency-Key": "casual-skills-00001"},
+            json={"message": "查一下网文知识库：玄幻开篇怎么写钩子", "writer_mode": "author_review_change_proposal"},
+        )
+        assert started.status_code == 202, started.text
+        run = wait_for_success(client, str(started.json()["run"]["run_id"]))
+        assert run["status"] == "succeeded", run["error"]
+
+    assert provider.requests
+    messages, tool_names = provider.requests[0]
+    # 随便聊（完全访问）：技能翻阅 + 电脑上的读写与执行命令 + 记偏好 + 上网抓网页 / 搜网页
+    # + 列工作计划；写文件工具 9-26 起不打开文件夹也给（纠偏指令 3.3），
+    # 只认打开的项目的列目录 / 读 / 搜不挂。只读挡位另见 test_casual_chat_tier_20260926.py。
+    # AI 味打分随技能来（纠偏指令 3.8）：这里唯一的技能没在 allowed-tools 里声明它，就不给。
+    assert sorted(tool_names) == sorted(
+        SKILL_FILE_TOOL_NAMES | COMPUTER_TOOL_NAMES | COMMAND_TOOL_NAMES | MEMORY_TOOL_NAMES | WEB_TOOL_NAMES | PLAN_TOOL_NAMES | GOAL_TOOL_NAMES | DIRECT_WRITE_TOOL_NAMES | HISTORY_TOOL_NAMES
+    )
+    assert not AI_SMELL_TOOL_NAMES & set(tool_names)
+    system_messages = [str(message.get("content", "")) for message in messages if message.get("role") == "system"]
+    # 作者 2026-09-20：随便聊不塞内部提示词——不发场景说明，也不发技能菜单。
+    # 弱模型会把塞进去的系统提示原文念出来当答案；技能靠工具按需发现，不靠菜单硬塞。
+    # 唯一的系统消息是开头那段环境事实（纠偏指令 3.2），一行一条「键：值」。
+    assert len(system_messages) == 1
+    assert [line.split("：", 1)[0] for line in system_messages[0].splitlines()] == [
+        "系统", "用户主目录", "当前文件夹", "今天", "挡位"
+    ]
+    assert "已启用的技能" not in system_messages[0]
+    assert "网文知识库" not in system_messages[0]
+
+
+def _run_request_messages(
+    provider: RecordingApiProvider,
+    user_text: str,
+) -> list[dict[str, object]]:
+    """从记录里挑出某一个 Run 的首轮请求（自动起名也走 provider，按用户消息原文区分）。"""
+
+    for messages, _tool_names in provider.requests:
+        if any(message.get("content") == user_text for message in messages):
+            return messages
+    raise AssertionError(f"没有找到装着 {user_text!r} 的 provider 请求")
+
+
+def test_casual_chat_with_manual_skill_names_gets_one_pointer_message(
+    settings: RuntimeSettings,
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """作者在输入框用 / 点名技能（引用标签）：这一条 Run 多发一条指路消息，
+    告诉模型用 skill_read_file 去读点名的技能；没点名的下一条照旧零系统提示。"""
+    skills_root = tmp_path / "author-skills"
+    folder = skills_root / "网文知识库"
+    folder.mkdir(parents=True)
+    (folder / "SKILL.md").write_text(
+        "---\nname: 网文知识库\n"
+        "description: 网文写作机制卡库，玄幻开篇钩子、场景写法、书名章名都能查\n---\n\n"
+        "# 网文知识库\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("ZHIMENG_USER_SKILLS_ROOT", str(skills_root))
+    provider = RecordingApiProvider()
+    app = create_app(settings, agent_provider=provider)
+    with TestClient(app) as client:
+        created = client.post("/api/v1/agent/sessions", json={"title": "随便聊聊"})
+        assert created.status_code == 201, created.text
+        session_id = str(created.json()["session_id"])
+        started = client.post(
+            f"/api/v1/agent/sessions/{session_id}/runs",
+            headers={"Idempotency-Key": "manual-skill-00001"},
+            json={
+                "message": "玄幻开篇怎么写钩子",
+                "manual_skill_names": ["网文知识库"],
+            },
+        )
+        assert started.status_code == 202, started.text
+        run = wait_for_success(client, str(started.json()["run"]["run_id"]))
+        assert run["status"] == "succeeded", run["error"]
+
+        follow_up = client.post(
+            f"/api/v1/agent/sessions/{session_id}/runs",
+            headers={"Idempotency-Key": "manual-skill-00002"},
+            json={"message": "那第二章怎么接"},
+        )
+        assert follow_up.status_code == 202, follow_up.text
+        second = wait_for_success(client, str(follow_up.json()["run"]["run_id"]))
+        assert second["status"] == "succeeded", second["error"]
+
+    tagged = _run_request_messages(provider, "玄幻开篇怎么写钩子")
+    system_text = "\n".join(
+        str(message.get("content", "")) for message in tagged if message.get("role") == "system"
+    )
+    assert "网文知识库" in system_text
+    assert "skill_read_file" in system_text
+
+    untagged = _run_request_messages(provider, "那第二章怎么接")
+    # 开头那段环境事实和第一条的一字不差。
+    assert untagged[0] == tagged[0] and str(untagged[0]["content"]).startswith("系统：")
+    # 9-28 起上一轮发给模型的那一段原样带进历史（ZCode 档案 12.2）：点名的指路消息跟在第一句话后面、只出现一次，
+    # 第二句话后面不再补。
+    pointers = [index for index, message in enumerate(untagged) if "skill_read_file" in str(message.get("content", ""))]
+    asked = [index for index, message in enumerate(untagged) if message.get("content") == "那第二章怎么接"]
+    assert len(pointers) == 1 and len(asked) == 1 and pointers[0] < asked[0]
+    assert untagged[pointers[0] - 1].get("content") == "玄幻开篇怎么写钩子"
+
+
+def test_book_setup_chat_in_read_only_stays_a_conversation(
+    settings: RuntimeSettings,
+) -> None:
+    """开书聊天在「只问不改」挡位不再炸 writer_task_mode_invalid：
+    降级为纯对话（摘掉提案/直接写/命令工具，只留只读翻阅），正常给出回答。"""
+    provider = RecordingApiProvider()
+    app = create_app(settings, agent_provider=provider)
+    with TestClient(app) as client:
+        bind_project(client)
+        client.app.state.agent_service.project_kb_service = CurrentProjectKbVerifier()
+        session_id = create_session(client)
+        request = ContextCreateRequest(
+            objective="我有个脑洞，帮我开一本新书。",
+            profile="chat_book_setup",
+            active_chapter_id=None,
+            expected_project_revision=1,
+            expected_project_fingerprint=FINGERPRINT,
+            project_kb_state_id=PROJECT_KB_STATE_ID,
+            project_kb_manifest_hash=PROJECT_KB_MANIFEST_HASH,
+        )
+        pack = compile_context_pack(
+            context_pack_id="context-pack-api-book-setup-read-only",
+            session_id=session_id,
+            project_id=PROJECT_ID,
+            history_through_ordinal=0,
+            request=request,
+            history=(),
+            candidates=(),
+            max_characters=20_000,
+            max_tokens=20_000,
+            created_at=datetime.now(UTC),
+        )
+        ContextStore(client.app.state.runtime.store).create_pack(pack)
+
+        started = client.post(
+            f"/api/v1/agent/sessions/{session_id}/runs",
+            headers={"Idempotency-Key": "book-setup-read-only-0001"},
+            json={
+                "message": request.objective,
+                "expected_project_revision": 1,
+                "expected_project_fingerprint": FINGERPRINT,
+                "active_chapter_id": None,
+                "writer_mode": "repair_only",
+                "context_pack_id": pack.context_pack_id,
+                "expected_context_pack_hash": pack.pack_hash,
+            },
+        )
+        assert started.status_code == 202, started.text
+        run = wait_for_success(client, str(started.json()["run"]["run_id"]))
+        assert run["status"] == "succeeded", run["error"]
+
+    assert provider.requests
+    messages, tool_names = provider.requests[0]
+    # 只读挡位：提案、直接写、命令工具全部摘掉，只读翻阅仍在。
+    assert "change_set_propose" not in tool_names
+    assert "write_file" not in tool_names
+    assert "edit_file" not in tool_names
+    assert not (set(COMMAND_TOOL_NAMES) & set(tool_names))
+    assert "skill_execute" not in tool_names
+    assert "read_file" in tool_names
+    assert "list_files" in tool_names
+    system_text = "\n".join(
+        str(message.get("content", "")) for message in messages if message.get("role") == "system"
+    )
+    assert "只读" in system_text
+    assert "writer_task_mode_invalid" not in system_text
+
+
+
+class BookSetupProposalProvider(ApiProvider):
+    """开书聊天（动手改挡位）：第一轮提一个 5 份新建的提案，第二轮正常回答。
+
+    5 份里带着旧闸门会拒的每一种：超过 3 份、非 .md、层深超过 4、落在正文夹。
+    旧闸门已删（2026-09-20 P2 第 5 条），这个提案应当照常成立。
+    """
+
+    def __init__(self) -> None:
+        self.requests: list[list[dict[str, object]]] = []
+        self.turns = 0
+
+    async def stream_chat(
+        self,
+        messages: Sequence[Mapping[str, str]],
+        *,
+        cancel_event: asyncio.Event,
+        tools: Sequence[ProviderToolDefinition] = (),
+    ) -> AsyncIterator[ProviderEvent]:
+        self.requests.append([dict(message) for message in messages])
+        if any(
+            message.get("role") == "system" and message.get("content") == _SESSION_TITLE_PROMPT
+            for message in messages
+        ):
+            yield ProviderTextDelta("测试会话起名")
+            yield ProviderCompleted("stop", None)
+            return
+        self.turns += 1
+        if self.turns == 1:
+            yield ProviderToolCall(
+                index=0,
+                tool_call_id="call_book_setup_propose_0001",
+                tool_name="change_set_propose",
+                arguments={
+                    "title": "开书五件套",
+                    "summary": "一次聊出定位、世界观、人物、大纲与第一章",
+                    "changes": [
+                        {
+                            "operation": "create",
+                            "relative_path": "01_项目定位/项目卡片.md",
+                            "after_content": "# 项目卡片\n\n一个破宗门只剩七个人。\n",
+                            "rationale": "作者已确认故事起点",
+                        },
+                        {
+                            "operation": "create",
+                            "relative_path": "02_世界观设定/世界.md",
+                            "after_content": "# 世界\n\n低武宗门世界。\n",
+                            "rationale": "作者已确认世界基调",
+                        },
+                        {
+                            "operation": "create",
+                            "relative_path": "03_人物设定/主角.md",
+                            "after_content": "# 主角\n\n接手破宗门。\n",
+                            "rationale": "作者已确认主角身份",
+                        },
+                        {
+                            "operation": "create",
+                            "relative_path": "04_剧情大纲/卷一/细纲/前三十章/节奏表.txt",
+                            "after_content": "前三十章节奏\n",
+                            "rationale": "作者要一份纯文本节奏表",
+                        },
+                        {
+                            "operation": "create",
+                            "relative_path": "05_正文内容/第一卷/CH001.md",
+                            "after_content": "# 第一章\n\n正文。\n",
+                            "rationale": "作者要求直接开写第一章",
+                        },
+                    ],
+                },
+            )
+            yield ProviderCompleted("tool_calls", None)
+            return
+        yield ProviderTextDelta("五份资料已经整理好，等你确认。")
+        yield ProviderCompleted("stop", None)
+
+
+class _AnyProjectKbVerifier:
+    """真实 inspect 出来的项目 id 不是常量 PROJECT_ID，KB 校验双倍放宽到任意项目。"""
+
+    def require_current_binding(
+        self,
+        project_id: str,
+        *,
+        project_kb_state_id: str,
+        project_kb_manifest_hash: str,
+        expected_knowledge_fingerprint: str | None = None,
+    ) -> SimpleNamespace:
+        return SimpleNamespace(knowledge_fingerprint=expected_knowledge_fingerprint)
+
+    @contextmanager
+    def current_binding_lease(self, project_id: str, **kwargs):
+        yield self.require_current_binding(project_id, **kwargs)
+
+
+def test_book_setup_chat_proposal_is_no_longer_count_depth_or_folder_gated(
+    tmp_path: Path,
+) -> None:
+    """开书链新建限制整段删除后的端到端证据：一次提 5 份新建（超 3 份、
+    含 .txt、层深 5、含正文夹）照常成立，提案等作者点头，不落盘。"""
+    trusted_root = tmp_path / "library"
+    book = trusted_root / "开书测试"
+    book.mkdir(parents=True)
+    for index, label in SECTION_LABELS.items():
+        (book / f"{index:02d}_{label}").mkdir()
+    (book / "05_正文内容" / "第一卷").mkdir(parents=True)
+
+    settings = RuntimeSettings(
+        environment="test",
+        database_path=tmp_path / "runtime.sqlite3",
+        trusted_project_roots=(trusted_root,),
+        allowed_origins=(),
+        sse_heartbeat_seconds=0.05,
+    )
+    provider = BookSetupProposalProvider()
+    app = create_app(settings, agent_provider=provider)
+    with TestClient(app) as client:
+        inspected = client.post("/api/v1/projects/inspect", json={"root_path": str(book)})
+        assert inspected.status_code == 200, inspected.text
+        payload = inspected.json()
+        project_id = str(payload["project"]["project_id"])
+        revision = payload["project"]["revision"]
+        fingerprint = str(payload["project"]["fingerprint"])
+        client.app.state.agent_service.project_kb_service = _AnyProjectKbVerifier()
+        session_response = client.post(
+            f"/api/v1/projects/{project_id}/agent/sessions",
+            json={"title": "开新书"},
+        )
+        assert session_response.status_code == 201, session_response.text
+        session_id = str(session_response.json()["session_id"])
+        request = ContextCreateRequest(
+            objective="我有个脑洞，帮我开一本新书。",
+            profile="chat_book_setup",
+            active_chapter_id=None,
+            expected_project_revision=revision,
+            expected_project_fingerprint=fingerprint,
+            project_kb_state_id=PROJECT_KB_STATE_ID,
+            project_kb_manifest_hash=PROJECT_KB_MANIFEST_HASH,
+        )
+        pack = compile_context_pack(
+            context_pack_id="context-pack-api-book-setup-ungated",
+            session_id=session_id,
+            project_id=project_id,
+            history_through_ordinal=0,
+            request=request,
+            history=(),
+            candidates=(),
+            max_characters=20_000,
+            max_tokens=20_000,
+            created_at=datetime.now(UTC),
+        )
+        ContextStore(client.app.state.runtime.store).create_pack(pack)
+
+        started = client.post(
+            f"/api/v1/agent/sessions/{session_id}/runs",
+            headers={"Idempotency-Key": "book-setup-ungated-0001"},
+            json={
+                "message": request.objective,
+                "expected_project_revision": revision,
+                "expected_project_fingerprint": fingerprint,
+                "active_chapter_id": None,
+                "writer_mode": "author_review_change_proposal",
+                "context_pack_id": pack.context_pack_id,
+                "expected_context_pack_hash": pack.pack_hash,
+            },
+        )
+        assert started.status_code == 202, started.text
+        run = wait_for_success(client, str(started.json()["run"]["run_id"]))
+        assert run["status"] == "succeeded", run["error"]
+
+    # 第二轮的消息里带着 change_set_propose 的成功结果：提案成立，等待作者确认。
+    assert len(provider.requests) >= 2
+    tool_results = [
+        message
+        for message in provider.requests[1]
+        if message.get("role") == "tool"
+    ]
+    assert len(tool_results) == 1
+    content = str(tool_results[0].get("content"))
+    assert '"status":"succeeded"' in content
+    assert "change_set" in content
+    # 提案不落盘：作者点头前，书里一个文件都不该多。
+    created_on_disk = [path for path in book.rglob("*") if path.is_file()]
+    assert created_on_disk == []
+
+
+def test_accept_reported_model_endpoint_adds_alias_to_active_profile(
+    settings: RuntimeSettings,
+) -> None:
+    """失败卡「认可这个名字」的端点：把上报名加进当前在用那套模型服务，
+    响应里看不到密钥；没配服务时 400 而不是 500。"""
+    app = create_app(settings)
+    with TestClient(app) as client:
+        saved = client.put(
+            "/api/v1/settings/providers",
+            json={
+                "provider_id": "primary-line",
+                "name": "主力线路",
+                "base_url": "https://primary.example/v1",
+                "model": "primary-writer",
+                "selected_models": ["primary-writer"],
+                "api_key": "primary-secret",
+                "reasoning_effort": "high",
+                "make_active": True,
+            },
+        )
+        assert saved.status_code == 200, saved.text
+
+        accepted = client.post(
+            "/api/v1/settings/provider/accept-reported-model",
+            json={"reported_model": "primary-writer-0815"},
+        )
+        assert accepted.status_code == 200, accepted.text
+        payload = accepted.json()
+        assert payload["already_accepted"] is False
+        assert payload["reported_model"] == "primary-writer-0815"
+        assert payload["active_settings"]["accepted_reported_models"] == [
+            "primary-writer-0815"
+        ]
+        assert "primary-secret" not in accepted.text
+
+        again = client.post(
+            "/api/v1/settings/provider/accept-reported-model",
+            json={"reported_model": "primary-writer-0815"},
+        )
+        assert again.status_code == 200, again.text
+        assert again.json()["already_accepted"] is True
+
+    empty_app = create_app(
+        RuntimeSettings(
+            environment="test",
+            database_path=settings.database_path.parent / "elsewhere" / "other.sqlite3",
+            allowed_origins=(),
+        )
+    )
+    with TestClient(empty_app) as client:
+        missing = client.post(
+            "/api/v1/settings/provider/accept-reported-model",
+            json={"reported_model": "anything"},
+        )
+        assert missing.status_code == 400, missing.text

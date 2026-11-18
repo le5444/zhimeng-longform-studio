@@ -1,0 +1,84 @@
+{
+  "$defs": {
+    "McpToolDetail": {
+      "properties": {
+        "alias": {
+          "title": "Alias",
+          "type": "string"
+        },
+        "annotations": {
+          "additionalProperties": true,
+          "title": "Annotations",
+          "type": "object"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "input_schema": {
+          "additionalProperties": true,
+          "title": "Input Schema",
+          "type": "object"
+        },
+        "raw_name": {
+          "title": "Raw Name",
+          "type": "string"
+        },
+        "read_only": {
+          "title": "Read Only",
+          "type": "boolean"
+        },
+        "schema_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schema Error"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        }
+      },
+      "required": [
+        "alias",
+        "raw_name",
+        "description",
+        "input_schema",
+        "read_only",
+        "annotations"
+      ],
+      "title": "McpToolDetail",
+      "type": "object"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/mcp-tool-list.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "tools": {
+      "items": {
+        "$ref": "#/$defs/McpToolDetail"
+      },
+      "title": "Tools",
+      "type": "array"
+    }
+  },
+  "required": [
+    "tools"
+  ],
+  "title": "McpToolListResponse",
+  "type": "object"
+}

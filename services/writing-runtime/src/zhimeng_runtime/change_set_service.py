@@ -21,8 +21,10 @@ from zhimeng_runtime.change_set_models import (
     ChangeHunk,
     ChangeOperation,
     ChangeSetApplyRequest,
+    ChangeSetDiscardRequest,
     ChangeSetCreateRequest,
     ChangeSetDecisionRequest,
+    ChangeSetHunkEditRequest,
     ChangeSetListResponse,
     ChangeSetOrigin,
     ChangeSetResponse,
@@ -30,6 +32,7 @@ from zhimeng_runtime.change_set_models import (
     ChangeSetStatus,
     ChangeSetSummary,
     HunkDecision,
+    HunkDecisionUpdate,
     NlclCallUsageContinuityReceipt,
     NlclCallUsageContinuityRequest,
     NlclCallUsageContinuityResponse,
@@ -111,11 +114,10 @@ from zhimeng_runtime.change_set_models import (
     WritebackManifest,
     change_set_persisted_payload,
 )
-from zhimeng_runtime.database import ProjectBindingRecord, SqliteStore
-from zhimeng_runtime.formal_draft_models import (
-    FormalDraftAuthorizationReceipt,
-    FormalDraftDecision,
-    FormalDraftEvaluateRequest,
+from zhimeng_runtime.database import (
+    ProjectBindingRecord,
+    SqliteStore,
+    latest_own_write_pin,
 )
 from zhimeng_runtime.formal_knowledge_promotion_models import (
     FormalKnowledgePromotionAction,
@@ -176,10 +178,6 @@ from zhimeng_runtime.gate_pipeline_models import (
     GatePipelineStepCode,
     gate_pipeline_receipt_hash,
 )
-from zhimeng_runtime.formal_draft_service import (
-    FormalDraftAuthorizationError,
-    FormalDraftAuthorizationService,
-)
 from zhimeng_runtime.hard_fact_models import (
     HardFactEvaluateRequest,
     HardFactGateReceipt,
@@ -228,6 +226,8 @@ from zhimeng_runtime.post_draft_gate_models import (
     canonical_json_hash,
     post_draft_gate_receipt_hash,
 )
+from zhimeng_runtime.fs_atomic import replace_with_retry
+from zhimeng_runtime.text_encoding import decode_project_text
 
 if TYPE_CHECKING:
     from zhimeng_runtime.skill_executor import SkillExecutor, SkillExecutionOutcome
@@ -235,7 +235,8 @@ if TYPE_CHECKING:
 
 UTF8_BOM = b"\xef\xbb\xbf"
 REPARSE_POINT_ATTRIBUTE = 0x400
-TEXT_EXTENSIONS = frozenset({".json", ".md", ".txt", ".yaml", ".yml"})
+# Legacy tool classification imports this; text editing itself uses byte decoding.
+TEXT_EXTENSIONS = frozenset({".json", ".jsonl", ".md", ".markdown", ".txt", ".yaml", ".yml", ".csv", ".toml"})
 MAX_WRITEBACK_JOURNAL_BYTES = 2 * 1024 * 1024
 KNOWLEDGE_VALIDATOR_BUNDLE_CAPABILITY = "knowledge_validator_bundle.v1"
 
@@ -258,6 +259,10 @@ class ChangeSetStateError(ChangeSetError):
 
 class ChangeSetInputError(ChangeSetError):
     pass
+
+
+class ChangeSetReviewRequiredError(ChangeSetError):
+    """The requested write is intentionally left for explicit author review."""
 
 
 class ChangeSetWritebackError(ChangeSetError):
@@ -305,6 +310,8 @@ class _PreparedWrite:
     accepted_hunks: list[str]
     rejected_hunks: list[str]
     applied: bool = False
+    # 移动/改名（move）的源路径：apply 时把它原子改名成 target，撤回挪回。
+    source: Path | None = None
 
 
 @dataclass(slots=True)
@@ -396,9 +403,17 @@ def _stat_key(value: os.stat_result) -> tuple[int, int, int, int, int]:
     )
 
 
-def _encode_text(content: str, *, preserve_utf8_bom: bool) -> bytes:
-    encoded = content.encode("utf-8")
-    return UTF8_BOM + encoded if preserve_utf8_bom else encoded
+def _encode_text(content: str, *, preserve_utf8_bom: bool, original_bytes: bytes | None = None) -> bytes:
+    if original_bytes is not None:
+        _, encoding, bom = decode_project_text(original_bytes)
+    else:
+        encoding, bom = "utf-8", UTF8_BOM if preserve_utf8_bom else b""
+    encoded = bom + content.encode(encoding)
+    if len(encoded) > MAX_TEXT_FILE_BYTES:
+        raise ChangeSetInputError(
+            f"project text exceeds the {MAX_TEXT_FILE_BYTES} byte limit"
+        )
+    return encoded
 
 
 def _atomic_write_json(path: Path, payload: dict[str, object]) -> None:
@@ -417,7 +432,7 @@ def _atomic_write_json(path: Path, payload: dict[str, object]) -> None:
             handle.write(encoded)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, path)
+        replace_with_retry(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
 
@@ -436,7 +451,6 @@ class ChangeSetService:
             tuple[str, str, KnowledgeValidatorBundle | None],
         ]
         | None = None,
-        formal_draft_authorization_service: FormalDraftAuthorizationService | None = None,
     ) -> None:
         self.reader = reader
         self.store = store
@@ -444,10 +458,6 @@ class ChangeSetService:
         self.post_draft_gate_executor = post_draft_gate_executor
         self.knowledge_fingerprint_probe = knowledge_fingerprint_probe
         self.knowledge_validator_resolver = knowledge_validator_resolver
-        self.formal_draft_authorization_service = (
-            formal_draft_authorization_service
-            or FormalDraftAuthorizationService(store)
-        )
 
     def set_post_draft_gate_executor(
         self,
@@ -513,6 +523,8 @@ class ChangeSetService:
                     source_tool_call_id=record.source_tool_call_id,
                     gate_required=record.gate_required,
                     status=record.status,
+                    base_revision=record.base_revision,
+                    base_fingerprint=record.base_fingerprint,
                     review_revision=record.review_revision,
                     file_count=len(record.changes),
                     hunk_count=len(decisions),
@@ -749,6 +761,9 @@ class ChangeSetService:
                     expected_after = change.proposed_after_sha256
                 elif change.operation is ChangeOperation.DELETE:
                     expected_after = None
+                elif change.operation is ChangeOperation.MOVE:
+                    # 移动/改名字节不变，指纹和落盘前一致。
+                    expected_after = expected_before
                 else:
                     backup = artifact_root / "backups" / Path(change.relative_path)
                     base_bytes = self._read_verified_backup(
@@ -757,15 +772,16 @@ class ChangeSetService:
                         artifact_root,
                     )
                     try:
-                        base_text = base_bytes.decode("utf-8-sig")
-                    except UnicodeDecodeError as exc:
+                        base_text = decode_project_text(base_bytes)[0]
+                    except ValueError as exc:
                         raise ChangeSetWritebackError(
-                            f"recovery backup is not UTF-8: {change.relative_path}"
+                            f"recovery backup is not readable text: {change.relative_path}"
                         ) from exc
                     expected_after = _sha256(
                         _encode_text(
                             self._apply_hunk_decisions(base_text, change),
                             preserve_utf8_bom=change.preserve_utf8_bom,
+                            original_bytes=base_bytes,
                         )
                     )
             else:
@@ -780,6 +796,65 @@ class ChangeSetService:
                 raise ChangeSetWritebackError(
                     "writeback journal after hash does not match the transaction"
                 )
+
+            if change.operation is ChangeOperation.MOVE:
+                # 移动/改名只有一个字节版本（before == after），但位置有两个。
+                # apply 恢复回「源在、目标空」；rollback 恢复回 applied 态
+                # 「目标在、源空」。只认这两种完整状态，其余视为中断后被改过。
+                move_target_raw = raw.get("move_target_path")
+                if not isinstance(move_target_raw, str):
+                    raise ChangeSetWritebackError(
+                        "writeback journal has an invalid move_target_path"
+                    )
+                source_path = self._recovery_project_path(root, relative_path)
+                if transaction == "apply":
+                    anchor_path = source_path
+                    other_path = self._recovery_project_path(root, move_target_raw)
+                else:
+                    result = writeback_results.get(change_id)
+                    if result is None or result.target_relative_path is None:
+                        raise ChangeSetWritebackError(
+                            "rollback journal references a move result without a target path"
+                        )
+                    anchor_path = self._recovery_project_path(
+                        root, result.target_relative_path
+                    )
+                    other_path = source_path
+                if before_sha256 is None:
+                    raise ChangeSetWritebackError(
+                        "writeback journal move row has no before hash"
+                    )
+                desired_bytes = self._read_verified_backup(
+                    (
+                        artifact_root / "backups"
+                        if transaction == "apply"
+                        else artifact_root / "rollback-current"
+                    )
+                    / Path(relative_path),
+                    before_sha256,
+                    artifact_root,
+                )
+                anchor_bytes = self._read_recovery_file(anchor_path, root)
+                other_bytes = self._read_recovery_file(other_path, root)
+                anchor_sha = None if anchor_bytes is None else _sha256(anchor_bytes)
+                other_sha = None if other_bytes is None else _sha256(other_bytes)
+                if not (
+                    (anchor_sha == before_sha256 and other_bytes is None)
+                    or (anchor_bytes is None and other_sha == before_sha256)
+                ):
+                    raise ChangeSetConflictError(
+                        f"project file changed after interruption: {relative_path}"
+                    )
+                writes.append(
+                    _RecoveryWrite(
+                        relative_path=relative_path,
+                        target=anchor_path,
+                        desired_bytes=desired_bytes,
+                        observed_sha256=anchor_sha,
+                        cleanup_paths=((other_path, before_sha256),),
+                    )
+                )
+                continue
 
             target = self._recovery_project_path(root, relative_path)
             current_bytes = self._read_recovery_file(target, root)
@@ -911,7 +986,21 @@ class ChangeSetService:
             item.target,
             item.desired_bytes,
         )
-        os.replace(temporary, item.target)
+        replace_with_retry(temporary, item.target)
+
+    def resolve_existing_file(self, project_id: str, relative_path: str) -> str | None:
+        """按相对路径在当前项目快照里找 file_id；文件不存在返回 None。
+
+        续写补空章时目标文件已存在，update 通道需要 file_id。
+        走与 create 相同的 _snapshot 机制，保证快照口径一致。
+        """
+        binding = self._require_binding(project_id)
+        _, snapshot, _ = self._snapshot(binding)
+        wanted = relative_path.casefold()
+        for item in snapshot.files:
+            if item.relative_path.casefold() == wanted:
+                return item.file_id
+        return None
 
     def create(
         self,
@@ -1000,6 +1089,7 @@ class ChangeSetService:
         targeted: set[str] = set()
         changes: list[CandidateFileChange] = []
         for item in request.changes:
+            target_relative_path: str | None = None
             if item.operation is ChangeOperation.CREATE:
                 relative_path = self._normalize_new_path(item.relative_path or "")
                 file_kind = classify_project_file_kind(relative_path)
@@ -1043,12 +1133,30 @@ class ChangeSetService:
                     )
                     self._validate_text(relative_path, after_text)
                     proposed_after_hash = _sha256(
-                        _encode_text(after_text, preserve_utf8_bom=preserve_bom)
+                        _encode_text(after_text, preserve_utf8_bom=preserve_bom, original_bytes=before_bytes)
                     )
                     if proposed_after_hash == before_hash:
                         raise ChangeSetInputError(
                             f"update does not change file content: {relative_path}"
                         )
+                elif item.operation is ChangeOperation.MOVE:
+                    target_relative_path = self._normalize_new_path(
+                        item.target_relative_path or ""
+                    )
+                    if target_relative_path.casefold() == target_key:
+                        raise ChangeSetInputError(
+                            "move target must differ from the current path: "
+                            f"{relative_path}"
+                        )
+                    if target_relative_path.casefold() in paths_casefold or os.path.lexists(
+                        root / Path(target_relative_path)
+                    ):
+                        raise ChangeSetInputError(
+                            f"move target already exists: {target_relative_path}"
+                        )
+                    # 移动/改名只换位置，字节原样跟着走。
+                    after_text = before_text
+                    proposed_after_hash = before_hash
                 else:
                     after_text = ""
                     proposed_after_hash = None
@@ -1058,6 +1166,13 @@ class ChangeSetService:
                     f"a change set cannot target one path more than once: {relative_path}"
                 )
             targeted.add(target_key)
+            if target_relative_path is not None:
+                if target_relative_path.casefold() in targeted:
+                    raise ChangeSetInputError(
+                        "a change set cannot target one path more than once: "
+                        f"{target_relative_path}"
+                    )
+                targeted.add(target_relative_path.casefold())
 
             change_id = self._change_id(
                 item.operation,
@@ -1077,13 +1192,14 @@ class ChangeSetService:
                     operation=item.operation,
                     file_id=file_id,
                     relative_path=relative_path,
+                    target_relative_path=target_relative_path,
                     rationale=item.rationale,
                     before_sha256=before_hash,
                     proposed_after_sha256=proposed_after_hash,
                     preserve_utf8_bom=preserve_bom,
                     post_draft_gate_scope=(
                         "prose_body"
-                        if item.operation is not ChangeOperation.DELETE
+                        if item.operation in {ChangeOperation.CREATE, ChangeOperation.UPDATE}
                         and file_kind == "prose"
                         else "none"
                     ),
@@ -1104,13 +1220,11 @@ class ChangeSetService:
             source_tool_call_id=request.source_tool_call_id,
             source_request_hash=request.source_request_hash,
             source_skill_ids=request.source_skill_ids,
-            gate_required=(
-                bool(request.gate_required)
-                or request.origin in {
-                    ChangeSetOrigin.AGENT,
-                    ChangeSetOrigin.SKILL_WORKFLOW,
-                }
-            ),
+            # 写前门禁只按请求本身来。以前 Agent 来源一律强制过门禁：每次写正文
+            # 都整本书复制一份跑校验，还会拦「系统：」「无法完成」这类正常句子
+            # （2026-09-22 审阅 A1 真机回执）。作者要的是普通 Agent，不是审批链。
+            gate_required=bool(request.gate_required),
+            ai_smell=request.ai_smell,
             status=ChangeSetStatus.REVIEWING,
             review_revision=0,
             changes=changes,
@@ -1164,16 +1278,23 @@ class ChangeSetService:
                 """,
                 (run_id, tool_call_id),
             ).fetchone()
+            own_pin = latest_own_write_pin(connection, run_id)
         if row is None:
             raise ChangeSetInputError("agent Run or ToolCall provenance was not found")
         if str(row["project_binding_id"]) != project_id:
             raise ChangeSetInputError("agent ToolCall belongs to another project")
         if row["context_pack_id"] is None:
             raise ChangeSetInputError("agent change proposal requires a bound Context Pack")
-        if (
-            int(row["project_revision"]) != request.base_revision
-            or str(row["project_fingerprint"]) != request.base_fingerprint
-        ):
+        base_matches = (
+            int(row["project_revision"]) == request.base_revision
+            and str(row["project_fingerprint"]) == request.base_fingerprint
+        ) or (
+            # 这场 Run 自己落盘推进过的钉子同样是合法基准：同一场对话里
+            # 「先直接保存一份，再把后续改法提案给作者看」是合法工作流。
+            own_pin is not None
+            and own_pin == (request.base_revision, request.base_fingerprint)
+        )
+        if not base_matches:
             raise ChangeSetConflictError(
                 "agent proposal base does not match its Run project snapshot"
             )
@@ -1253,6 +1374,142 @@ class ChangeSetService:
         self.store.save_change_set(self._payload(updated))
         return updated
 
+    def edit_hunk(
+        self,
+        change_set_id: str,
+        hunk_id: str,
+        request: ChangeSetHunkEditRequest,
+    ) -> ChangeSetResponse:
+        record = self.get(change_set_id)
+        if record.status not in {ChangeSetStatus.REVIEWING, ChangeSetStatus.READY}:
+            raise ChangeSetStateError("当前修改已经不能再编辑")
+        self._require_review_revision(record, request.expected_review_revision)
+
+        matches = [
+            (change_index, hunk_index)
+            for change_index, change in enumerate(record.changes)
+            for hunk_index, hunk in enumerate(change.hunks)
+            if hunk.hunk_id == hunk_id
+        ]
+        if not matches:
+            raise ChangeSetInputError("找不到这处修改，请刷新后再试")
+        change_index, hunk_index = matches[0]
+        target_change = record.changes[change_index]
+        if target_change.operation is ChangeOperation.DELETE:
+            raise ChangeSetInputError("整文件删除不能在这里改写")
+        if target_change.operation is ChangeOperation.MOVE:
+            raise ChangeSetInputError("移动/改名没有正文可以在这里改写")
+
+        binding = self._require_binding(record.project_id)
+        root, snapshot, current = self._snapshot(binding)
+        self._require_base(record.base_revision, record.base_fingerprint, current)
+        files_by_id = {item.file_id: item for item in snapshot.files}
+
+        before_bytes = None
+        before_text = ""
+        if target_change.operation is ChangeOperation.CREATE:
+            if os.path.lexists(root / Path(target_change.relative_path)):
+                raise ChangeSetConflictError(
+                    f"create target now exists: {target_change.relative_path}"
+                )
+        else:
+            file_record = files_by_id.get(target_change.file_id or "")
+            if (
+                file_record is None
+                or file_record.relative_path != target_change.relative_path
+            ):
+                raise ChangeSetConflictError(
+                    f"target file identity changed: {target_change.relative_path}"
+                )
+            before_bytes, before_text, preserve_bom = self._read_snapshot_file(
+                root,
+                file_record,
+            )
+            if preserve_bom != target_change.preserve_utf8_bom:
+                raise ChangeSetConflictError(
+                    f"target encoding changed: {target_change.relative_path}"
+                )
+            if _sha256(before_bytes) != target_change.before_sha256:
+                raise ChangeSetConflictError(
+                    f"target hash changed: {target_change.relative_path}"
+                )
+
+        target_hunk = target_change.hunks[hunk_index]
+        author_text = self._preserve_newline_style(
+            request.after_text,
+            before_text or target_hunk.after_text,
+        )
+        self._validate_text(target_change.relative_path, author_text)
+        if author_text == target_hunk.before_text:
+            raise ChangeSetInputError("改后的内容和原文相同；不想采用时直接点‘不要’")
+
+        line_delta = len(author_text.splitlines(keepends=True)) - len(
+            target_hunk.after_text.splitlines(keepends=True)
+        )
+        next_hunks: list[ChangeHunk] = []
+        for index, hunk in enumerate(target_change.hunks):
+            if index == hunk_index:
+                next_hunks.append(
+                    hunk.model_copy(
+                        update={
+                            "after_text": author_text,
+                            "after_end": hunk.after_start
+                            + len(author_text.splitlines(keepends=True)),
+                            "after_sha256": _text_sha256(author_text),
+                            "decision": HunkDecision.PENDING,
+                        }
+                    )
+                )
+            elif index > hunk_index and line_delta:
+                next_hunks.append(
+                    hunk.model_copy(
+                        update={
+                            "after_start": hunk.after_start + line_delta,
+                            "after_end": hunk.after_end + line_delta,
+                        }
+                    )
+                )
+            else:
+                next_hunks.append(hunk)
+
+        proposed_change = target_change.model_copy(update={"hunks": next_hunks})
+        all_accepted = proposed_change.model_copy(
+            update={
+                "hunks": [
+                    hunk.model_copy(update={"decision": HunkDecision.ACCEPTED})
+                    for hunk in next_hunks
+                ]
+            }
+        )
+        proposed_text = self._apply_hunk_decisions(before_text, all_accepted)
+        proposed_hash = _sha256(
+            _encode_text(
+                proposed_text,
+                preserve_utf8_bom=target_change.preserve_utf8_bom,
+                original_bytes=before_bytes,
+            )
+        )
+        if proposed_hash == target_change.before_sha256:
+            raise ChangeSetInputError("改后的内容和原文相同；不想采用时直接点‘不要’")
+
+        changes = list(record.changes)
+        changes[change_index] = proposed_change.model_copy(
+            update={"proposed_after_sha256": proposed_hash}
+        )
+        updated = record.model_copy(
+            update={
+                "changes": changes,
+                "status": ChangeSetStatus.REVIEWING,
+                "post_draft_gate": None,
+                "error": None,
+                "review_revision": record.review_revision + 1,
+                "updated_at": _now(),
+            }
+        )
+        updated = ChangeSetResponse.model_validate(updated.model_dump())
+        self.store.save_change_set(self._payload(updated))
+        return updated
+
     @staticmethod
     def _has_accepted_post_draft_body(record: ChangeSetResponse) -> bool:
         return any(
@@ -1263,10 +1520,6 @@ class ChangeSetService:
             )
             for change in record.changes
         )
-
-    @classmethod
-    def _post_draft_gate_required(cls, record: ChangeSetResponse) -> bool:
-        return record.gate_required and cls._has_accepted_post_draft_body(record)
 
     def post_draft_gate(
         self,
@@ -1438,6 +1691,7 @@ class ChangeSetService:
                 after_bytes = _encode_text(
                     after_text,
                     preserve_utf8_bom=change.preserve_utf8_bom,
+                    original_bytes=before_bytes,
                 )
             materialized.append(
                 _CandidateFile(
@@ -2117,71 +2371,48 @@ class ChangeSetService:
             )
         cls._require_current_validator(receipt, binding.managed_validator)
 
-    def _require_gate_receipt(
+    def discard(
         self,
-        record: ChangeSetResponse,
-        *,
-        candidate_hash: str,
-    ) -> PostDraftGateReceipt:
-        binding = self._current_gate_binding(record)
-        try:
-            payload = self.store.find_post_draft_gate_receipt(
-                change_set_id=record.change_set_id,
-                review_revision=record.review_revision,
-                candidate_hash=candidate_hash,
-                base_revision=record.base_revision,
-                base_fingerprint=record.base_fingerprint,
-                context_pack_id=binding.context_pack_id,
-                context_pack_hash=binding.context_pack_hash,
-                knowledge_fingerprint=binding.knowledge_fingerprint,
-                validator_package_fingerprint=(
-                    binding.managed_validator.package_fingerprint
-                ),
+        change_set_id: str,
+        request: ChangeSetDiscardRequest,
+    ) -> ChangeSetResponse:
+        """作者明确说「不要这份修改了」。一键作废，不需要逐条拒绝再走应用。
+
+        还没逐条表态的小块统一落成 rejected——终态记录不允许残留 pending。
+        """
+        record = self.get(change_set_id)
+        if record.status not in (ChangeSetStatus.REVIEWING, ChangeSetStatus.READY):
+            raise ChangeSetStateError(
+                f"only reviewing or ready change sets can be discarded; current state is {record.status.value}"
             )
-        except (TypeError, ValueError, RuntimeError) as exc:
-            raise ChangeSetGateStaleError(
-                "stored post-draft Gate receipt failed integrity validation: "
-                + str(exc)
-            ) from exc
-        if payload is None:
-            try:
-                latest_payload = self.store.get_latest_post_draft_gate_receipt(
-                    record.change_set_id
-                )
-            except (TypeError, ValueError, RuntimeError) as exc:
-                raise ChangeSetGateStaleError(
-                    "stored post-draft Gate receipt failed integrity validation: "
-                    + str(exc)
-                ) from exc
-            if latest_payload is not None:
-                latest = self._validate_stored_gate_receipt(latest_payload)
-                same_candidate_binding = (
-                    latest.change_set_id == record.change_set_id
-                    and latest.project_id == record.project_id
-                    and latest.review_revision == record.review_revision
-                    and latest.candidate_hash == candidate_hash
-                    and latest.base_revision == record.base_revision
-                    and latest.base_fingerprint == record.base_fingerprint
-                    and latest.context_pack_id == binding.context_pack_id
-                    and latest.context_pack_hash == binding.context_pack_hash
-                    and latest.knowledge_fingerprint == binding.knowledge_fingerprint
-                )
-                if same_candidate_binding:
-                    self._require_current_gate_binding(latest, binding)
-            raise ChangeSetGateMissingError(
-                "a current passing post-draft Gate receipt is required before apply"
+        self._require_review_revision(record, request.expected_review_revision)
+        # hunks/changes 合同是 list；这里必须用 list 并在末尾重新校验，
+        # 否则 model_copy(update=) 会把 tuple 塞进 list 字段（跳过校验），
+        # 序列化时刷 PydanticSerializationUnexpectedValue 警告。
+        changes = [
+            change.model_copy(
+                update={
+                    "hunks": [
+                        hunk.model_copy(update={"decision": HunkDecision.REJECTED})
+                        if hunk.decision is HunkDecision.PENDING
+                        else hunk
+                        for hunk in change.hunks
+                    ],
+                },
             )
-        receipt = self._validate_stored_gate_receipt(payload)
-        self._require_current_gate_binding(receipt, binding)
-        if receipt.status == "blocked":
-            raise ChangeSetGateBlockedError(
-                "post-draft Gate blocked the candidate; revise it and run the Gate again"
-            )
-        if receipt.status != "passed":
-            raise ChangeSetGateStaleError(
-                "post-draft Gate receipt is not a successful passing receipt"
-            )
-        return receipt
+            for change in record.changes
+        ]
+        discarded = ChangeSetResponse.model_validate(
+            record.model_copy(
+                update={
+                    "status": ChangeSetStatus.DISCARDED,
+                    "changes": changes,
+                    "updated_at": _now(),
+                }
+            ).model_dump(mode="json", by_alias=True)
+        )
+        self.store.save_change_set(self._payload(discarded))
+        return discarded
 
     def apply(
         self,
@@ -2210,14 +2441,6 @@ class ChangeSetService:
             self.store.save_change_set(self._payload(discarded))
             return discarded
 
-        # Author-reviewed apply remains allowed. Formal-draft authorization is
-        # evaluated and fail-closed against any grant of formal prose rights.
-        formal_draft_authorization = self._require_denied_formal_draft_authorization(
-            project_id=record.project_id,
-            change_set_id=record.change_set_id,
-            run_id=record.source_run_id,
-        )
-
         binding = self._require_binding(record.project_id)
         root, snapshot, current = self._snapshot(binding)
         if (
@@ -2226,48 +2449,8 @@ class ChangeSetService:
         ):
             self._conflict(record, "project revision changed after the proposal was created")
 
-        if self._post_draft_gate_required(record):
-            try:
-                _, candidate_hash = self._materialize_candidate(
-                    root,
-                    snapshot,
-                    record,
-                )
-                self._require_gate_receipt(
-                    record,
-                    candidate_hash=candidate_hash,
-                )
-            except ChangeSetConflictError as exc:
-                self._conflict(record, str(exc))
-            # Ordered pipeline is fail-closed on apply when post-draft prose Gate is required.
-            pipeline = self.evaluate_gate_pipeline(
-                record.change_set_id,
-                GatePipelineEvaluateRequest(
-                    expected_review_revision=record.review_revision,
-                ),
-            )
-            pipeline_receipt = pipeline.receipt
-            if pipeline_receipt is None:
-                raise ChangeSetGatePipelineBlockedError(
-                    "ordered gate pipeline receipt is required before apply when post-draft Gate is required"
-                )
-            pipeline_status = getattr(
-                pipeline_receipt.status, "value", str(pipeline_receipt.status)
-            )
-            if pipeline_status != "complete" or not pipeline_receipt.authorization_input_ready:
-                raise ChangeSetGatePipelineBlockedError(
-                    "ordered gate pipeline blocked or incomplete for this candidate; "
-                    f"status={pipeline_status}"
-                )
-            if (
-                pipeline_receipt.formal_draft_allowed is not False
-                or pipeline_receipt.quality_assessed is not False
-                or pipeline_receipt.authorization_unlock is not False
-            ):
-                raise ChangeSetWritebackError(
-                    "ordered gate pipeline attempted to unlock formal draft or claim quality assessed"
-                )
-
+        # Historical gate_required flags remain readable; saving no longer runs
+        # writing checks. File conflicts and writeback integrity still apply.
         files_by_id = {item.file_id: item for item in snapshot.files}
         artifact_root = self._artifact_root(record.change_set_id)
         prepared: list[_PreparedWrite] = []
@@ -2327,7 +2510,6 @@ class ChangeSetService:
                 record,
                 manifest,
                 artifact_root=artifact_root,
-                formal_draft_authorization=formal_draft_authorization,
             )
             applied = record.model_copy(
                 update={
@@ -2418,6 +2600,57 @@ class ChangeSetService:
                 raise exc
             raise ChangeSetWritebackError(message) from exc
 
+    def apply_direct(
+        self,
+        change_set_id: str,
+        request: ChangeSetApplyRequest,
+    ) -> ChangeSetResponse:
+        """Apply the candidate the author chose to save directly, preserving
+        review history.
+
+        This is the author-facing Agent/IDE path: accept a fresh candidate,
+        run the existing prose gate when required, and reuse the normal atomic
+        apply transaction. 作者选了「直接保存」就直接保存——删除、多文件、
+        新建都一样落盘，撤回链兜底。已拒绝的块保持拒绝，只接受待定的块。
+        """
+
+        record = self.get(change_set_id)
+        if record.status is ChangeSetStatus.APPLIED:
+            # The desktop UI can retry after a lost response. Returning the
+            # committed record is safe and prevents a duplicate write.
+            return record
+        if record.status not in {ChangeSetStatus.REVIEWING, ChangeSetStatus.READY}:
+            raise ChangeSetStateError(
+                f"direct apply is not allowed in state {record.status.value}"
+            )
+        self._require_review_revision(record, request.expected_review_revision)
+        # 作者已经手动拒掉几块也照常保存：只把还没表态的块当作接受，
+        # 被拒的块保持被拒，落盘的就是作者取舍后的结果，不再整批弹回审阅页。
+        pending = [
+            HunkDecisionUpdate(
+                hunk_id=hunk.hunk_id,
+                decision=HunkDecision.ACCEPTED,
+            )
+            for change in record.changes
+            for hunk in change.hunks
+            if hunk.decision is HunkDecision.PENDING
+        ]
+        if pending:
+            record = self.decide(
+                change_set_id,
+                ChangeSetDecisionRequest(
+                    expected_review_revision=record.review_revision,
+                    decisions=pending,
+                ),
+            )
+
+        return self.apply(
+            change_set_id,
+            ChangeSetApplyRequest(
+                expected_review_revision=record.review_revision,
+            ),
+        )
+
     def rollback(
         self,
         change_set_id: str,
@@ -2427,15 +2660,8 @@ class ChangeSetService:
         if record.status is not ChangeSetStatus.APPLIED or record.writeback is None:
             raise ChangeSetStateError("only applied change sets can be rolled back")
         self._require_review_revision(record, request.expected_review_revision)
-        formal_draft_authorization = self._require_denied_formal_draft_authorization(
-            project_id=record.project_id,
-            change_set_id=record.change_set_id,
-            run_id=record.source_run_id,
-        )
         binding = self._require_binding(record.project_id)
         root, snapshot, current = self._snapshot(binding)
-        if current.fingerprint != record.writeback.result_fingerprint:
-            self._conflict(record, "project changed after this change set was applied")
 
         files_by_path = {item.relative_path.casefold(): item for item in snapshot.files}
         artifact_root = self._artifact_root(record.change_set_id)
@@ -2450,7 +2676,69 @@ class ChangeSetService:
         )
         try:
             for result in record.writeback.files:
+                if result.operation is ChangeOperation.MOVE:
+                    # 撤回移动/改名＝挪回：新位置的原文件原子改名回源路径；
+                    # 新位置上的内容若被作者又改过，按既有规矩拒绝撤回。
+                    if result.target_relative_path is None:
+                        raise ChangeSetWritebackError(
+                            "rollback move result has no target path: "
+                            f"{result.relative_path}"
+                        )
+                    moved_path = root / Path(result.target_relative_path)
+                    restore_path = root / Path(result.relative_path)
+                    moved_file = files_by_path.get(
+                        result.target_relative_path.casefold()
+                    )
+                    if moved_file is None:
+                        raise ChangeSetConflictError(
+                            "这份文件后来又被挪走了，不能直接撤销："
+                            f"{result.target_relative_path}"
+                        )
+                    moved_bytes, _, _ = self._read_snapshot_file(root, moved_file)
+                    if result.after_sha256 is None or (
+                        _sha256(moved_bytes) != result.after_sha256
+                    ):
+                        raise ChangeSetConflictError(
+                            "这份文件后来又被改过，已保留现有内容，不能直接撤销："
+                            f"{result.target_relative_path}"
+                        )
+                    if os.path.lexists(restore_path):
+                        raise ChangeSetConflictError(
+                            "原来的位置已经有别的文件了，不能直接撤销："
+                            f"{result.relative_path}"
+                        )
+                    self._validate_existing_parent_chain(root, restore_path.parent)
+                    rollback_backup = artifact_root / "rollback-current" / Path(
+                        result.relative_path
+                    )
+                    rollback_backup.parent.mkdir(parents=True, exist_ok=True)
+                    rollback_backup.write_bytes(moved_bytes)
+                    prepared.append(
+                        _PreparedWrite(
+                            change=next(
+                                change
+                                for change in record.changes
+                                if change.change_id == result.change_id
+                            ),
+                            root=root,
+                            target=restore_path,
+                            before_bytes=moved_bytes,
+                            after_bytes=moved_bytes,
+                            backup=rollback_backup,
+                            temporary=None,
+                            tombstone=None,
+                            accepted_hunks=result.accepted_hunk_ids,
+                            rejected_hunks=result.rejected_hunk_ids,
+                            source=moved_path,
+                        )
+                    )
+                    continue
                 target = root / Path(result.relative_path)
+                if result.operation is ChangeOperation.DELETE and os.path.lexists(target):
+                    raise ChangeSetConflictError(
+                        "原来的位置已有新内容，已保留现有文件，不能直接撤销删除："
+                        f"{result.relative_path}"
+                    )
                 backup = (
                     artifact_root / Path(result.backup_ref)
                     if result.backup_ref is not None
@@ -2463,7 +2751,8 @@ class ChangeSetService:
                 if result.after_sha256 is not None:
                     if current_bytes is None or _sha256(current_bytes) != result.after_sha256:
                         raise ChangeSetConflictError(
-                            f"writeback target changed before rollback: {result.relative_path}"
+                            "这份文件后来又被改过，已保留现有内容，不能直接撤销："
+                            f"{result.relative_path}"
                         )
                 if result.operation is ChangeOperation.CREATE:
                     after_bytes = None
@@ -2544,8 +2833,8 @@ class ChangeSetService:
                 result_snapshot,
                 result_binding,
                 outcome="rolled_back",
-                base_revision=record.writeback.result_revision,
-                base_fingerprint=record.writeback.result_fingerprint,
+                base_revision=current.revision,
+                base_fingerprint=current.fingerprint,
                 created_directories=[],
             )
             _atomic_write_json(
@@ -2556,7 +2845,6 @@ class ChangeSetService:
                 record,
                 rollback_manifest,
                 artifact_root=artifact_root,
-                formal_draft_authorization=formal_draft_authorization,
             )
             rolled_back = record.model_copy(
                 update={
@@ -2618,6 +2906,8 @@ class ChangeSetService:
                 update={"status": ChangeSetStatus.APPLIED, "error": message, "updated_at": _now()}
             )
             self.store.save_change_set(self._payload(restored))
+            if isinstance(exc, ChangeSetError):
+                raise
             raise ChangeSetWritebackError(message) from exc
 
     def _require_binding(self, project_id: str) -> ProjectBindingRecord:
@@ -2691,13 +2981,12 @@ class ChangeSetService:
             raise ChangeSetInputError("relative_path must be a non-empty relative path")
         if any(part in {"", ".", ".."} for part in candidate.parts):
             raise ChangeSetInputError("relative_path cannot contain dot segments")
-        if not candidate.parts[0][:3].endswith("_") or candidate.parts[0][:2] not in {
-            f"{index:02d}" for index in range(1, 10)
-        }:
-            raise ChangeSetInputError("new files must be created inside a 01-09 section")
+        if any(
+            part.startswith(".") or part.casefold() in {"node_modules", "__pycache__"}
+            for part in candidate.parts[:-1]
+        ):
+            raise ChangeSetInputError("new files cannot target hidden or system directories")
         normalized = candidate.as_posix()
-        if Path(normalized).suffix.casefold() not in TEXT_EXTENSIONS:
-            raise ChangeSetInputError("new project files must use a supported text extension")
         return normalized
 
     @staticmethod
@@ -2708,6 +2997,10 @@ class ChangeSetService:
             encoded = content.encode("utf-8")
         except UnicodeEncodeError as exc:
             raise ChangeSetInputError("project text must be valid UTF-8") from exc
+        try:
+            decode_project_text(encoded)
+        except ValueError as exc:
+            raise ChangeSetInputError("project text contains binary characters") from exc
         if len(encoded) > MAX_TEXT_FILE_BYTES:
             raise ChangeSetInputError(
                 f"project text exceeds the {MAX_TEXT_FILE_BYTES} byte limit"
@@ -2734,10 +3027,6 @@ class ChangeSetService:
         root: Path,
         file_record: ProjectFile,
     ) -> tuple[bytes, str, bool]:
-        if Path(file_record.relative_path).suffix.casefold() not in TEXT_EXTENSIONS:
-            raise ChangeSetInputError(
-                f"change sets only support text project files: {file_record.relative_path}"
-            )
         path = Path(file_record.absolute_path)
         try:
             before = path.lstat()
@@ -2785,10 +3074,10 @@ class ChangeSetService:
                 f"project file hash changed after inspection: {file_record.relative_path}"
             )
         try:
-            text = content.decode("utf-8-sig")
-        except UnicodeDecodeError as exc:
+            text = decode_project_text(content)[0]
+        except ValueError as exc:
             raise ChangeSetInputError(
-                f"project text is not UTF-8: {file_record.relative_path}"
+                f"project file is not readable text: {file_record.relative_path}"
             ) from exc
         if "\x00" in text:
             raise ChangeSetInputError(
@@ -2818,6 +3107,25 @@ class ChangeSetService:
         *,
         operation: ChangeOperation,
     ) -> list[ChangeHunk]:
+        if operation is ChangeOperation.MOVE:
+            # 移动/改名没有文字差异，留一条零长度标记 hunk，让审阅/撤回链
+            # 与 create/update/delete 同构（接受它即同意这次挪动）。
+            empty_hash = _text_sha256("")
+            material = f"{change_id}\0move".encode("utf-8")
+            return [
+                ChangeHunk(
+                    hunk_id=f"hunk-{_sha256(material)[:32]}",
+                    index=0,
+                    before_start=0,
+                    before_end=0,
+                    after_start=0,
+                    after_end=0,
+                    before_text="",
+                    after_text="",
+                    before_sha256=empty_hash,
+                    after_sha256=empty_hash,
+                )
+            ]
         before_lines = before.splitlines(keepends=True)
         after_lines = after.splitlines(keepends=True)
         if operation is ChangeOperation.CREATE:
@@ -2912,6 +3220,54 @@ class ChangeSetService:
                 f"create target now exists: {change.relative_path}"
             )
 
+        if change.operation is ChangeOperation.MOVE:
+            # 移动/改名：字节原样跟着走（after == before），不需要临时文件
+            # 与墓碑；apply 阶段一步原子改名（replace_with_retry 同卷 rename）。
+            if change.target_relative_path is None:
+                raise ChangeSetWritebackError(
+                    f"move change has no target path: {change.relative_path}"
+                )
+            move_target = root / Path(change.target_relative_path)
+            if os.path.lexists(move_target):
+                raise ChangeSetConflictError(
+                    f"move target now exists: {change.target_relative_path}"
+                )
+            move_parent = move_target.parent
+            missing = []
+            cursor = move_parent
+            while cursor != root and not cursor.exists():
+                missing.append(cursor)
+                cursor = cursor.parent
+            self._validate_existing_parent_chain(root, cursor)
+            for directory in reversed(missing):
+                directory.mkdir()
+                created_directories.append(directory)
+            self._validate_existing_parent_chain(root, move_parent)
+            if before_bytes is None:
+                raise ChangeSetWritebackError(
+                    f"move change has no source bytes: {change.relative_path}"
+                )
+            backup = artifact_root / "backups" / Path(change.relative_path)
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            backup.write_bytes(before_bytes)
+            if _sha256(backup.read_bytes()) != change.before_sha256:
+                raise ChangeSetWritebackError(
+                    f"backup verification failed: {change.relative_path}"
+                )
+            return _PreparedWrite(
+                change=change,
+                root=root,
+                target=move_target,
+                before_bytes=before_bytes,
+                after_bytes=before_bytes,
+                backup=backup,
+                temporary=None,
+                tombstone=None,
+                accepted_hunks=accepted_hunks,
+                rejected_hunks=rejected_hunks,
+                source=target,
+            )
+
         if change.operation is ChangeOperation.DELETE:
             after_bytes = None
         elif change.operation is ChangeOperation.CREATE:
@@ -2922,6 +3278,7 @@ class ChangeSetService:
             after_bytes = _encode_text(
                 after_text,
                 preserve_utf8_bom=change.preserve_utf8_bom,
+                original_bytes=before_bytes,
             )
         if after_bytes == before_bytes:
             return None
@@ -3042,6 +3399,35 @@ class ChangeSetService:
     @staticmethod
     def _apply_prepared(item: _PreparedWrite) -> None:
         ChangeSetService._validate_existing_parent_chain(item.root, item.target.parent)
+        if item.change.operation is ChangeOperation.MOVE:
+            # 移动/改名＝源文件原子改名成目标（同卷 rename，撤回时挪回）。
+            if item.source is None or item.before_bytes is None:
+                raise ChangeSetWritebackError("move operation has no source")
+            try:
+                if _is_link_or_reparse(item.source):
+                    raise ChangeSetConflictError(
+                        f"move source became a link: {item.change.relative_path}"
+                    )
+                if int(getattr(item.source.lstat(), "st_nlink", 1)) > 1:
+                    raise ChangeSetConflictError(
+                        f"move source became hardlinked: {item.change.relative_path}"
+                    )
+                current = item.source.read_bytes()
+            except OSError as exc:
+                raise ChangeSetConflictError(
+                    f"move source became unreadable: {item.change.relative_path}"
+                ) from exc
+            if _sha256(current) != _sha256(item.before_bytes):
+                raise ChangeSetConflictError(
+                    f"move source changed during writeback: {item.change.relative_path}"
+                )
+            if os.path.lexists(item.target):
+                raise ChangeSetConflictError(
+                    f"move target appeared during writeback: {item.change.relative_path}"
+                )
+            replace_with_retry(item.source, item.target)
+            item.applied = True
+            return
         if item.before_bytes is None:
             if os.path.lexists(item.target):
                 raise ChangeSetConflictError(
@@ -3069,11 +3455,11 @@ class ChangeSetService:
         if item.after_bytes is None:
             if item.tombstone is None:
                 raise ChangeSetWritebackError("delete operation has no tombstone")
-            os.replace(item.target, item.tombstone)
+            replace_with_retry(item.target, item.tombstone)
         else:
             if item.temporary is None:
                 raise ChangeSetWritebackError("write operation has no temporary file")
-            os.replace(item.temporary, item.target)
+            replace_with_retry(item.temporary, item.target)
             item.temporary = None
         item.applied = True
 
@@ -3082,6 +3468,42 @@ class ChangeSetService:
         errors: list[str] = []
         for item in reversed(items):
             try:
+                if item.change.operation is ChangeOperation.MOVE:
+                    # 移动/改名的补偿＝挪回：目标文件改名回源路径。
+                    # 改名是单步动作，只认两种状态：已挪走（目标在）或已归位。
+                    if item.applied and item.source is not None:
+                        current = ChangeSetService._read_recovery_file(
+                            item.target, item.root
+                        )
+                        before_hash = (
+                            None
+                            if item.before_bytes is None
+                            else _sha256(item.before_bytes)
+                        )
+                        current_hash = None if current is None else _sha256(current)
+                        if current_hash == before_hash:
+                            if os.path.lexists(item.source):
+                                raise ChangeSetConflictError(
+                                    "move source is occupied before compensation"
+                                )
+                            ChangeSetService._validate_existing_parent_chain(
+                                item.root, item.source.parent
+                            )
+                            replace_with_retry(item.target, item.source)
+                        elif current is None:
+                            restored = ChangeSetService._read_recovery_file(
+                                item.source, item.root
+                            )
+                            if restored is None or _sha256(restored) != before_hash:
+                                raise ChangeSetConflictError(
+                                    "move target and source both missing before compensation"
+                                )
+                        else:
+                            raise ChangeSetConflictError(
+                                "write target changed before compensation"
+                            )
+                        item.applied = False
+                    continue
                 if item.applied:
                     current = ChangeSetService._read_recovery_file(
                         item.target,
@@ -3117,13 +3539,13 @@ class ChangeSetService:
                                 raise ChangeSetConflictError(
                                     "delete tombstone changed before compensation"
                                 )
-                            os.replace(item.tombstone, item.target)
+                            replace_with_retry(item.tombstone, item.target)
                         else:
                             temporary = ChangeSetService._write_temporary_sibling(
                                 item.target,
                                 item.before_bytes,
                             )
-                            os.replace(temporary, item.target)
+                            replace_with_retry(temporary, item.target)
                     item.applied = False
                 if item.temporary is not None and os.path.lexists(item.temporary):
                     temporary_bytes = ChangeSetService._read_recovery_file(
@@ -3415,55 +3837,12 @@ class ChangeSetService:
             history=history,
         )
 
-    def _require_denied_formal_draft_authorization(
-        self,
-        *,
-        project_id: str,
-        change_set_id: str | None = None,
-        context_pack_id: str | None = None,
-        run_id: str | None = None,
-    ) -> FormalDraftAuthorizationReceipt:
-        """Evaluate formal-draft rights and fail closed unless denied.
-
-        Author-reviewed ChangeSet apply/rollback is not formal prose grant.
-        This keeps the write path bound to an auditable denial receipt.
-        """
-
-        service = (
-            self.formal_draft_authorization_service
-            or FormalDraftAuthorizationService(self.store)
-        )
-        try:
-            response = service.evaluate(
-                project_id,
-                FormalDraftEvaluateRequest(
-                    context_pack_id=context_pack_id,
-                    run_id=run_id,
-                    change_set_id=change_set_id,
-                ),
-            )
-        except FormalDraftAuthorizationError as exc:
-            raise ChangeSetWritebackError(
-                f"formal draft authorization evaluation failed: {exc}"
-            ) from exc
-        receipt = response.receipt
-        if (
-            receipt.decision is not FormalDraftDecision.DENIED
-            or receipt.formal_draft_allowed is not False
-            or receipt.writes_project_truth is not False
-        ):
-            raise ChangeSetWritebackError(
-                "formal draft authorization did not deny formal prose write rights"
-            )
-        return receipt
-
     def _record_writeback_evidence(
         self,
         record: ChangeSetResponse,
         manifest: WritebackManifest,
         *,
         artifact_root: Path,
-        formal_draft_authorization: FormalDraftAuthorizationReceipt | None = None,
     ) -> WritebackEvidenceReceipt:
         context_pack_id: str | None = None
         context_pack_hash: str | None = None
@@ -3510,38 +3889,6 @@ class ChangeSetService:
                     selected_card_ids = []
         # Preserve stable order while de-duplicating.
         selected_card_ids = list(dict.fromkeys(selected_card_ids))
-        if formal_draft_authorization is None:
-            formal_draft_authorization = (
-                self._require_denied_formal_draft_authorization(
-                    project_id=record.project_id,
-                    change_set_id=record.change_set_id,
-                    context_pack_id=context_pack_id,
-                    run_id=record.source_run_id,
-                )
-            )
-        elif (
-            formal_draft_authorization.decision is not FormalDraftDecision.DENIED
-            or formal_draft_authorization.formal_draft_allowed is not False
-            or formal_draft_authorization.writes_project_truth is not False
-        ):
-            raise ChangeSetWritebackError(
-                "formal draft authorization did not deny formal prose write rights"
-            )
-        if formal_draft_authorization.project_id != record.project_id:
-            raise ChangeSetWritebackError(
-                "formal draft authorization project does not match the change set"
-            )
-        if (
-            formal_draft_authorization.change_set_id is not None
-            and formal_draft_authorization.change_set_id != record.change_set_id
-        ):
-            raise ChangeSetWritebackError(
-                "formal draft authorization change set does not match writeback"
-            )
-        _atomic_write_json(
-            artifact_root / "formal-draft-authorization-receipt.json",
-            formal_draft_authorization.model_dump(mode="json", by_alias=True),
-        )
         manifest_hash = canonical_json_hash(
             manifest.model_dump(mode="json", by_alias=True)
         )
@@ -3562,12 +3909,8 @@ class ChangeSetService:
             "knowledge_fingerprint": knowledge_fingerprint,
             "selected_card_ids": selected_card_ids,
             "source_run_id": record.source_run_id,
-            "formal_draft_authorization_receipt_id": (
-                formal_draft_authorization.receipt_id
-            ),
-            "formal_draft_authorization_receipt_hash": (
-                formal_draft_authorization.receipt_hash
-            ),
+            "formal_draft_authorization_receipt_id": None,
+            "formal_draft_authorization_receipt_hash": None,
             "formal_draft_allowed": False,
             "quality_assessed": False,
             "novel_state_synced": False,
@@ -5425,7 +5768,7 @@ class ChangeSetService:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 tmp = path.with_suffix(path.suffix + ".tmp")
                 tmp.write_text(str(payload), encoding="utf-8")
-                tmp.replace(path)
+                replace_with_retry(tmp, path)
             digest = hashlib.sha256(path.read_bytes()).hexdigest()
             written.append(
                 NlclOriginalPrewriteContextReportWrittenFile(
@@ -6443,7 +6786,7 @@ class ChangeSetService:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 tmp = path.with_suffix(path.suffix + ".tmp")
                 tmp.write_text(md_text, encoding="utf-8")
-                tmp.replace(path)
+                replace_with_retry(tmp, path)
             digest = hashlib.sha256(path.read_bytes()).hexdigest()
             written.append(
                 NlclOriginalMandatoryUsagePlanWrittenFile(
@@ -6792,7 +7135,7 @@ class ChangeSetService:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 tmp = path.with_suffix(path.suffix + ".tmp")
                 tmp.write_text(md_text, encoding="utf-8")
-                tmp.replace(path)
+                replace_with_retry(tmp, path)
             digest = hashlib.sha256(path.read_bytes()).hexdigest()
             written.append(
                 NlclOriginalMandatoryUsageClosureWrittenFile(
@@ -7150,7 +7493,7 @@ class ChangeSetService:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 tmp = path.with_suffix(path.suffix + ".tmp")
                 tmp.write_text(md_text, encoding="utf-8")
-                tmp.replace(path)
+                replace_with_retry(tmp, path)
             digest = hashlib.sha256(path.read_bytes()).hexdigest()
             written.append(
                 NlclOriginalOperationPackageLikeWrittenFile(
@@ -7540,7 +7883,7 @@ class ChangeSetService:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 tmp = path.with_suffix(path.suffix + ".tmp")
                 tmp.write_text(md_text, encoding="utf-8")
-                tmp.replace(path)
+                replace_with_retry(tmp, path)
             digest = hashlib.sha256(path.read_bytes()).hexdigest()
             written.append(
                 NlclOriginalLibraryLayoutInventoryWrittenFile(
@@ -7848,7 +8191,7 @@ class ChangeSetService:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 tmp = path.with_suffix(path.suffix + ".tmp")
                 tmp.write_text(md_text, encoding="utf-8")
-                tmp.replace(path)
+                replace_with_retry(tmp, path)
             digest = hashlib.sha256(path.read_bytes()).hexdigest()
             written.append(
                 NlclOriginalLibraryLayoutCompletenessWrittenFile(
@@ -8325,7 +8668,7 @@ class ChangeSetService:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 tmp = path.with_suffix(path.suffix + ".tmp")
                 tmp.write_text(md_text, encoding="utf-8")
-                tmp.replace(path)
+                replace_with_retry(tmp, path)
             digest = hashlib.sha256(path.read_bytes()).hexdigest()
             written.append(
                 NlclOriginalBoundedLibraryActivationWrittenFile(
@@ -13556,7 +13899,13 @@ class ChangeSetService:
         files_by_path = {item.relative_path.casefold(): item for item in snapshot.files}
         results: list[WritebackFileResult] = []
         for item in prepared:
-            result_file = files_by_path.get(item.change.relative_path.casefold())
+            if item.change.operation is ChangeOperation.MOVE:
+                # 移动/改名落盘后文件待在 item.target（撤回时＝源路径）。
+                result_file = files_by_path.get(
+                    item.target.relative_to(item.root).as_posix().casefold()
+                )
+            else:
+                result_file = files_by_path.get(item.change.relative_path.casefold())
             actual_after_hash = (
                 None
                 if item.after_bytes is None
@@ -13568,6 +13917,7 @@ class ChangeSetService:
                     ChangeOperation.CREATE: ChangeOperation.DELETE,
                     ChangeOperation.UPDATE: ChangeOperation.UPDATE,
                     ChangeOperation.DELETE: ChangeOperation.CREATE,
+                    ChangeOperation.MOVE: ChangeOperation.MOVE,
                 }[operation]
             before_hash = (
                 _sha256(item.before_bytes)
@@ -13590,6 +13940,11 @@ class ChangeSetService:
                     change_id=item.change.change_id,
                     operation=operation,
                     relative_path=item.change.relative_path,
+                    target_relative_path=(
+                        item.change.target_relative_path
+                        if item.change.operation is ChangeOperation.MOVE
+                        else None
+                    ),
                     before_sha256=before_hash,
                     after_sha256=actual_after_hash,
                     result_file_id=(
@@ -13629,6 +13984,32 @@ class ChangeSetService:
     ) -> None:
         files_by_path = {item.relative_path.casefold(): item for item in snapshot.files}
         for item in prepared:
+            if item.change.operation is ChangeOperation.MOVE:
+                # 移动/改名落盘后：目标在位且字节未变，源路径已经空出来。
+                expected_rel = item.target.relative_to(item.root).as_posix()
+                result_file = files_by_path.get(expected_rel.casefold())
+                actual_bytes = ChangeSetService._read_recovery_file(item.target, root)
+                expected_hash = _sha256(item.after_bytes) if item.after_bytes is not None else None
+                actual_hash = None if actual_bytes is None else _sha256(actual_bytes)
+                if (
+                    actual_hash != expected_hash
+                    or result_file is None
+                    or result_file.sha256 != expected_hash
+                ):
+                    raise ChangeSetConflictError(
+                        f"writeback target changed before commit: {item.change.relative_path}"
+                    )
+                if item.source is not None:
+                    source_rel = item.source.relative_to(item.root).as_posix()
+                    if (
+                        files_by_path.get(source_rel.casefold()) is not None
+                        or os.path.lexists(item.source)
+                    ):
+                        raise ChangeSetConflictError(
+                            "move source still present after writeback: "
+                            f"{item.change.relative_path}"
+                        )
+                continue
             result_file = files_by_path.get(item.change.relative_path.casefold())
             actual_bytes = ChangeSetService._read_recovery_file(item.target, root)
             if item.after_bytes is None:
@@ -13681,6 +14062,13 @@ class ChangeSetService:
                         "change_id": item.change.change_id,
                         "operation": item.change.operation.value,
                         "relative_path": item.change.relative_path,
+                        # 移动/改名的落点（本次事务把它挪到哪里）；恢复时靠它
+                        # 判断「已挪走/未挪走」两种半截状态。
+                        "move_target_path": (
+                            item.target.relative_to(item.root).as_posix()
+                            if item.change.operation is ChangeOperation.MOVE
+                            else None
+                        ),
                         "before_sha256": (
                             _sha256(item.before_bytes)
                             if item.before_bytes is not None

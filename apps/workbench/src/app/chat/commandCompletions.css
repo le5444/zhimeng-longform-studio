@@ -1,0 +1,12 @@
+.zm-command-completions { margin: 8px 0 20px; color: var(--zm-fg-2); font-size: var(--zm-fs-2); border-bottom: 1px solid var(--zm-line); padding-bottom: 12px; }
+.zm-command-completions > summary { cursor: pointer; }
+.zm-command-completions > summary > span { margin-left: 12px; color: var(--zm-fg-3); }
+.zm-command-completions ul { list-style: none; padding: 4px 0 0; margin: 0; }
+.zm-command-completions li { padding: 10px 0; }
+.zm-command-completions li > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px; }
+.zm-command-completion-status { color: var(--zm-fg); }
+.zm-command-completions li > code { display: block; max-width: 100%; margin-top: 4px; font-size: var(--zm-fs-1); color: var(--zm-fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.zm-completion-origin { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px; margin: 8px 0; color: var(--zm-fg-3); font-size: var(--zm-fs-1); }
+.zm-command-completion-recovery { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+.zm-command-completion-recovery summary { cursor: pointer; }
+.zm-command-completion-recovery p { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 8px; }

@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "RecoveryEntry": {
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "string"
+        },
+        "action": {
+          "enum": [
+            "restore",
+            "remove"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "available",
+            "unchanged",
+            "conflict",
+            "unavailable"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "before_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Before Sha256"
+        },
+        "current_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Current Sha256"
+        },
+        "before_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Before Text"
+        },
+        "current_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Current Text"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "path",
+        "revision",
+        "action",
+        "status",
+        "before_sha256",
+        "current_sha256"
+      ],
+      "title": "RecoveryEntry",
+      "type": "object"
+    },
+    "RecoveryReceipt": {
+      "properties": {
+        "request_id": {
+          "title": "Request Id",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "change_id": {
+          "title": "Change Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "applied",
+            "undone",
+            "unconfirmed"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id",
+        "path",
+        "change_id",
+        "status"
+      ],
+      "title": "RecoveryReceipt",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "observation_id": {
+      "title": "Observation Id",
+      "type": "string"
+    },
+    "source": {
+      "enum": [
+        "command_end",
+        "current_check"
+      ],
+      "title": "Source",
+      "type": "string"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/RecoveryEntry"
+      },
+      "title": "Entries",
+      "type": "array"
+    },
+    "problems": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Problems",
+      "type": "array"
+    },
+    "restorations": {
+      "items": {
+        "$ref": "#/$defs/RecoveryReceipt"
+      },
+      "title": "Restorations",
+      "type": "array"
+    },
+    "previewed_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Previewed Path"
+    }
+  },
+  "required": [
+    "observation_id",
+    "source",
+    "entries",
+    "problems",
+    "restorations"
+  ],
+  "title": "CommandRecoveryResponse",
+  "type": "object"
+}

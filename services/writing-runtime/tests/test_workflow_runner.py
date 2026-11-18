@@ -451,6 +451,111 @@ def _fixture():
     return run, context, store, runner
 
 
+def test_fold_skill_output_keeps_status_and_truncates_bulk() -> None:
+    from zhimeng_runtime.workflow_runner import fold_skill_output_for_model
+
+    output = {
+        "schema": "zhimeng.skill-result.v1",
+        "domain_status": "degraded",
+        "summary": "整体可写",
+        "full_report": "很长的审计正文" * 500,
+        "findings": [{"title": f"发现 {index}", "detail": "细节" * 200} for index in range(30)],
+    }
+    folded = fold_skill_output_for_model(output)
+    encoded = json.dumps(folded, ensure_ascii=False)
+    assert folded["domain_status"] == "degraded"
+    assert folded["summary"] == "整体可写"
+    assert folded["folded_for_model"] is True
+    assert "已折叠" in str(folded["full_report"])
+    assert len(folded["findings"]) == 9  # 8 项 + 折叠说明
+    assert "其余 22 项已折叠" in str(folded["findings"][-1])
+    assert len(encoded) < 12_000
+    # 小结果原样通过，不加折叠标记。
+    small = {"domain_status": "healthy", "summary": "无发现"}
+    assert fold_skill_output_for_model(small) == small
+
+
+def test_fold_surfaces_blocked_checks_and_drops_task_goal_body() -> None:
+    """借鉴 deepseek-harness spill-policy：回喂给模型的是决策要点，不是全量。
+
+    通用折叠是位置截断（列表留前 8 项）：blocked 检查排在第 9 位之后时会被
+    截掉，模型看不到被拦原因。语义投影先把 passed 归成计数、非 passed 逐条
+    带出；task_goal（十万字级任务书随 WriterTask 已交付）换成长度 + SHA-256。
+    存储层不经过这里，仍是全量。
+    """
+    import hashlib
+
+    from zhimeng_runtime.workflow_runner import fold_skill_output_for_model
+
+    checks = [
+        {"code": f"passed_{index}", "status": "passed", "message": "通过", "evidence_refs": []}
+        for index in range(20)
+    ]
+    checks.append(
+        {
+            "code": "truth_bound",
+            "status": "blocked",
+            "message": "缺少真值绑定",
+            "evidence_refs": ["ref-1"],
+        }
+    )
+    goal = "第 12 章任务书。" * 5000
+    output = {
+        "schema": "zhimeng.tool-result.skill-execute.v1",
+        "domain_status": "blocked",
+        "prewrite_gate": {
+            "gate_status": "blocked",
+            "formal_draft_allowed": False,
+            "checks": checks,
+            "failure_signatures": ["truth_bound"],
+        },
+        "creation_handoff": {
+            "handoff_status": "blocked",
+            "formal_draft_allowed": False,
+            "task_goal": goal,
+        },
+    }
+    folded = fold_skill_output_for_model(output)
+    assert folded["folded_for_model"] is True
+
+    gate = folded["prewrite_gate"]
+    assert gate["gate_status"] == "blocked"
+    assert gate["checks_total"] == 21
+    assert gate["checks_passed"] == 20
+    assert [item["code"] for item in gate["checks_attention"]] == ["truth_bound"]
+    assert "checks" not in gate
+
+    handoff = folded["creation_handoff"]
+    assert "task_goal" not in handoff
+    assert handoff["task_goal_characters"] == len(goal)
+    assert handoff["task_goal_sha256"] == (
+        hashlib.sha256(goal.encode("utf-8")).hexdigest()
+    )
+    assert handoff["handoff_status"] == "blocked"
+
+
+def test_workflow_transcript_folds_chained_skill_arguments() -> None:
+    """prewrite/handoff 的链式输入实测单个 8.6 万字符；
+    给模型的转写必须折叠，数据库里的全量记录不动。"""
+    from zhimeng_runtime.workflow_runner import WorkflowRunner
+
+    checkpoint = SimpleNamespace(provider_tool_call_id="nlcl_call_test_0001")
+    tool_call = SimpleNamespace(
+        status="succeeded",
+        arguments={
+            "family": "creation_suite",
+            "input": {"previous_report": "巨大的上一步结果" * 8000},
+        },
+        output={"domain_status": "healthy"},
+        error=None,
+    )
+    assistant, tool = WorkflowRunner._provider_messages(checkpoint, tool_call)
+    arguments = assistant["tool_calls"][0]["function"]["arguments"]
+    assert len(arguments) < 3_000
+    assert "已折叠" in arguments
+    assert json.loads(tool["content"])["output"] == {"domain_status": "healthy"}
+
+
 def test_runner_executes_and_checkpoints_the_fixed_three_step_plan() -> None:
     async def scenario() -> None:
         run, _, store, runner = _fixture()

@@ -1,0 +1,181 @@
+{
+  "$defs": {
+    "McpServerView": {
+      "properties": {
+        "applied_revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Applied Revision"
+        },
+        "apply_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Apply Error"
+        },
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Args",
+          "type": "array"
+        },
+        "command": {
+          "title": "Command",
+          "type": "string"
+        },
+        "configuration_status": {
+          "default": "applied",
+          "enum": [
+            "applied",
+            "pending"
+          ],
+          "title": "Configuration Status",
+          "type": "string"
+        },
+        "connection_id": {
+          "title": "Connection Id",
+          "type": "string"
+        },
+        "cwd": {
+          "title": "Cwd",
+          "type": "string"
+        },
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "env_names": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Env Names",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "header_names": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Header Names",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "protocol_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Protocol Version"
+        },
+        "revision": {
+          "default": "",
+          "title": "Revision",
+          "type": "string"
+        },
+        "source": {
+          "const": "settings",
+          "default": "settings",
+          "title": "Source",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "disabled",
+            "connecting",
+            "ready",
+            "error"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "tool_count": {
+          "default": 0,
+          "title": "Tool Count",
+          "type": "integer"
+        },
+        "transport": {
+          "default": "stdio",
+          "enum": [
+            "stdio",
+            "http"
+          ],
+          "title": "Transport",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        }
+      },
+      "required": [
+        "connection_id",
+        "name",
+        "command",
+        "args",
+        "cwd",
+        "enabled",
+        "env_names",
+        "state"
+      ],
+      "title": "McpServerView",
+      "type": "object"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/mcp-server-list.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "servers": {
+      "items": {
+        "$ref": "#/$defs/McpServerView"
+      },
+      "title": "Servers",
+      "type": "array"
+    }
+  },
+  "required": [
+    "servers"
+  ],
+  "title": "McpServerListResponse",
+  "type": "object"
+}

@@ -1,0 +1,55 @@
+/* 选文件夹那一页，也给设置页共用「整页」的骨架（.zm-page / .zm-page-head）。 */
+
+.zm-page { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.zm-page-head { display: flex; align-items: flex-start; gap: 12px; padding: 20px 24px 12px; }
+.zm-page-head > div { flex: 1; min-width: 0; }
+.zm-page-head h1 { font-size: var(--zm-fs-5); font-weight: 600; }
+.zm-page-head p { margin-top: 4px; color: var(--zm-fg-2); font-size: var(--zm-fs-3); line-height: 1.6; }
+.zm-warn-line { padding: 8px 12px; border-radius: var(--zm-r-2); background: var(--zm-warn-soft); color: var(--zm-warn); font-size: var(--zm-fs-2); }
+
+.zm-folder-grid { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; flex: 1; min-height: 0; padding: 0 24px; }
+.zm-folder-places { display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto; }
+.zm-folder-label { padding: 4px 10px; color: var(--zm-fg-3); font-size: var(--zm-fs-1); font-weight: 600; }
+.zm-folder-place {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--zm-r-2);
+  background: transparent;
+  color: var(--zm-fg-2);
+  font-size: var(--zm-fs-3);
+  text-align: left;
+  cursor: pointer;
+}
+.zm-folder-place svg { width: 15px; height: 15px; flex: none; color: var(--zm-fg-3); }
+.zm-folder-place span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zm-folder-place:hover { background: var(--zm-bg-hover); color: var(--zm-fg); }
+.zm-folder-place.is-current { background: var(--zm-bg-active); color: var(--zm-fg); }
+.zm-folder-main { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.zm-folder-address { display: flex; align-items: center; gap: 6px; }
+.zm-folder-address .zm-input { flex: 1; font-family: var(--zm-mono); font-size: var(--zm-fs-2); }
+.zm-folder-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; font-size: var(--zm-fs-2); }
+.zm-folder-crumbs span { display: inline-flex; align-items: center; gap: 2px; }
+.zm-folder-crumbs svg { width: 12px; height: 12px; color: var(--zm-fg-3); }
+.zm-folder-crumbs button { padding: 2px 4px; border: 0; border-radius: 4px; background: none; color: var(--zm-fg-2); font-size: inherit; cursor: pointer; }
+.zm-folder-crumbs button:hover:not(:disabled) { background: var(--zm-bg-hover); color: var(--zm-fg); }
+.zm-folder-crumbs button:disabled { color: var(--zm-fg); font-weight: 600; cursor: default; }
+.zm-folder-list { list-style: none; margin: 0; padding: 4px; flex: 1; min-height: 120px; overflow-y: auto; border: 1px solid var(--zm-line); border-radius: var(--zm-r-3); }
+.zm-folder-row { display: flex; align-items: center; gap: 4px; border-radius: var(--zm-r-2); }
+.zm-folder-row:hover { background: var(--zm-bg-hover); }
+.zm-folder-entry { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; height: 34px; padding: 0 10px; border: 0; background: none; color: var(--zm-fg); font-size: var(--zm-fs-3); text-align: left; cursor: pointer; }
+.zm-folder-entry svg { width: 16px; height: 16px; flex: none; color: var(--zm-fg-3); }
+.zm-folder-entry span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zm-folder-open { opacity: 0; }
+.zm-folder-row:hover .zm-folder-open, .zm-folder-open:focus-visible { opacity: 1; }
+.zm-folder-newhere { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.zm-folder-newhere .zm-input { flex: 1; min-width: 200px; }
+.zm-folder-problem { width: 100%; color: var(--zm-danger); font-size: var(--zm-fs-1); }
+.zm-folder-foot { display: flex; flex-direction: column; gap: 8px; padding: 12px 24px 20px; border-top: 1px solid var(--zm-line); }
+.zm-folder-actions { display: flex; align-items: flex-end; gap: 12px; }
+.zm-folder-current { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--zm-fg-2); font-size: var(--zm-fs-2); }
+.zm-folder-name { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; font-size: var(--zm-fs-2); color: var(--zm-fg-2); }
+.zm-folder-name small { min-height: 1.2em; color: var(--zm-fg-3); font-size: var(--zm-fs-1); }

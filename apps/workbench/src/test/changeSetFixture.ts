@@ -3,7 +3,6 @@ import {
   type ChangeSet,
   type ChangeSetSummary,
   type HunkDecision,
-  type PostDraftGateReceipt,
   type WritebackManifest,
 } from '../api/changeSets'
 
@@ -36,116 +35,28 @@ function writeback(outcome: 'applied' | 'rolled_back'): WritebackManifest {
   }
 }
 
-export function postDraftGateReceiptFixture({
-  status = 'passed',
-  reviewRevision = 1,
-  changeSetId: receiptChangeSetId = changeSetId,
-  projectId: receiptProjectId = projectId,
-}: {
-  status?: PostDraftGateReceipt['status']
-  reviewRevision?: number
-  changeSetId?: string
-  projectId?: string
-} = {}): PostDraftGateReceipt {
-  const passed = status === 'passed'
-  return {
-    schema: 'zhimeng.post-draft-gate-receipt.v1',
-    gate_receipt_id: 'post-draft-gate-0123456789abcdef0123456789abcdef',
-    change_set_id: receiptChangeSetId,
-    project_id: receiptProjectId,
-    review_revision: reviewRevision,
-    base_revision: 3,
-    base_fingerprint: 'a'.repeat(64),
-    candidate_hash: 'c'.repeat(64),
-    validator_id: 'novel-creation-suite.post-draft-gate',
-    validator_version: '0.1.0',
-    validator_manifest_fingerprint: 'd'.repeat(64),
-    validator_package_fingerprint: 'e'.repeat(64),
-    context_pack_id: null,
-    context_pack_hash: null,
-    knowledge_fingerprint: null,
-    candidate_file_count: 1,
-    skill_receipt_id: 'skill-receipt-local-1',
-    skill_receipt_hash: 'f'.repeat(64),
-    skill_output_hash: '1'.repeat(64),
-    execution_status: status === 'failed' ? 'failed' : 'succeeded',
-    status,
-    result: status === 'failed' ? null : {
-      schema: 'zhimeng.creation-draft-gate-result.v1',
-      status: passed ? 'passed' : 'blocked',
-      summary: passed ? '候选通过交付检查' : '候选包含阻断项',
-      candidate_id: 'candidate-local-1',
-      candidate_manifest_hash: '2'.repeat(64),
-      quality_assessed: false,
-      formal_draft_allowed: false,
-      global_findings: passed ? [] : [{
-        code: 'draft_role_marker_leak',
-        failure_signature: 'draft_role_marker_leak',
-        severity: 'blocked',
-        message: '候选正文包含草稿角色标记',
-        evidence: '第 1 行',
-        location: {
-          start: { line: 1, column: 1, offset: 0 },
-          end: { line: 1, column: 5, offset: 4 },
-        },
-      }],
-      checks: [{
-        code: 'candidate_manifest',
-        status: passed ? 'passed' : 'blocked',
-        message: passed ? '候选文件清单完整' : '候选清单存在阻断项',
-        evidence_refs: ['candidate-local-1'],
-      }],
-      files: [{
-        path: '05_正文内容/第一卷/CH001_正文.md',
-        status: passed ? 'passed' : 'blocked',
-        content_hash: '3'.repeat(64),
-        byte_length: 24,
-        body_line_count: 2,
-        findings: passed ? [] : [{
-          code: 'draft_role_marker_leak',
-          failure_signature: 'draft_role_marker_leak',
-          severity: 'blocked',
-          message: '正文标记需要移除',
-          evidence: '系统：',
-          location: {
-            start: { line: 1, column: 1, offset: 0 },
-            end: { line: 1, column: 4, offset: 3 },
-          },
-        }],
-      }],
-      failure_signatures: passed ? [] : ['draft_role_marker_leak'],
-    },
-    error_code: status === 'failed' ? 'post_draft_gate_unavailable' : null,
-    error_message: status === 'failed' ? 'Gate 执行器不可用' : null,
-    quality_assessed: false,
-    formal_draft_allowed: false,
-    created_at: '2026-07-19T04:10:00Z',
-    receipt_hash: '4'.repeat(64),
-  }
-}
-
 export function changeSetFixture({
   status = 'reviewing',
   decision = 'pending',
   reviewRevision = 0,
   gateRequired = false,
-  postDraftGate = null,
   postDraftGateScope = 'prose_body',
   origin = gateRequired ? 'agent' : 'manual',
+  aiSmell = null,
 }: {
   status?: ChangeSet['status']
   decision?: HunkDecision
   reviewRevision?: number
   gateRequired?: boolean
-  postDraftGate?: PostDraftGateReceipt | null
   postDraftGateScope?: ChangeSet['changes'][number]['post_draft_gate_scope']
   origin?: ChangeSet['origin']
+  aiSmell?: ChangeSet['ai_smell']
 } = {}): ChangeSet {
   const appliedManifest = ['applied', 'rolled_back'].includes(status)
     ? writeback('applied')
     : null
   const hasAgentProvenance = origin === 'agent'
-  const hasSkillProvenance = origin !== 'manual'
+  const hasSkillProvenance = origin === 'agent' || origin === 'skill_workflow'
   return {
     schema: 'zhimeng.change-set.v1',
     change_set_id: changeSetId,
@@ -160,6 +71,7 @@ export function changeSetFixture({
     source_request_hash: hasAgentProvenance ? '1'.repeat(64) : null,
     source_skill_ids: hasSkillProvenance ? ['novel-style-deai'] : [],
     gate_required: gateRequired,
+    ai_smell: aiSmell,
     status,
     review_revision: reviewRevision,
     changes: [{
@@ -186,7 +98,6 @@ export function changeSetFixture({
         decision,
       }],
     }],
-    post_draft_gate: postDraftGate,
     writeback: appliedManifest,
     rollback: status === 'rolled_back' ? writeback('rolled_back') : null,
     error: status === 'failed' ? '写回失败' : null,

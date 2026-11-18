@@ -21,14 +21,24 @@ PORTABLE_PATH_SEGMENT_PATTERN = (
     r'[^./\\:<>"|?*\x00-\x1f]'
     r'(?:[^/\\:<>"|?*\x00-\x1f]*[^./\\:<>"|?*\x00-\x1f ])?'
 )
+PROJECT_TEXT_SUFFIX_PATTERN = r"(?:json|jsonl|md|txt|yaml|yml)"
+# 书里的路径按作者真实摆法来：01_~09_ 只是新建书时的默认夹子，不是准入条件。
+# 守住的底线是「书根之内的纯文本文件」：分段可移植、不隐藏、不越界、后缀在白名单里。
 RELATIVE_PROJECT_PATH_PATTERN = (
-    rf"^0[1-9]_{PORTABLE_PATH_SEGMENT_PATTERN}"
-    rf"(?:/{PORTABLE_PATH_SEGMENT_PATTERN})+"
-    r"\.(?:json|jsonl|md|txt|yaml|yml)$"
+    rf"^{PORTABLE_PATH_SEGMENT_PATTERN}"
+    rf"(?:/{PORTABLE_PATH_SEGMENT_PATTERN})*"
+    rf"\.{PROJECT_TEXT_SUFFIX_PATTERN}$"
 )
 RELATIVE_PROJECT_DIRECTORY_PATTERN = (
-    rf"^0[1-9]_{PORTABLE_PATH_SEGMENT_PATTERN}"
-    rf"(?:/{PORTABLE_PATH_SEGMENT_PATTERN})+$"
+    rf"^{PORTABLE_PATH_SEGMENT_PATTERN}"
+    rf"(?:/{PORTABLE_PATH_SEGMENT_PATTERN})*$"
+)
+# Workbench files use the user's actual names, including dotfiles and files
+# without extensions. The legacy writing contracts keep their narrower type.
+WORKSPACE_PATH_SEGMENT_PATTERN = rf"\.*{PORTABLE_PATH_SEGMENT_PATTERN}"
+RELATIVE_WORKSPACE_PATH_PATTERN = (
+    rf"^{WORKSPACE_PATH_SEGMENT_PATTERN}"
+    rf"(?:/{WORKSPACE_PATH_SEGMENT_PATTERN})*$"
 )
 WINDOWS_DEVICE_NAMES = frozenset(
     {"con", "prn", "aux", "nul"}
@@ -47,6 +57,36 @@ def _validate_portable_relative_path(value: str) -> str:
     return value
 
 
+def _validate_workspace_relative_path(value: str) -> str:
+    _validate_portable_relative_path(value)
+    for segment in value.split("/"):
+        if segment in {"", ".", ".."} or segment.endswith((" ", ".")):
+            raise ValueError("relative workspace paths require ordinary file-name segments")
+        if segment.split(".", 1)[0].rstrip(" ").casefold() in WINDOWS_DEVICE_NAMES:
+            raise ValueError("relative paths cannot use Windows device names")
+    return value
+
+
+RelativeWorkspacePath = Annotated[
+    str,
+    Field(
+        min_length=1,
+        max_length=1024,
+        pattern=RELATIVE_WORKSPACE_PATH_PATTERN,
+        json_schema_extra={
+            "x-zhimeng-invariants": [
+                "path segments cannot use Windows device names",
+                "path segments are at most 255 characters",
+                "paths are relative and cannot contain dot traversal segments",
+                "file names may be dotfiles, extensionless, or use any extension",
+                "file contents are checked as text when read or written",
+            ]
+        },
+    ),
+    AfterValidator(_validate_workspace_relative_path),
+]
+
+
 RelativeProjectPath = Annotated[
     str,
     Field(
@@ -57,6 +97,8 @@ RelativeProjectPath = Annotated[
             "x-zhimeng-invariants": [
                 "path segments cannot use Windows device names",
                 "path segments are at most 255 characters",
+                "folders inside the book are the author's own layout",
+                "project files must use a supported text suffix",
             ]
         },
     ),
@@ -72,6 +114,7 @@ RelativeProjectDirectory = Annotated[
             "x-zhimeng-invariants": [
                 "path segments cannot use Windows device names",
                 "path segments are at most 255 characters",
+                "folders inside the book are the author's own layout",
             ]
         },
     ),
@@ -244,10 +287,12 @@ class ChangeOperation(StrEnum):
     CREATE = "create"
     UPDATE = "update"
     DELETE = "delete"
+    MOVE = "move"
 
 
 class ChangeSetOrigin(StrEnum):
     MANUAL = "manual"
+    MODEL = "model"
     AGENT = "agent"
     SKILL_WORKFLOW = "skill_workflow"
 
@@ -276,7 +321,7 @@ class _FileChangeInput(ChangeSetModel):
 
 class CreateFileChangeInput(_FileChangeInput):
     operation: Literal[ChangeOperation.CREATE]
-    relative_path: RelativeProjectPath
+    relative_path: RelativeWorkspacePath
     after_content: str = Field(max_length=MAX_CHANGE_CONTENT_CHARACTERS)
 
 
@@ -291,8 +336,14 @@ class DeleteFileChangeInput(_FileChangeInput):
     file_id: FileId
 
 
+class MoveFileChangeInput(_FileChangeInput):
+    operation: Literal[ChangeOperation.MOVE]
+    file_id: FileId
+    target_relative_path: RelativeWorkspacePath
+
+
 ProposedFileChangeInput = Annotated[
-    CreateFileChangeInput | UpdateFileChangeInput | DeleteFileChangeInput,
+    CreateFileChangeInput | UpdateFileChangeInput | DeleteFileChangeInput | MoveFileChangeInput,
     Field(discriminator="operation"),
 ]
 
@@ -323,6 +374,9 @@ class ChangeSetCreateRequest(ChangeSetModel):
     # Agent-origin proposals are forced to require a post-draft Gate by the
     # Runtime. Manual callers may opt in without changing the legacy path.
     gate_required: bool = False
+    # 写法提示证据（AiSmellReport.as_dict() + baseline/chronic/purpose）。
+    # 只作展示：作者面前的卡片从这里渲染，不再解析摘要字符串；不进 payload 哈希。
+    ai_smell: dict | None = None
     changes: list[ProposedFileChangeInput] = Field(
         min_length=1,
         max_length=MAX_CHANGE_COUNT,
@@ -404,7 +458,9 @@ class CandidateFileChange(ChangeSetModel):
     change_id: ChangeId
     operation: ChangeOperation
     file_id: FileId | None = None
-    relative_path: RelativeProjectPath
+    relative_path: RelativeWorkspacePath
+    # 移动/改名（move）的目标路径：其余操作永远是 None。
+    target_relative_path: RelativeWorkspacePath | None = None
     rationale: str = Field(min_length=1, max_length=4000)
     before_sha256: Sha256 | None = None
     proposed_after_sha256: Sha256 | None = None
@@ -414,6 +470,9 @@ class CandidateFileChange(ChangeSetModel):
 
     @model_validator(mode="after")
     def validate_hash_transition(self) -> "CandidateFileChange":
+        if self.operation is not ChangeOperation.MOVE:
+            if self.target_relative_path is not None:
+                raise ValueError("only a move carries target_relative_path")
         if self.operation is ChangeOperation.CREATE:
             if self.file_id is not None or self.before_sha256 is not None:
                 raise ValueError("create cannot carry file_id or before_sha256")
@@ -428,13 +487,24 @@ class CandidateFileChange(ChangeSetModel):
                 raise ValueError("update requires file_id and both hashes")
             if self.before_sha256 == self.proposed_after_sha256:
                 raise ValueError("update must change file content")
-        else:
+        elif self.operation is ChangeOperation.DELETE:
             if self.file_id is None or self.before_sha256 is None:
                 raise ValueError("delete requires file_id and before_sha256")
             if self.proposed_after_sha256 is not None:
                 raise ValueError("delete cannot carry proposed_after_sha256")
             if self.post_draft_gate_scope != "none":
                 raise ValueError("delete cannot require a post-draft body Gate")
+        else:
+            if self.file_id is None or self.before_sha256 is None:
+                raise ValueError("move requires file_id and before_sha256")
+            if self.proposed_after_sha256 != self.before_sha256:
+                raise ValueError("move keeps the file bytes unchanged")
+            if self.target_relative_path is None:
+                raise ValueError("move requires target_relative_path")
+            if self.target_relative_path.casefold() == self.relative_path.casefold():
+                raise ValueError("move target must differ from the current path")
+            if self.post_draft_gate_scope != "none":
+                raise ValueError("move cannot require a post-draft body Gate")
         if [item.index for item in self.hunks] != list(range(len(self.hunks))):
             raise ValueError("hunk indexes must be contiguous and zero based")
         if len({item.hunk_id for item in self.hunks}) != len(self.hunks):
@@ -460,7 +530,9 @@ class WritebackFileResult(ChangeSetModel):
     )
     change_id: ChangeId
     operation: ChangeOperation
-    relative_path: RelativeProjectPath
+    relative_path: RelativeWorkspacePath
+    # 移动/改名（move）的目标路径：其余操作永远是 None。
+    target_relative_path: RelativeWorkspacePath | None = None
     before_sha256: Sha256 | None = None
     after_sha256: Sha256 | None = None
     result_file_id: FileId | None = None
@@ -474,6 +546,9 @@ class WritebackFileResult(ChangeSetModel):
 
     @model_validator(mode="after")
     def validate_transition(self) -> "WritebackFileResult":
+        if self.operation is not ChangeOperation.MOVE:
+            if self.target_relative_path is not None:
+                raise ValueError("only a move carries target_relative_path")
         if self.operation is ChangeOperation.CREATE:
             if self.before_sha256 is not None or self.after_sha256 is None:
                 raise ValueError("create result requires only after_sha256")
@@ -486,11 +561,20 @@ class WritebackFileResult(ChangeSetModel):
                 raise ValueError("update result must change file content")
             if self.result_file_id is None or self.backup_ref is None:
                 raise ValueError("update result requires result_file_id and backup")
-        else:
+        elif self.operation is ChangeOperation.DELETE:
             if self.before_sha256 is None or self.after_sha256 is not None:
                 raise ValueError("delete result requires only before_sha256")
             if self.result_file_id is not None or self.backup_ref is None:
                 raise ValueError("delete result requires backup and no result_file_id")
+        else:
+            if self.before_sha256 is None or self.after_sha256 is None:
+                raise ValueError("move result requires both hashes")
+            if self.before_sha256 != self.after_sha256:
+                raise ValueError("move result keeps the file bytes unchanged")
+            if self.result_file_id is None or self.backup_ref is None:
+                raise ValueError("move result requires result_file_id and backup")
+            if self.target_relative_path is None:
+                raise ValueError("move result requires target_relative_path")
         if set(self.accepted_hunk_ids) & set(self.rejected_hunk_ids):
             raise ValueError("accepted and rejected hunk IDs must be disjoint")
         if len(self.accepted_hunk_ids) != len(set(self.accepted_hunk_ids)):
@@ -2248,6 +2332,8 @@ class ChangeSetResponse(ChangeSetModel):
         json_schema_extra={"uniqueItems": True},
     )
     gate_required: bool = False
+    # 写法提示证据，随记录存储、随 API 带出；与 post_draft_gate 一样不进哈希。
+    ai_smell: dict | None = None
     status: ChangeSetStatus
     review_revision: int = Field(ge=0)
     changes: list[CandidateFileChange] = Field(
@@ -2328,6 +2414,14 @@ class ChangeSetResponse(ChangeSetModel):
         return self
 
 
+# ai_smell 是给作者看的写法提示证据，和 post_draft_gate 一样不进哈希：
+# 旧记录没有这个键，进哈希会让存量候选输出里的引用哈希全部失配。
+# 信封侧（change_set_payload_hash）与校验侧（candidate 引用比对）共用同一份口径。
+CHANGE_SET_HASH_EXCLUDED_KEYS: frozenset[str] = frozenset(
+    {"post_draft_gate", "ai_smell"}
+)
+
+
 def change_set_persisted_payload(record: ChangeSetResponse) -> dict[str, object]:
     """Return the canonical payload kept in the append-only ChangeSet row."""
 
@@ -2338,8 +2432,29 @@ def change_set_persisted_payload(record: ChangeSetResponse) -> dict[str, object]
     )
 
 
+def change_set_reference_hash_from_payload(payload: dict[str, object]) -> str:
+    """Hash a stored ChangeSet payload using the envelope-side口径.
+
+    存储的 payload 带 ai_smell（作者审阅要看），哈希口径必须与
+    change_set_payload_hash 一致，否则候选提交校验必然失配。
+    """
+
+    comparable = {
+        key: value
+        for key, value in payload.items()
+        if key not in CHANGE_SET_HASH_EXCLUDED_KEYS
+    }
+    return canonical_json_hash(comparable)
+
+
 def change_set_payload_hash(record: ChangeSetResponse) -> str:
-    return canonical_json_hash(change_set_persisted_payload(record))
+    return canonical_json_hash(
+        record.model_dump(
+            mode="json",
+            by_alias=True,
+            exclude=CHANGE_SET_HASH_EXCLUDED_KEYS,
+        )
+    )
 
 
 class ChangeSetSummary(ChangeSetModel):
@@ -2351,6 +2466,8 @@ class ChangeSetSummary(ChangeSetModel):
     source_tool_call_id: str | None = None
     gate_required: bool = False
     status: ChangeSetStatus
+    base_revision: int = Field(ge=0)
+    base_fingerprint: str
     review_revision: int = Field(ge=0)
     file_count: int = Field(ge=1)
     hunk_count: int = Field(ge=1)
@@ -2397,7 +2514,16 @@ class ChangeSetDecisionRequest(ChangeSetModel):
         return self
 
 
+class ChangeSetHunkEditRequest(ChangeSetModel):
+    expected_review_revision: int = Field(ge=0)
+    after_text: str = Field(max_length=MAX_CHANGE_CONTENT_CHARACTERS)
+
+
 class ChangeSetApplyRequest(ChangeSetModel):
+    expected_review_revision: int = Field(ge=0)
+
+
+class ChangeSetDiscardRequest(ChangeSetModel):
     expected_review_revision: int = Field(ge=0)
 
 
@@ -2602,4 +2728,3 @@ class FeedbackCandidatePromotionResponse(ChangeSetModel):
         max_length=32,
     )
     bundle: FeedbackCandidateBundle | None = None
-

@@ -1,0 +1,147 @@
+{
+  "$defs": {
+    "FileChangeItem": {
+      "properties": {
+        "operation": {
+          "enum": [
+            "create",
+            "update",
+            "delete",
+            "move",
+            "mkdir"
+          ],
+          "title": "Operation",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "target_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target Path"
+        },
+        "undone_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Undone At"
+        }
+      },
+      "required": [
+        "sequence",
+        "operation",
+        "path",
+        "target_path",
+        "undone_at"
+      ],
+      "title": "FileChangeItem",
+      "type": "object"
+    },
+    "SessionFileChange": {
+      "properties": {
+        "change_id": {
+          "title": "Change Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/FileChangeItem"
+          },
+          "title": "Files",
+          "type": "array"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "applied",
+            "failed",
+            "unverified",
+            "partially_undone",
+            "undone"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "undone_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Undone At"
+        }
+      },
+      "required": [
+        "change_id",
+        "session_id",
+        "run_id",
+        "title",
+        "created_at",
+        "undone_at",
+        "status",
+        "files"
+      ],
+      "title": "SessionFileChange",
+      "type": "object"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/session-file-changes.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "changes": {
+      "items": {
+        "$ref": "#/$defs/SessionFileChange"
+      },
+      "title": "Changes",
+      "type": "array"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "session_id",
+    "changes"
+  ],
+  "title": "SessionFileChanges",
+  "type": "object"
+}
