@@ -5,8 +5,7 @@ import { IconBtn } from '../ui'
 import { ChangesPanel } from './Changes'
 import { CommandsPanel } from './Commands'
 import { FilesPanel } from './Files'
-import { SessionChangesPanel } from './SessionChangesPanel'
-import { ChangeHistory } from './ChangeHistory'
+import { ChangeWorkspace } from './ChangeWorkspace'
 import { BrowserPanel } from './Browser'
 import { LocalFilePanel } from './LocalFile'
 
@@ -24,7 +23,9 @@ interface WorkspacePanelProps {
   files: ComponentProps<typeof FilesPanel> | null
   localFile?: ComponentProps<typeof LocalFilePanel> | null
   projectChanges: ComponentProps<typeof ChangesPanel> | null
-  sessionChanges: ComponentProps<typeof SessionChangesPanel>
+  sessionChanges: ComponentProps<typeof ChangeWorkspace>['session']
+  onOpenFile?: (path: string) => void
+  changesRefreshKey?: string
   commands: ComponentProps<typeof CommandsPanel>
 }
 
@@ -67,7 +68,7 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
       {props.tab === 'browser' ? <BrowserPanel sessionId={props.commands.sessionId} /> : props.tab === 'commands' ? <CommandsPanel {...props.commands} />
         : props.tab === 'files' && props.localFile ? <LocalFilePanel {...props.localFile} />
         : props.tab === 'files' && props.files ? <FilesPanel {...props.files} />
-          : <ChangeHistory key={`${props.sessionChanges.sessionId}:${props.projectChanges?.snapshot.project.project_id ?? ''}`} project={props.projectChanges} session={props.sessionChanges} />}
+          : <ChangeWorkspace project={props.projectChanges} session={props.sessionChanges} onOpenFile={props.onOpenFile} refreshKey={props.changesRefreshKey} />}
     </div>
   </aside>
 }

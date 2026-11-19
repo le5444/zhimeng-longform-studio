@@ -9,7 +9,6 @@ import { AgentBusyError, useAgentConversation } from '../hooks/useAgentConversat
 import { useChangeSets } from '../hooks/useChangeSets'
 import { useProjectWorkspace } from '../hooks/useProjectWorkspace'
 import { useRuntimeStatus } from '../hooks/useRuntimeStatus'
-import { useSessionFileChanges } from '../hooks/useSessionFileChanges'
 import { authorFacingError } from '../lib/authorFacingError'
 import { useConversations, type ConversationRow } from './lib/useConversations'
 import { useProviderSettings } from './lib/useProviderSettings'
@@ -277,8 +276,8 @@ export default function Root() {
   const sessionCount = conversation.sessions.length
   const activeSessionId = conversation.session?.session_id ?? null
   const fileChangesRefreshKey = `${conversation.activeRun?.run_id ?? ''}:${conversation.activeRun?.status ?? ''}:${conversation.activities.filter((activity) => activity.kind === 'tool_result').length}`
-  const sessionFileChanges = useSessionFileChanges(activeSessionId, fileChangesRefreshKey, workspace.refresh,
-    panelShown && effectivePanelTab === 'changes')
+  const [fileChangeRevision, setFileChangeRevision] = useState(0)
+  const refreshChangedFiles = () => { setFileChangeRevision(value => value + 1); workspace.refresh() }
   const refreshConversations = conversations.refresh
   useEffect(() => { refreshConversations() }, [refreshConversations, sessionCount, activeSessionId])
   const wasBusy = useRef(false)
@@ -407,7 +406,7 @@ export default function Root() {
             openFileLabel={visibleOpenPath}
             onProjectChanged={workspace.refresh}
             onChangesChanged={review.refresh}
-            changesRefreshKey={`${review.records?.map((record) => `${record.change_set_id}:${record.review_revision}:${record.status}`).join('|') ?? ''}:${sessionFileChanges.records.map((record) => `${record.change_id}:${record.status}:${record.undone_at}:${record.files.map((entry) => entry.undone_at).join(',')}`).join('|')}`}
+            changesRefreshKey={`${fileChangeRevision}:${review.records?.map((record) => `${record.change_set_id}:${record.review_revision}:${record.status}`).join('|') ?? ''}`}
             provider={provider}
             onProviderChanged={providerChanged}
             runtime={runtime}
@@ -453,7 +452,7 @@ export default function Root() {
           } : null}
           localFile={visibleLocalFile ? {
             target: visibleLocalFile,
-            refreshKey: `${fileChangesRefreshKey}:${sessionFileChanges.records.map(record => `${record.change_id}:${record.status}`).join('|')}`,
+            refreshKey: `${fileChangesRefreshKey}:${fileChangeRevision}`,
             onOpenFile: openLocalFile, onBack: backFromLocalFile, notify,
             onQuote: conversation.switchingSession || conversation.contextState === 'restoring' ? undefined : quote => {
               composerRef.current?.quoteFile(quote)
@@ -464,7 +463,8 @@ export default function Root() {
             snapshot, review, focusId: changesFocus?.startsWith('filechange-') ? null : changesFocus,
             focusRequest: changesFocusRequest, onRefreshProject: workspace.refresh, notify, askConfirm,
           } : null}
-          sessionChanges={{ sessionId: activeSessionId, review: sessionFileChanges, focusId: changesFocus, focusRequest: changesFocusRequest }}
+          sessionChanges={{ sessionId: activeSessionId, focusId: changesFocus, focusRequest: changesFocusRequest, onChanged: refreshChangedFiles }}
+          changesRefreshKey={`${fileChangesRefreshKey}:${fileChangeRevision}`} onOpenFile={openLocalFile}
           commands={{ sessionId: activeSessionId, focusId: commandFocus.sessionId === activeSessionId ? commandFocus.id : null, focusRequest: commandFocus.request, onChanged: workspace.refresh }}
         />
       ) : null}

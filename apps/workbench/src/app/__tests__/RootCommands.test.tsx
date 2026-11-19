@@ -3,12 +3,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import Root from '../Root'
 import { makeFile, makeSnapshot } from './fixtures'
 import type { ProjectInspection } from '../../api/projects'
-import { getSessionFileChange, listSessionFileChanges, undoSessionFileChange, type SessionFileChangeDetail } from '../../api/fileChanges'
-import type { useSessionFileChanges } from '../../hooks/useSessionFileChanges'
+import { readChangeHistory, readHistoryDetail, undoHistoryChange, type ChangeHistoryDetail } from '../../api/changeHistory'
 import type { FileFocus } from '../lib/filePosition'
 import type { FileLocation } from '../lib/fileReferences'
 
-vi.mock('../../api/fileChanges', () => ({ getSessionFileChange: vi.fn(), listSessionFileChanges: vi.fn(), undoSessionFileChange: vi.fn() }))
+vi.mock('../../api/changeHistory', () => ({ readChangeHistory: vi.fn(), readHistoryDetail: vi.fn(), undoHistoryChange: vi.fn() }))
 
 const state = vi.hoisted(() => ({ sid: 'chat-a', refresh: vi.fn(), unmounted: vi.fn(), cancel: vi.fn(), snapshot: null as ProjectInspection | null, openFilePath: null as string | null }))
 const historyActions = vi.hoisted(() => vi.fn())
@@ -47,14 +46,11 @@ vi.mock('../panel/Commands', async () => {
     return <div aria-label="命令面板测试">{sessionId}<output data-testid="command-focus">{focusId}</output><button onClick={onChanged}>刷新文件结果</button></div>
   } }
 })
-vi.mock('../panel/SessionChangesPanel', () => ({ SessionChangesPanel: ({ review }: { review: ReturnType<typeof useSessionFileChanges> }) =>
-  <button disabled={review.busy} onClick={() => void review.undo('filechange-1')}>撤回文件测试</button> }))
 
 beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); state.sid = 'chat-a'; state.snapshot = null; state.openFilePath = null })
 afterEach(() => { cleanup(); delete window.zhimengBrowser; vi.unstubAllGlobals() })
 
 it('opens outside artifacts without a project and drops the preview in a different conversation', () => {
-  vi.mocked(listSessionFileChanges).mockResolvedValue([])
   const view = render(<Root />)
   fireEvent.click(screen.getByRole('button', { name: '打开外部文件' }))
   expect(screen.getByText('外部预览 C:/outside/report.md')).toBeInTheDocument()
@@ -105,15 +101,16 @@ it('文件定位独立传到右栏，重复点击产生新请求，上下文保�
 })
 
 it('撤回面板卸载并切到另一个对话后，真实 Hook 仍通知当前文件工作区刷新', async () => {
-  const changed = { session_id: 'chat-a', change_id: 'filechange-1', files: [], previews: [], status: 'undone' } as unknown as SessionFileChangeDetail
-  let finish!: (value: SessionFileChangeDetail) => void
-  vi.mocked(undoSessionFileChange).mockReturnValueOnce(new Promise(resolve => { finish = resolve }))
-  vi.mocked(listSessionFileChanges).mockResolvedValue([])
-  vi.mocked(getSessionFileChange).mockResolvedValue(changed)
+  const changed = { id: 'filechange-1', source: 'file_change', session_id: 'chat-a', project_id: null, run_id: null,
+    title: '保存报告', created_at: '2026-11-19T10:00:00Z', files: [], previews: [], status: 'applied', undo_available: true, undo_reason: null, review_revision: null } satisfies ChangeHistoryDetail
+  let finish!: () => void
+  vi.mocked(undoHistoryChange).mockReturnValueOnce(new Promise(resolve => { finish = () => resolve({} as never) }))
+  vi.mocked(readChangeHistory).mockResolvedValue({ session_id: 'chat-a', scope: 'session', project_id: null, revision: '1', total: 0, changes: [], next_offset: null })
+  vi.mocked(readHistoryDetail).mockResolvedValue(changed)
   const view = render(<Root />)
   fireEvent.click(screen.getByRole('button', { name: '打开修改测试' }))
-  fireEvent.click(screen.getByRole('button', { name: '撤回文件测试' }))
-  expect(undoSessionFileChange).toHaveBeenCalledWith('chat-a', 'filechange-1')
+  fireEvent.click(await screen.findByRole('button', { name: '撤回这次修改' }))
+  expect(undoHistoryChange).toHaveBeenCalledWith(changed)
   fireEvent.click(screen.getByRole('button', { name: '返回对话' }))
   state.sid = 'chat-b'
   state.snapshot = makeSnapshot({ files: [makeFile('notes.txt')], chapters: [], volumes: [] })
@@ -121,7 +118,7 @@ it('撤回面板卸载并切到另一个对话后，真实 Hook 仍通知当前�
   fireEvent.click(screen.getByRole('button', { name: '打开测试文件' }))
   expect(screen.getByText('文件预览')).toBeInTheDocument()
   state.refresh.mockClear()
-  await act(async () => finish(changed))
+  await act(async () => finish())
   expect(state.refresh).toHaveBeenCalledOnce()
   expect(screen.getByText('文件预览')).toBeInTheDocument()
   expect(screen.getByRole('textbox', { name: '消息草稿' })).toHaveValue('待继续的草稿')

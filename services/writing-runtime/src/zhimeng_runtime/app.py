@@ -39,6 +39,8 @@ from zhimeng_runtime.mcp_tool_adapter import McpToolAdapter
 from zhimeng_runtime.change_set_api import create_change_set_router
 from zhimeng_runtime.change_set_service import ChangeSetService
 from zhimeng_runtime.file_changes_api import create_file_changes_router
+from zhimeng_runtime.change_history import ChangeHistoryReader
+from zhimeng_runtime.change_history_api import create_change_history_router
 from zhimeng_runtime.context_state_api import create_context_state_router
 from zhimeng_runtime.file_journal import FileChangeJournal
 from zhimeng_runtime.config import DEFAULT_MANAGED_SKILL_ROOT, RuntimeSettings
@@ -1030,6 +1032,7 @@ def create_app(
     file_change_journal = base_tool_executor.file_journal if base_tool_executor else FileChangeJournal(context.store, runtime_state_root)
     app.state.file_change_journal = file_change_journal
     app.include_router(create_file_changes_router(file_change_journal, agent_store))
+    app.include_router(create_change_history_router(ChangeHistoryReader(agent_store, file_change_journal, change_set_service)))
     app.include_router(create_context_state_router(agent_service))
 
     @app.get("/health/live", response_model=LiveResponse, tags=["health"])
