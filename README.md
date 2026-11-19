@@ -47,3 +47,5 @@ $env:PYTHONPATH = 'services/writing-runtime/src'
 ```
 
 真实文件写入验收使用独立数据库与临时文件。开发版本同步范围见 [源码快照说明](docs/public-snapshot.md)，本轮修复见 [文件工作流](docs/agent-file-workflows.md)。
+
+项目体积、当前重构边界和开发快照入口见 [项目减负记录](docs/project-slimdown.md)。需要开发检查点时使用 `python scripts/dev_snapshot.py capture .runtime/workbench.sqlite3 <label>`；按内容压缩去重，避免每个任务目录各存一份完整数据库。

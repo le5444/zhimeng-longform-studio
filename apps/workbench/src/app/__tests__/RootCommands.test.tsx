@@ -50,10 +50,10 @@ vi.mock('../panel/Commands', async () => {
 beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); state.sid = 'chat-a'; state.snapshot = null; state.openFilePath = null })
 afterEach(() => { cleanup(); delete window.zhimengBrowser; vi.unstubAllGlobals() })
 
-it('opens outside artifacts without a project and drops the preview in a different conversation', () => {
+it('opens outside artifacts without a project and drops the preview in a different conversation', async () => {
   const view = render(<Root />)
   fireEvent.click(screen.getByRole('button', { name: '打开外部文件' }))
-  expect(screen.getByText('外部预览 C:/outside/report.md')).toBeInTheDocument()
+  expect(await screen.findByText('外部预览 C:/outside/report.md')).toBeInTheDocument()
   expect(screen.getByRole('tab', { name: '文件' })).toHaveAttribute('aria-selected', 'true')
   expect(state.openFilePath).toBeNull()
   state.sid = 'chat-b'
@@ -74,7 +74,7 @@ it('desktop links open a shared page belonging to the active conversation and ke
   await act(async () => {})
 })
 
-it('根页面更新保持历史导航回调，换会话后的命令入口使用新会话', () => {
+it('根页面更新保持历史导航回调，换会话后的命令入口使用新会话', async () => {
   const view = render(<Root />)
   const original = historyActions.mock.lastCall![0]
   view.rerender(<Root />)
@@ -84,15 +84,15 @@ it('根页面更新保持历史导航回调，换会话后的命令入口使用�
   view.rerender(<Root />)
   expect(historyActions.mock.lastCall![0].onShowCommands).not.toBe(original.onShowCommands)
   fireEvent.click(screen.getByRole('button', { name: '定位指定命令' }))
-  expect(screen.getByLabelText('命令面板测试')).toHaveTextContent('chat-b')
+  expect(await screen.findByLabelText('命令面板测试')).toHaveTextContent('chat-b')
   expect(screen.getByTestId('command-focus')).toHaveTextContent('cmd-a')
 })
 
-it('文件定位独立传到右栏，重复点击产生新请求，上下文保留纯路径', () => {
+it('文件定位独立传到右栏，重复点击产生新请求，上下文保留纯路径', async () => {
   state.snapshot = makeSnapshot({ files: [makeFile('notes.txt')], chapters: [], volumes: [] })
   render(<Root />)
   fireEvent.click(screen.getByRole('button', { name: '定位测试文件' }))
-  const first = JSON.parse(screen.getByTestId('file-focus').textContent!)
+  const first = JSON.parse((await screen.findByTestId('file-focus')).textContent!)
   expect(first.location).toEqual({ line: 80, column: 4 })
   expect(state.openFilePath).toBe('notes.txt')
   fireEvent.click(screen.getByRole('button', { name: '定位测试文件' }))
@@ -116,7 +116,7 @@ it('撤回面板卸载并切到另一个对话后，真实 Hook 仍通知当前�
   state.snapshot = makeSnapshot({ files: [makeFile('notes.txt')], chapters: [], volumes: [] })
   view.rerender(<Root />)
   fireEvent.click(screen.getByRole('button', { name: '打开测试文件' }))
-  expect(screen.getByText('文件预览')).toBeInTheDocument()
+  expect(await screen.findByText('文件预览')).toBeInTheDocument()
   state.refresh.mockClear()
   await act(async () => finish())
   expect(state.refresh).toHaveBeenCalledOnce()
@@ -142,7 +142,7 @@ it('文件被设置页遮住时界面与请求都清除当前文件，返回后�
 it('无项目对话可以打开命令页，切对话不沿用前一场编号，返回时卸载轮询并保留草稿', async () => {
   const view = render(<Root />)
   fireEvent.click(screen.getByRole('button', { name: '定位指定命令' }))
-  expect(screen.getByTestId('command-focus')).toHaveTextContent('cmd-a')
+  expect(await screen.findByTestId('command-focus')).toHaveTextContent('cmd-a')
   expect(screen.getByRole('tab', { name: '命令' })).toHaveAttribute('aria-selected', 'true')
   expect(screen.getByLabelText('命令面板测试')).toHaveTextContent('chat-a')
   state.refresh.mockClear()

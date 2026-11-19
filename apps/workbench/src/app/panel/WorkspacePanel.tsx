@@ -1,13 +1,14 @@
-import { useId, type ComponentProps, type KeyboardEvent } from 'react'
+import { lazy, Suspense, useId, type ComponentProps, type KeyboardEvent } from 'react'
 import { ArrowLeft, FileDiff, Files, Globe, Maximize2, Minimize2, SquareTerminal, X } from 'lucide-react'
 import { A } from '../text'
 import { IconBtn } from '../ui'
-import { ChangesPanel } from './Changes'
-import { CommandsPanel } from './Commands'
-import { FilesPanel } from './Files'
-import { ChangeWorkspace } from './ChangeWorkspace'
-import { BrowserPanel } from './Browser'
-import { LocalFilePanel } from './LocalFile'
+import type { ChangesPanel } from './Changes'
+
+const CommandsPanel = lazy(() => import('./Commands').then(module => ({ default: module.CommandsPanel })))
+const FilesPanel = lazy(() => import('./Files').then(module => ({ default: module.FilesPanel })))
+const ChangeWorkspace = lazy(() => import('./ChangeWorkspace').then(module => ({ default: module.ChangeWorkspace })))
+const BrowserPanel = lazy(() => import('./Browser').then(module => ({ default: module.BrowserPanel })))
+const LocalFilePanel = lazy(() => import('./LocalFile').then(module => ({ default: module.LocalFilePanel })))
 
 export type PanelTab = 'files' | 'changes' | 'commands' | 'browser'
 const icons = { files: Files, changes: FileDiff, commands: SquareTerminal, browser: Globe }
@@ -65,10 +66,12 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
       </div>
     </header>
     <div id={`${id}-body`} className="zm-panel-body" role="tabpanel" aria-labelledby={`${id}-${props.tab}`}>
+      <Suspense key={props.tab} fallback={<div className="zm-page-loading" role="status">{A.common.loading}</div>}>
       {props.tab === 'browser' ? <BrowserPanel sessionId={props.commands.sessionId} /> : props.tab === 'commands' ? <CommandsPanel {...props.commands} />
         : props.tab === 'files' && props.localFile ? <LocalFilePanel {...props.localFile} />
         : props.tab === 'files' && props.files ? <FilesPanel {...props.files} />
           : <ChangeWorkspace project={props.projectChanges} session={props.sessionChanges} onOpenFile={props.onOpenFile} refreshKey={props.changesRefreshKey} />}
+      </Suspense>
     </div>
   </aside>
 }
