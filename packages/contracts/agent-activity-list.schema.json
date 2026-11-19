@@ -1,0 +1,2438 @@
+{
+  "$defs": {
+    "ActivityItem": {
+      "description": "Validated discriminated activity union with an object-shaped JSON root.",
+      "discriminator": {
+        "mapping": {
+          "approval_request": "#/$defs/ApprovalRequestActivityItem",
+          "artifact": "#/$defs/ArtifactActivityItem",
+          "change_proposal": "#/$defs/ChangeProposalActivityItem",
+          "command": "#/$defs/CommandActivityItem",
+          "compaction": "#/$defs/CompactionActivityItem",
+          "error": "#/$defs/ErrorActivityItem",
+          "message": "#/$defs/MessageActivityItem",
+          "reasoning": "#/$defs/ReasoningActivityItem",
+          "run_state": "#/$defs/RunStateActivityItem",
+          "skill_call": "#/$defs/SkillCallActivityItem",
+          "subagent": "#/$defs/SubagentActivityItem",
+          "tool_call": "#/$defs/ToolCallActivityItem",
+          "tool_result": "#/$defs/ToolResultActivityItem"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/MessageActivityItem"
+        },
+        {
+          "$ref": "#/$defs/RunStateActivityItem"
+        },
+        {
+          "$ref": "#/$defs/ReasoningActivityItem"
+        },
+        {
+          "$ref": "#/$defs/ToolCallActivityItem"
+        },
+        {
+          "$ref": "#/$defs/ToolResultActivityItem"
+        },
+        {
+          "$ref": "#/$defs/CommandActivityItem"
+        },
+        {
+          "$ref": "#/$defs/ChangeProposalActivityItem"
+        },
+        {
+          "$ref": "#/$defs/ApprovalRequestActivityItem"
+        },
+        {
+          "$ref": "#/$defs/SkillCallActivityItem"
+        },
+        {
+          "$ref": "#/$defs/SubagentActivityItem"
+        },
+        {
+          "$ref": "#/$defs/CompactionActivityItem"
+        },
+        {
+          "$ref": "#/$defs/ArtifactActivityItem"
+        },
+        {
+          "$ref": "#/$defs/ErrorActivityItem"
+        }
+      ],
+      "title": "ActivityItem"
+    },
+    "ApprovalOption": {
+      "additionalProperties": false,
+      "properties": {
+        "option_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Option Id",
+          "type": "string"
+        },
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "effect": {
+          "enum": [
+            "approve",
+            "reject",
+            "cancel",
+            "custom"
+          ],
+          "title": "Effect",
+          "type": "string"
+        }
+      },
+      "required": [
+        "option_id",
+        "label",
+        "effect"
+      ],
+      "title": "ApprovalOption",
+      "type": "object"
+    },
+    "ApprovalRequestActivityItem": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.activity-item.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "activity_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Activity Id",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "project_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProjectRevision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correlation_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "causation_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Causation Id"
+        },
+        "kind": {
+          "const": "approval_request",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ApprovalRequestPayload"
+        }
+      },
+      "required": [
+        "schema",
+        "activity_id",
+        "session_id",
+        "run_id",
+        "sequence",
+        "created_at",
+        "project_revision",
+        "correlation_id",
+        "causation_id",
+        "kind",
+        "payload"
+      ],
+      "title": "ApprovalRequestActivityItem",
+      "type": "object"
+    },
+    "ApprovalRequestPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Approval Id",
+          "type": "string"
+        },
+        "subject_kind": {
+          "enum": [
+            "tool_call",
+            "command",
+            "change_proposal",
+            "skill_call",
+            "subagent"
+          ],
+          "title": "Subject Kind",
+          "type": "string"
+        },
+        "subject_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Subject Id",
+          "type": "string"
+        },
+        "prompt": {
+          "minLength": 1,
+          "title": "Prompt",
+          "type": "string"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/ApprovalOption"
+          },
+          "minItems": 2,
+          "title": "Options",
+          "type": "array"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "resolved",
+            "expired",
+            "cancelled"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "selected_option_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Selected Option Id"
+        }
+      },
+      "required": [
+        "approval_id",
+        "subject_kind",
+        "subject_id",
+        "prompt",
+        "options",
+        "status",
+        "selected_option_id"
+      ],
+      "title": "ApprovalRequestPayload",
+      "type": "object"
+    },
+    "ArtifactActivityItem": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.activity-item.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "activity_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Activity Id",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "project_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProjectRevision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correlation_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "causation_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Causation Id"
+        },
+        "kind": {
+          "const": "artifact",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ArtifactPayload"
+        }
+      },
+      "required": [
+        "schema",
+        "activity_id",
+        "session_id",
+        "run_id",
+        "sequence",
+        "created_at",
+        "project_revision",
+        "correlation_id",
+        "causation_id",
+        "kind",
+        "payload"
+      ],
+      "title": "ArtifactActivityItem",
+      "type": "object"
+    },
+    "ArtifactPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_type": {
+          "minLength": 1,
+          "title": "Artifact Type",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "uri": {
+          "minLength": 1,
+          "title": "Uri",
+          "type": "string"
+        },
+        "media_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Media Type"
+        },
+        "content_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Content Hash"
+        },
+        "size_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Size Bytes"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_type",
+        "name",
+        "uri",
+        "media_type",
+        "content_hash",
+        "size_bytes"
+      ],
+      "title": "ArtifactPayload",
+      "type": "object"
+    },
+    "ChangeProposalActivityItem": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.activity-item.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "activity_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Activity Id",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "project_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProjectRevision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correlation_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "causation_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Causation Id"
+        },
+        "kind": {
+          "const": "change_proposal",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ChangeProposalPayload"
+        }
+      },
+      "required": [
+        "schema",
+        "activity_id",
+        "session_id",
+        "run_id",
+        "sequence",
+        "created_at",
+        "project_revision",
+        "correlation_id",
+        "causation_id",
+        "kind",
+        "payload"
+      ],
+      "title": "ChangeProposalActivityItem",
+      "type": "object"
+    },
+    "ChangeProposalPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "proposal_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "base_revision": {
+          "minimum": 1,
+          "title": "Base Revision",
+          "type": "integer"
+        },
+        "base_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Base Fingerprint",
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/FileChange"
+          },
+          "minItems": 1,
+          "title": "Files",
+          "type": "array"
+        }
+      },
+      "required": [
+        "proposal_id",
+        "title",
+        "summary",
+        "base_revision",
+        "base_fingerprint",
+        "files"
+      ],
+      "title": "ChangeProposalPayload",
+      "type": "object"
+    },
+    "CommandActivityItem": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.activity-item.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "activity_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Activity Id",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "project_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProjectRevision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correlation_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "causation_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Causation Id"
+        },
+        "kind": {
+          "const": "command",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/CommandPayload"
+        }
+      },
+      "required": [
+        "schema",
+        "activity_id",
+        "session_id",
+        "run_id",
+        "sequence",
+        "created_at",
+        "project_revision",
+        "correlation_id",
+        "causation_id",
+        "kind",
+        "payload"
+      ],
+      "title": "CommandActivityItem",
+      "type": "object"
+    },
+    "CommandPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "command_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Command Id",
+          "type": "string"
+        },
+        "command": {
+          "minLength": 1,
+          "title": "Command",
+          "type": "string"
+        },
+        "cwd": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cwd"
+        },
+        "status": {
+          "$ref": "#/$defs/OperationStatus"
+        },
+        "exit_code": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Exit Code"
+        },
+        "output_artifact_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Output Artifact Id"
+        }
+      },
+      "required": [
+        "command_id",
+        "command",
+        "cwd",
+        "status",
+        "exit_code",
+        "output_artifact_id"
+      ],
+      "title": "CommandPayload",
+      "type": "object"
+    },
+    "CompactionActivityItem": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.activity-item.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "activity_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Activity Id",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "project_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProjectRevision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correlation_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "causation_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Causation Id"
+        },
+        "kind": {
+          "const": "compaction",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/CompactionPayload"
+        }
+      },
+      "required": [
+        "schema",
+        "activity_id",
+        "session_id",
+        "run_id",
+        "sequence",
+        "created_at",
+        "project_revision",
+        "correlation_id",
+        "causation_id",
+        "kind",
+        "payload"
+      ],
+      "title": "CompactionActivityItem",
+      "type": "object"
+    },
+    "CompactionPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "from_sequence": {
+          "minimum": 1,
+          "title": "From Sequence",
+          "type": "integer"
+        },
+        "to_sequence": {
+          "minimum": 1,
+          "title": "To Sequence",
+          "type": "integer"
+        },
+        "strategy": {
+          "minLength": 1,
+          "title": "Strategy",
+          "type": "string"
+        },
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "tokens_before": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Tokens Before"
+        },
+        "tokens_after": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Tokens After"
+        },
+        "artifact_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Artifact Id"
+        }
+      },
+      "required": [
+        "from_sequence",
+        "to_sequence",
+        "strategy",
+        "summary",
+        "tokens_before",
+        "tokens_after",
+        "artifact_id"
+      ],
+      "title": "CompactionPayload",
+      "type": "object"
+    },
+    "ErrorActivityItem": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.activity-item.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "activity_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Activity Id",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "project_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProjectRevision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correlation_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "causation_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Causation Id"
+        },
+        "kind": {
+          "const": "error",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ErrorPayload"
+        }
+      },
+      "required": [
+        "schema",
+        "activity_id",
+        "session_id",
+        "run_id",
+        "sequence",
+        "created_at",
+        "project_revision",
+        "correlation_id",
+        "causation_id",
+        "kind",
+        "payload"
+      ],
+      "title": "ErrorActivityItem",
+      "type": "object"
+    },
+    "ErrorDetail": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "request_id": {
+          "title": "Request Id",
+          "type": "string"
+        },
+        "retryable": {
+          "title": "Retryable",
+          "type": "boolean"
+        },
+        "details": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Details"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "request_id",
+        "retryable"
+      ],
+      "title": "ErrorDetail",
+      "type": "object"
+    },
+    "ErrorEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.error.v1",
+          "default": "zhimeng.error.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "error": {
+          "$ref": "#/$defs/ErrorDetail"
+        }
+      },
+      "required": [
+        "error"
+      ],
+      "title": "ErrorEnvelope",
+      "type": "object"
+    },
+    "ErrorPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/ErrorEnvelope"
+        },
+        "fatal": {
+          "title": "Fatal",
+          "type": "boolean"
+        },
+        "scope": {
+          "enum": [
+            "activity",
+            "run",
+            "session",
+            "runtime"
+          ],
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "error",
+        "fatal",
+        "scope"
+      ],
+      "title": "ErrorPayload",
+      "type": "object"
+    },
+    "FileChange": {
+      "additionalProperties": false,
+      "properties": {
+        "file_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "File Id"
+        },
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "operation": {
+          "enum": [
+            "create",
+            "update",
+            "delete"
+          ],
+          "title": "Operation",
+          "type": "string"
+        },
+        "content_hash_before": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Content Hash Before"
+        },
+        "content_hash_after": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Content Hash After"
+        }
+      },
+      "required": [
+        "file_id",
+        "path",
+        "operation",
+        "content_hash_before",
+        "content_hash_after"
+      ],
+      "title": "FileChange",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "MessageActivityItem": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.activity-item.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "activity_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Activity Id",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "project_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProjectRevision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correlation_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "causation_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Causation Id"
+        },
+        "kind": {
+          "const": "message",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/MessagePayload"
+        }
+      },
+      "required": [
+        "schema",
+        "activity_id",
+        "session_id",
+        "run_id",
+        "sequence",
+        "created_at",
+        "project_revision",
+        "correlation_id",
+        "causation_id",
+        "kind",
+        "payload"
+      ],
+      "title": "MessageActivityItem",
+      "type": "object"
+    },
+    "MessagePayload": {
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "enum": [
+            "system",
+            "user",
+            "assistant",
+            "tool"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "content": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Content"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Name"
+        },
+        "message_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message Id"
+        },
+        "phase": {
+          "default": "completed",
+          "enum": [
+            "delta",
+            "completed"
+          ],
+          "title": "Phase",
+          "type": "string"
+        },
+        "delta": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delta"
+        },
+        "format": {
+          "default": "plain",
+          "enum": [
+            "plain",
+            "markdown"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "finish_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finish Reason"
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MessageUsage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "role",
+        "content",
+        "name"
+      ],
+      "title": "MessagePayload",
+      "type": "object"
+    },
+    "MessageUsage": {
+      "additionalProperties": false,
+      "properties": {
+        "input_tokens": {
+          "minimum": 0,
+          "title": "Input Tokens",
+          "type": "integer"
+        },
+        "output_tokens": {
+          "minimum": 0,
+          "title": "Output Tokens",
+          "type": "integer"
+        },
+        "total_tokens": {
+          "minimum": 0,
+          "title": "Total Tokens",
+          "type": "integer"
+        },
+        "cached_input_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cached Input Tokens"
+        },
+        "input_tokens_reported": {
+          "default": true,
+          "title": "Input Tokens Reported",
+          "type": "boolean"
+        },
+        "output_tokens_reported": {
+          "default": true,
+          "title": "Output Tokens Reported",
+          "type": "boolean"
+        },
+        "cached_input_tokens_complete": {
+          "default": true,
+          "title": "Cached Input Tokens Complete",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "input_tokens",
+        "output_tokens",
+        "total_tokens"
+      ],
+      "title": "MessageUsage",
+      "type": "object"
+    },
+    "OperationStatus": {
+      "enum": [
+        "pending",
+        "running",
+        "succeeded",
+        "failed",
+        "cancelled"
+      ],
+      "title": "OperationStatus",
+      "type": "string"
+    },
+    "ProjectRevision": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fingerprint",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "revision",
+        "fingerprint",
+        "observed_at"
+      ],
+      "title": "ProjectRevision",
+      "type": "object"
+    },
+    "ReasoningActivityItem": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.activity-item.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "activity_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Activity Id",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "project_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProjectRevision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correlation_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "causation_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Causation Id"
+        },
+        "kind": {
+          "const": "reasoning",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ReasoningPayload"
+        }
+      },
+      "required": [
+        "schema",
+        "activity_id",
+        "session_id",
+        "run_id",
+        "sequence",
+        "created_at",
+        "project_revision",
+        "correlation_id",
+        "causation_id",
+        "kind",
+        "payload"
+      ],
+      "title": "ReasoningActivityItem",
+      "type": "object"
+    },
+    "ReasoningPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Content"
+        },
+        "visibility": {
+          "enum": [
+            "summary",
+            "full",
+            "redacted"
+          ],
+          "title": "Visibility",
+          "type": "string"
+        },
+        "block_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Block Id"
+        },
+        "phase": {
+          "default": "completed",
+          "enum": [
+            "delta",
+            "completed",
+            "interrupted"
+          ],
+          "title": "Phase",
+          "type": "string"
+        },
+        "delta": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delta"
+        },
+        "source": {
+          "default": "model",
+          "enum": [
+            "model",
+            "runtime"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary",
+        "content",
+        "visibility"
+      ],
+      "title": "ReasoningPayload",
+      "type": "object"
+    },
+    "RunStateActivityItem": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.activity-item.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "activity_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Activity Id",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "project_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProjectRevision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correlation_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "causation_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Causation Id"
+        },
+        "kind": {
+          "const": "run_state",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/RunStatePayload"
+        }
+      },
+      "required": [
+        "schema",
+        "activity_id",
+        "session_id",
+        "run_id",
+        "sequence",
+        "created_at",
+        "project_revision",
+        "correlation_id",
+        "causation_id",
+        "kind",
+        "payload"
+      ],
+      "title": "RunStateActivityItem",
+      "type": "object"
+    },
+    "RunStatePayload": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/RunStatus"
+        },
+        "previous_status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Detail"
+        }
+      },
+      "required": [
+        "status",
+        "previous_status",
+        "detail"
+      ],
+      "title": "RunStatePayload",
+      "type": "object"
+    },
+    "RunStatus": {
+      "enum": [
+        "queued",
+        "starting",
+        "running",
+        "awaiting_approval",
+        "paused",
+        "cancelling",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "interrupted"
+      ],
+      "title": "RunStatus",
+      "type": "string"
+    },
+    "SkillCallActivityItem": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.activity-item.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "activity_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Activity Id",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "project_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProjectRevision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correlation_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "causation_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Causation Id"
+        },
+        "kind": {
+          "const": "skill_call",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/SkillCallPayload"
+        }
+      },
+      "required": [
+        "schema",
+        "activity_id",
+        "session_id",
+        "run_id",
+        "sequence",
+        "created_at",
+        "project_revision",
+        "correlation_id",
+        "causation_id",
+        "kind",
+        "payload"
+      ],
+      "title": "SkillCallActivityItem",
+      "type": "object"
+    },
+    "SkillCallPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "skill_call_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Skill Call Id",
+          "type": "string"
+        },
+        "skill_id": {
+          "minLength": 1,
+          "title": "Skill Id",
+          "type": "string"
+        },
+        "skill_version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Skill Version"
+        },
+        "status": {
+          "$ref": "#/$defs/OperationStatus"
+        },
+        "input": {
+          "$ref": "#/$defs/JsonValue"
+        },
+        "output": {
+          "$ref": "#/$defs/JsonValue"
+        }
+      },
+      "required": [
+        "skill_call_id",
+        "skill_id",
+        "skill_version",
+        "status",
+        "input",
+        "output"
+      ],
+      "title": "SkillCallPayload",
+      "type": "object"
+    },
+    "SubagentActivityItem": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.activity-item.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "activity_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Activity Id",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "project_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProjectRevision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correlation_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "causation_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Causation Id"
+        },
+        "kind": {
+          "const": "subagent",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/SubagentPayload"
+        }
+      },
+      "required": [
+        "schema",
+        "activity_id",
+        "session_id",
+        "run_id",
+        "sequence",
+        "created_at",
+        "project_revision",
+        "correlation_id",
+        "causation_id",
+        "kind",
+        "payload"
+      ],
+      "title": "SubagentActivityItem",
+      "type": "object"
+    },
+    "SubagentPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "subagent_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Subagent Id",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Name"
+        },
+        "task": {
+          "minLength": 1,
+          "title": "Task",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "requested",
+            "running",
+            "waiting",
+            "succeeded",
+            "failed",
+            "cancelled",
+            "interrupted"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "child_run_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Child Run Id"
+        }
+      },
+      "required": [
+        "subagent_id",
+        "name",
+        "task",
+        "status",
+        "child_run_id"
+      ],
+      "title": "SubagentPayload",
+      "type": "object"
+    },
+    "ToolCallActivityItem": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.activity-item.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "activity_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Activity Id",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "project_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProjectRevision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correlation_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "causation_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Causation Id"
+        },
+        "kind": {
+          "const": "tool_call",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ToolCallPayload"
+        }
+      },
+      "required": [
+        "schema",
+        "activity_id",
+        "session_id",
+        "run_id",
+        "sequence",
+        "created_at",
+        "project_revision",
+        "correlation_id",
+        "causation_id",
+        "kind",
+        "payload"
+      ],
+      "title": "ToolCallActivityItem",
+      "type": "object"
+    },
+    "ToolCallPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "tool_call_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Tool Call Id",
+          "type": "string"
+        },
+        "tool_name": {
+          "minLength": 1,
+          "title": "Tool Name",
+          "type": "string"
+        },
+        "arguments": {
+          "$ref": "#/$defs/JsonValue"
+        }
+      },
+      "required": [
+        "tool_call_id",
+        "tool_name",
+        "arguments"
+      ],
+      "title": "ToolCallPayload",
+      "type": "object"
+    },
+    "ToolResultActivityItem": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.activity-item.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "activity_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Activity Id",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "project_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProjectRevision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correlation_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "causation_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Causation Id"
+        },
+        "kind": {
+          "const": "tool_result",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ToolResultPayload"
+        }
+      },
+      "required": [
+        "schema",
+        "activity_id",
+        "session_id",
+        "run_id",
+        "sequence",
+        "created_at",
+        "project_revision",
+        "correlation_id",
+        "causation_id",
+        "kind",
+        "payload"
+      ],
+      "title": "ToolResultActivityItem",
+      "type": "object"
+    },
+    "ToolResultPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "tool_call_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Tool Call Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "succeeded",
+            "failed",
+            "cancelled"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "output": {
+          "$ref": "#/$defs/JsonValue"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorEnvelope"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Duration Ms"
+        }
+      },
+      "required": [
+        "tool_call_id",
+        "status",
+        "output",
+        "error",
+        "duration_ms"
+      ],
+      "title": "ToolResultPayload",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "zhimeng.agent-activity-list.v1",
+      "default": "zhimeng.agent-activity-list.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "run_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "activities": {
+      "items": {
+        "$ref": "#/$defs/ActivityItem"
+      },
+      "title": "Activities",
+      "type": "array"
+    },
+    "last_sequence": {
+      "minimum": 0,
+      "title": "Last Sequence",
+      "type": "integer"
+    },
+    "next_after_sequence": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Next After Sequence"
+    },
+    "last_event_sequence": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Last Event Sequence"
+    }
+  },
+  "required": [
+    "run_id",
+    "activities",
+    "last_sequence"
+  ],
+  "title": "AgentActivityListResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/agent-activity-list.schema.json"
+}

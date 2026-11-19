@@ -13,6 +13,16 @@ class AgentEventBroker:
     def snapshot(self, run_id: str) -> int:
         return self._generations.get(run_id, 0)
 
+    def forget(self, run_id: str) -> None:
+        """Run 终态后回收条目，长驻进程下字典不再无界增长。
+
+        晚到的订阅者不受影响：wait_for_change 拿到的是新建的空条件，
+        代号比对立刻返回 True，外层循环重查库后照常发出 done；最坏
+        情况多等一个心跳周期。
+        """
+        self._conditions.pop(run_id, None)
+        self._generations.pop(run_id, None)
+
     async def publish(self, run_id: str) -> None:
         condition = self._conditions.setdefault(run_id, asyncio.Condition())
         async with condition:

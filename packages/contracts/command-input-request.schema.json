@@ -1,0 +1,17 @@
+{
+  "$id": "https://zhimeng.local/contracts/command-input-request.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "input": {
+      "minLength": 1,
+      "title": "Input",
+      "type": "string"
+    }
+  },
+  "required": [
+    "input"
+  ],
+  "title": "CommandInputRequest",
+  "type": "object"
+}

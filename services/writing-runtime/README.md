@@ -12,6 +12,16 @@ handoff. Runtime, Workbench and browser validation is recorded in
 
 ## Runtime contract
 
+`web_fetch` reads public HTTP/HTTPS pages and uses a fresh, headless browser
+context when a small HTML shell needs JavaScript to load its content. It tries
+installed Edge, Chrome, then Playwright Chromium. Install the runtime dependencies
+first; machines without Edge or Chrome also need `python -m playwright install chromium`.
+The browser does not use the author's browser profile or login cookies. HTTP errors,
+verification pages, empty content and failed rendering retain their response evidence
+and are recorded as failed reads. Automatic rendering is a heuristic; it does not
+guarantee that every site's content has loaded. Long rendered text uses the same saved
+full-text and head/tail preview as other pages.
+
 - Python 3.12 and Pydantic v2
 - Loopback-only HTTP server
 - Exact-origin CORS, configured by environment variable

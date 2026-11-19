@@ -1,0 +1,16 @@
+.zm-diff { border: 1px solid var(--zm-line); border-radius: var(--zm-r-2); overflow: hidden; }
+.zm-diff-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--zm-bg-sunken); color: var(--zm-fg-2); font-family: var(--zm-mono); font-size: var(--zm-fs-1); }
+.zm-diff-head > span { min-width: 0; overflow-wrap: anywhere; }
+.zm-diff-head > svg { width: 14px; height: 14px; flex: none; }
+.zm-diff-lines { max-height: 360px; overflow: auto; font: var(--zm-fs-2)/1.7 var(--zm-mono); }
+.zm-diff-line { display: flex; white-space: pre-wrap; overflow-wrap: anywhere; }
+.zm-diff-sign { flex: 0 0 2ch; text-align: center; color: var(--zm-fg-3); user-select: none; }
+.zm-diff-text { flex: 1; min-width: 0; padding-right: 10px; tab-size: 4; }
+.zm-diff-line.is-add { background: var(--zm-add); }
+.zm-diff-line.is-add .zm-diff-sign { color: var(--zm-ok); }
+.zm-diff-line.is-del { background: var(--zm-del); }
+.zm-diff-line.is-del .zm-diff-sign { color: var(--zm-danger); }
+.zm-diff-line.is-del .zm-diff-text { opacity: 0.8; }
+.zm-diff-context { display: block; width: 100%; padding: 6px 12px; border: 0; border-block: 1px solid var(--zm-line); background: var(--zm-bg-sunken); color: var(--zm-fg-2); text-align: left; font: inherit; cursor: pointer; }
+.zm-diff-context:hover { color: var(--zm-fg); background: var(--zm-bg-hover); }
+.zm-diff-context:focus-visible { outline: 2px solid var(--zm-accent); outline-offset: -2px; }

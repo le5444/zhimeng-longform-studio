@@ -1,0 +1,411 @@
+{
+  "$defs": {
+    "AgentImage": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "exclusiveMinimum": 0,
+          "title": "Height",
+          "type": "integer"
+        },
+        "image_id": {
+          "title": "Image Id",
+          "type": "string"
+        },
+        "mime_type": {
+          "title": "Mime Type",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "width": {
+          "exclusiveMinimum": 0,
+          "title": "Width",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "image_id",
+        "name",
+        "mime_type",
+        "width",
+        "height",
+        "url"
+      ],
+      "title": "AgentImage",
+      "type": "object"
+    },
+    "AgentMessageResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "minLength": 1,
+          "title": "Content",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "format": {
+          "enum": [
+            "plain",
+            "markdown"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "images": {
+          "items": {
+            "$ref": "#/$defs/AgentImage"
+          },
+          "title": "Images",
+          "type": "array"
+        },
+        "message_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Message Id",
+          "type": "string"
+        },
+        "ordinal": {
+          "minimum": 1,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "role": {
+          "enum": [
+            "system",
+            "user",
+            "assistant",
+            "tool"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "run_usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunUsage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "schema": {
+          "const": "zhimeng.agent-message.v1",
+          "default": "zhimeng.agent-message.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usage"
+        }
+      },
+      "required": [
+        "message_id",
+        "session_id",
+        "run_id",
+        "ordinal",
+        "role",
+        "format",
+        "content",
+        "created_at"
+      ],
+      "title": "AgentMessageResponse",
+      "type": "object"
+    },
+    "AgentRunProcessSummary": {
+      "additionalProperties": false,
+      "description": "Small persisted facts for deciding whether a conversation has details.",
+      "properties": {
+        "has_process": {
+          "title": "Has Process",
+          "type": "boolean"
+        },
+        "tool_count": {
+          "minimum": 0,
+          "title": "Tool Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "has_process",
+        "tool_count"
+      ],
+      "title": "AgentRunProcessSummary",
+      "type": "object"
+    },
+    "MessageUsage": {
+      "additionalProperties": false,
+      "properties": {
+        "cached_input_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cached Input Tokens"
+        },
+        "cached_input_tokens_complete": {
+          "default": true,
+          "title": "Cached Input Tokens Complete",
+          "type": "boolean"
+        },
+        "input_tokens": {
+          "minimum": 0,
+          "title": "Input Tokens",
+          "type": "integer"
+        },
+        "input_tokens_reported": {
+          "default": true,
+          "title": "Input Tokens Reported",
+          "type": "boolean"
+        },
+        "output_tokens": {
+          "minimum": 0,
+          "title": "Output Tokens",
+          "type": "integer"
+        },
+        "output_tokens_reported": {
+          "default": true,
+          "title": "Output Tokens Reported",
+          "type": "boolean"
+        },
+        "total_tokens": {
+          "minimum": 0,
+          "title": "Total Tokens",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "input_tokens",
+        "output_tokens",
+        "total_tokens"
+      ],
+      "title": "MessageUsage",
+      "type": "object"
+    },
+    "ReviewSource": {
+      "properties": {
+        "source_message_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Message Id"
+        },
+        "source_run_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Source Run Id",
+          "type": "string"
+        },
+        "source_run_ordinal": {
+          "minimum": 1,
+          "title": "Source Run Ordinal",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source_run_id",
+        "source_run_ordinal"
+      ],
+      "title": "ReviewSource",
+      "type": "object"
+    },
+    "RunUsage": {
+      "additionalProperties": false,
+      "properties": {
+        "compaction": {
+          "$ref": "#/$defs/UsageGroup"
+        },
+        "main": {
+          "$ref": "#/$defs/UsageGroup"
+        },
+        "scope": {
+          "const": "main_and_tool_compaction",
+          "default": "main_and_tool_compaction",
+          "title": "Scope",
+          "type": "string"
+        },
+        "total": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MessageUsage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "main",
+        "compaction",
+        "total"
+      ],
+      "title": "RunUsage",
+      "type": "object"
+    },
+    "UsageGroup": {
+      "additionalProperties": false,
+      "properties": {
+        "completed": {
+          "minimum": 0,
+          "title": "Completed",
+          "type": "integer"
+        },
+        "requests": {
+          "minimum": 0,
+          "title": "Requests",
+          "type": "integer"
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MessageUsage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "requests",
+        "completed",
+        "usage"
+      ],
+      "title": "UsageGroup",
+      "type": "object"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/agent-message-list.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "has_earlier": {
+      "default": false,
+      "title": "Has Earlier",
+      "type": "boolean"
+    },
+    "last_ordinal": {
+      "minimum": 0,
+      "title": "Last Ordinal",
+      "type": "integer"
+    },
+    "messages": {
+      "items": {
+        "$ref": "#/$defs/AgentMessageResponse"
+      },
+      "title": "Messages",
+      "type": "array"
+    },
+    "review_sources": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ReviewSource"
+      },
+      "title": "Review Sources",
+      "type": "object"
+    },
+    "run_origins": {
+      "additionalProperties": {
+        "enum": [
+          "user",
+          "command_completion"
+        ],
+        "type": "string"
+      },
+      "title": "Run Origins",
+      "type": "object"
+    },
+    "run_process_summaries": {
+      "additionalProperties": {
+        "$ref": "#/$defs/AgentRunProcessSummary"
+      },
+      "title": "Run Process Summaries",
+      "type": "object"
+    },
+    "schema": {
+      "const": "zhimeng.agent-message-list.v1",
+      "default": "zhimeng.agent-message-list.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "session_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Session Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "session_id",
+    "messages",
+    "last_ordinal"
+  ],
+  "title": "AgentMessageListResponse",
+  "type": "object"
+}

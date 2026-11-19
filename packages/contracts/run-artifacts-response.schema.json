@@ -1,0 +1,214 @@
+{
+  "$defs": {
+    "ArtifactFileState": {
+      "properties": {
+        "state": {
+          "enum": [
+            "file",
+            "directory",
+            "missing",
+            "unverified"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "bytes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bytes"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sha256"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "ArtifactFileState",
+      "type": "object"
+    },
+    "RunArtifact": {
+      "properties": {
+        "receipt_id": {
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "file_change",
+            "change_set"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "record_state": {
+          "title": "Record State",
+          "type": "string"
+        },
+        "operation": {
+          "title": "Operation",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "expected_state": {
+          "enum": [
+            "file",
+            "directory",
+            "missing",
+            "unknown"
+          ],
+          "title": "Expected State",
+          "type": "string"
+        },
+        "expected_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Expected Sha256"
+        },
+        "current": {
+          "$ref": "#/$defs/ArtifactFileState"
+        },
+        "matches_recorded_state": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Matches Recorded State"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "source",
+        "record_state",
+        "operation",
+        "path",
+        "expected_state",
+        "expected_sha256",
+        "current",
+        "matches_recorded_state"
+      ],
+      "title": "RunArtifact",
+      "type": "object"
+    },
+    "RunStatus": {
+      "enum": [
+        "queued",
+        "starting",
+        "running",
+        "awaiting_approval",
+        "paused",
+        "cancelling",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "interrupted"
+      ],
+      "title": "RunStatus",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "run_status": {
+      "$ref": "#/$defs/RunStatus"
+    },
+    "revision": {
+      "title": "Revision",
+      "type": "string"
+    },
+    "observed_at": {
+      "title": "Observed At",
+      "type": "string"
+    },
+    "total_paths": {
+      "title": "Total Paths",
+      "type": "integer"
+    },
+    "observations": {
+      "items": {
+        "$ref": "#/$defs/RunArtifact"
+      },
+      "title": "Observations",
+      "type": "array"
+    },
+    "next_offset": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Next Offset"
+    },
+    "scope": {
+      "const": "run_receipt_paths_only",
+      "default": "run_receipt_paths_only",
+      "title": "Scope",
+      "type": "string"
+    }
+  },
+  "required": [
+    "session_id",
+    "run_id",
+    "run_status",
+    "revision",
+    "observed_at",
+    "total_paths",
+    "observations",
+    "next_offset"
+  ],
+  "title": "RunArtifactsResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/run-artifacts-response.schema.json"
+}

@@ -2,11 +2,9 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   applyChangeSet,
-  getPostDraftGate,
   getChangeSet,
   listProjectChangeSets,
   rollbackChangeSet,
-  runPostDraftGate,
   updateHunkDecisions,
 } from '../api/changeSets'
 import { RuntimeApiError } from '../api/runtime'
@@ -14,20 +12,17 @@ import {
   changeSetFixture,
   changeSetProjectId,
   changeSetSummaryFixture,
-  postDraftGateReceiptFixture,
 } from '../test/changeSetFixture'
-import { deriveChangeSetGateState, useChangeSets } from './useChangeSets'
+import { useChangeSets } from './useChangeSets'
 
 vi.mock('../api/changeSets', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/changeSets')>()
   return {
     ...actual,
     applyChangeSet: vi.fn(),
-    getPostDraftGate: vi.fn(),
     getChangeSet: vi.fn(),
     listProjectChangeSets: vi.fn(),
     rollbackChangeSet: vi.fn(),
-    runPostDraftGate: vi.fn(),
     updateHunkDecisions: vi.fn(),
   }
 })
@@ -38,51 +33,6 @@ describe('useChangeSets', () => {
     const pending = changeSetFixture()
     vi.mocked(listProjectChangeSets).mockResolvedValue([changeSetSummaryFixture()])
     vi.mocked(getChangeSet).mockResolvedValue(pending)
-    vi.mocked(getPostDraftGate).mockResolvedValue({
-      schema: 'zhimeng.post-draft-gate-response.v1',
-      change_set_id: pending.change_set_id,
-      project_id: pending.project_id,
-      gate_required: false,
-      review_revision: pending.review_revision,
-      receipt: null,
-    })
-  })
-
-  it('treats the Gate endpoint null receipt and review revision as authoritative', () => {
-    const detail = changeSetFixture({
-      status: 'ready',
-      decision: 'accepted',
-      reviewRevision: 2,
-      gateRequired: true,
-      postDraftGate: postDraftGateReceiptFixture({ status: 'passed', reviewRevision: 2 }),
-    })
-    const response = {
-      schema: 'zhimeng.post-draft-gate-response.v1' as const,
-      change_set_id: detail.change_set_id,
-      project_id: detail.project_id,
-      gate_required: true,
-      review_revision: 2,
-      receipt: null,
-    }
-
-    expect(deriveChangeSetGateState(detail, response)).toMatchObject({
-      required: true,
-      status: 'missing',
-      receipt: null,
-    })
-    expect(deriveChangeSetGateState(detail, { ...response, review_revision: 1 })).toMatchObject({
-      required: true,
-      status: 'stale',
-      receipt: null,
-    })
-    expect(deriveChangeSetGateState(detail, {
-      ...response,
-      change_set_id: 'changeset-fedcba9876543210fedcba9876543210',
-    })).toMatchObject({
-      required: true,
-      status: 'stale',
-      receipt: null,
-    })
   })
 
   it('loads the queue and selected ChangeSet detail from separate endpoints', async () => {
@@ -195,202 +145,6 @@ describe('useChangeSets', () => {
     expect(applyChangeSet).toHaveBeenCalledWith(applied.change_set_id, 1)
     expect(result.current.detail?.status).toBe('applied')
     expect(projectChanged).toHaveBeenCalledOnce()
-  })
-
-  it('loads Gate status, runs the current revision, and exposes the passing receipt', async () => {
-    const ready = changeSetFixture({
-      status: 'ready',
-      decision: 'accepted',
-      reviewRevision: 1,
-      gateRequired: true,
-    })
-    const passed = {
-      ...ready,
-      post_draft_gate: postDraftGateReceiptFixture({ status: 'passed', reviewRevision: 1 }),
-    }
-    vi.mocked(listProjectChangeSets).mockResolvedValue([
-      changeSetSummaryFixture({ status: 'ready', decision: 'accepted', reviewRevision: 1, gateRequired: true }),
-    ])
-    vi.mocked(getChangeSet).mockResolvedValue(ready)
-    vi.mocked(getPostDraftGate).mockResolvedValue({
-      schema: 'zhimeng.post-draft-gate-response.v1',
-      change_set_id: ready.change_set_id,
-      project_id: ready.project_id,
-      gate_required: true,
-      review_revision: 1,
-      receipt: null,
-    })
-    vi.mocked(runPostDraftGate).mockResolvedValue(passed)
-
-    const { result } = renderHook(() => useChangeSets(changeSetProjectId))
-    await waitFor(() => expect(result.current.detailState).toBe('ready'))
-    await waitFor(() => expect(result.current.gate.status).toBe('missing'))
-
-    await act(async () => {
-      await result.current.runGate()
-    })
-    expect(runPostDraftGate).toHaveBeenCalledWith(ready.change_set_id, 1)
-    expect(result.current.gate.status).toBe('passed')
-    expect(result.current.gate.receipt?.review_revision).toBe(1)
-  })
-
-  it.each(['succeeded', 'failed'] as const)(
-    'ignores a delayed Gate result after selecting another ChangeSet (%s)',
-    async (outcome) => {
-      const alternateId = 'changeset-fedcba9876543210fedcba9876543210'
-      const current = changeSetFixture({
-        status: 'ready',
-        decision: 'accepted',
-        reviewRevision: 1,
-        gateRequired: true,
-      })
-      const alternate = {
-        ...changeSetFixture({
-          status: 'ready',
-          decision: 'accepted',
-          reviewRevision: 1,
-          gateRequired: true,
-        }),
-        change_set_id: alternateId,
-        title: '另一个待审候选',
-      }
-      const passed = {
-        ...current,
-        post_draft_gate: postDraftGateReceiptFixture({
-          status: 'passed',
-          reviewRevision: 1,
-          changeSetId: current.change_set_id,
-        }),
-      }
-      let resolveGate: ((value: typeof passed) => void) | undefined
-      let rejectGate: ((reason?: unknown) => void) | undefined
-      const delayedGate = new Promise<typeof passed>((resolve, reject) => {
-        resolveGate = resolve
-        rejectGate = reject
-      })
-      vi.mocked(listProjectChangeSets).mockResolvedValue([
-        changeSetSummaryFixture({ status: 'ready', decision: 'accepted', reviewRevision: 1, gateRequired: true }),
-        {
-          ...changeSetSummaryFixture({ status: 'ready', decision: 'accepted', reviewRevision: 1, gateRequired: true }),
-          change_set_id: alternateId,
-          title: alternate.title,
-        },
-      ])
-      vi.mocked(getChangeSet).mockImplementation((changeSetId) => Promise.resolve(
-        changeSetId === alternateId ? alternate : current,
-      ))
-      vi.mocked(getPostDraftGate).mockImplementation((changeSetId) => {
-        const record = changeSetId === alternateId ? alternate : current
-        return Promise.resolve({
-          schema: 'zhimeng.post-draft-gate-response.v1',
-          change_set_id: record.change_set_id,
-          project_id: record.project_id,
-          gate_required: true,
-          review_revision: record.review_revision,
-          receipt: null,
-        })
-      })
-      vi.mocked(runPostDraftGate).mockReturnValue(delayedGate)
-
-      const { result } = renderHook(() => useChangeSets(changeSetProjectId))
-      await waitFor(() => expect(result.current.gate.status).toBe('missing'))
-      let gateOperation: Promise<void> | undefined
-      act(() => {
-        gateOperation = result.current.runGate()
-      })
-      await waitFor(() => expect(result.current.action?.kind).toBe('gate'))
-
-      act(() => result.current.select(alternateId))
-      await waitFor(() => expect(result.current.detail?.change_set_id).toBe(alternateId))
-      await waitFor(() => expect(result.current.gateResponse?.change_set_id).toBe(alternateId))
-
-      await act(async () => {
-        if (outcome === 'succeeded') resolveGate?.(passed)
-        else rejectGate?.(new Error('旧 ChangeSet 的 Gate 失败'))
-        await gateOperation
-      })
-
-      expect(result.current.detail?.change_set_id).toBe(alternateId)
-      expect(result.current.gateResponse?.change_set_id).toBe(alternateId)
-      expect(result.current.gate.status).toBe('missing')
-      expect(result.current.gateError).toBeNull()
-      expect(result.current.actionError).toBeNull()
-      expect(result.current.action).toBeNull()
-      await act(async () => {
-        await result.current.apply()
-      })
-      expect(applyChangeSet).not.toHaveBeenCalled()
-    },
-  )
-
-  it('does not expose an older receipt as current after review revision changes', async () => {
-    const stale = changeSetFixture({
-      status: 'ready',
-      decision: 'accepted',
-      reviewRevision: 2,
-      gateRequired: true,
-      postDraftGate: postDraftGateReceiptFixture({ status: 'passed', reviewRevision: 1 }),
-    })
-    vi.mocked(listProjectChangeSets).mockResolvedValue([
-      changeSetSummaryFixture({ status: 'ready', decision: 'accepted', reviewRevision: 2, gateRequired: true }),
-    ])
-    vi.mocked(getChangeSet).mockResolvedValue(stale)
-    vi.mocked(getPostDraftGate).mockResolvedValue({
-      schema: 'zhimeng.post-draft-gate-response.v1',
-      change_set_id: stale.change_set_id,
-      project_id: stale.project_id,
-      gate_required: true,
-      review_revision: 2,
-      receipt: stale.post_draft_gate,
-    })
-
-    const { result } = renderHook(() => useChangeSets(changeSetProjectId))
-    await waitFor(() => expect(result.current.gate.status).toBe('stale'))
-    expect(result.current.gate.receipt).toBeNull()
-  })
-
-  it('stops requiring Gate when a Hunk decision removes the final accepted prose body', async () => {
-    const receipt = postDraftGateReceiptFixture({ status: 'passed', reviewRevision: 1 })
-    const current = changeSetFixture({
-      status: 'ready',
-      decision: 'accepted',
-      reviewRevision: 1,
-      gateRequired: true,
-      postDraftGate: receipt,
-    })
-    const revised = changeSetFixture({
-      status: 'ready',
-      decision: 'rejected',
-      reviewRevision: 2,
-      gateRequired: true,
-      postDraftGate: null,
-    })
-    vi.mocked(listProjectChangeSets).mockResolvedValue([
-      changeSetSummaryFixture({ status: 'ready', decision: 'accepted', reviewRevision: 1, gateRequired: true }),
-    ])
-    vi.mocked(getChangeSet).mockResolvedValue(current)
-    vi.mocked(getPostDraftGate).mockResolvedValue({
-      schema: 'zhimeng.post-draft-gate-response.v1',
-      change_set_id: current.change_set_id,
-      project_id: current.project_id,
-      gate_required: true,
-      review_revision: 1,
-      receipt,
-    })
-    vi.mocked(updateHunkDecisions).mockResolvedValue(revised)
-
-    const { result } = renderHook(() => useChangeSets(changeSetProjectId))
-    await waitFor(() => expect(result.current.gate.status).toBe('passed'))
-    await act(async () => {
-      await result.current.decide({
-        hunk_id: current.changes[0].hunks[0].hunk_id,
-        decision: 'rejected',
-      })
-    })
-
-    expect(result.current.detail?.review_revision).toBe(2)
-    expect(result.current.gate.status).toBe('not_required')
-    expect(result.current.gate.receipt).toBeNull()
   })
 
   it('keeps list failures explicit and does not request mixed detail', async () => {
@@ -558,5 +312,115 @@ describe('useChangeSets', () => {
     expect(result.current.detail?.status).toBe('rolled_back')
     expect(result.current.actionError).toBe('network connection closed after writeback')
     expect(projectChanged).toHaveBeenCalledOnce()
+  })
+
+  it.each(['apply', 'rollback'] as const)('%s refreshes completed file changes after selecting another record', async (kind) => {
+    const original = changeSetFixture({ status: kind === 'apply' ? 'ready' : 'applied', decision: 'accepted' })
+    const updated = { ...original, status: kind === 'apply' ? 'applied' as const : 'rolled_back' as const }
+    const other = { ...original, change_set_id: 'changeset-other', title: 'Other notes' }
+    let persisted = original
+    let finish!: (value: typeof updated) => void
+    const pending = new Promise<typeof updated>((resolve) => { finish = resolve })
+    vi.mocked(kind === 'apply' ? applyChangeSet : rollbackChangeSet).mockReturnValue(pending)
+    vi.mocked(listProjectChangeSets).mockImplementation(async () => [
+      { ...changeSetSummaryFixture(), change_set_id: original.change_set_id, status: persisted.status },
+      { ...changeSetSummaryFixture(), change_set_id: other.change_set_id, status: original.status },
+    ])
+    vi.mocked(getChangeSet).mockImplementation(async (id) => id === other.change_set_id ? other : persisted)
+    const changed = vi.fn()
+    const { result } = renderHook(() => useChangeSets(changeSetProjectId, changed))
+    await waitFor(() => expect(result.current.detail?.change_set_id).toBe(original.change_set_id))
+    act(() => { void result.current[kind]() })
+    act(() => result.current.select(other.change_set_id))
+    await waitFor(() => expect(result.current.detail?.change_set_id).toBe(other.change_set_id))
+    persisted = updated
+    await act(async () => finish(updated))
+    await waitFor(() => expect(result.current.records.find(r => r.change_set_id === original.change_set_id)?.status).toBe(updated.status))
+    expect(result.current.selectedId).toBe(other.change_set_id)
+    expect(result.current.detail?.change_set_id).toBe(other.change_set_id)
+    expect(changed).toHaveBeenCalledOnce()
+  })
+
+  it.each(['apply', 'rollback'] as const)('%s remains in progress when leaving and returning to the same record', async (kind) => {
+    const original = changeSetFixture({ status: kind === 'apply' ? 'ready' : 'applied', decision: 'accepted' })
+    const other = { ...original, change_set_id: 'changeset-other' }
+    const updated = { ...original, status: kind === 'apply' ? 'applied' as const : 'rolled_back' as const }
+    let persisted = original
+    let finish!: (value: typeof updated) => void
+    const pending = new Promise<typeof updated>((resolve) => { finish = resolve })
+    const endpoint = vi.mocked(kind === 'apply' ? applyChangeSet : rollbackChangeSet)
+    endpoint.mockReturnValue(pending)
+    vi.mocked(listProjectChangeSets).mockImplementation(async () => [
+      { ...changeSetSummaryFixture(), status: persisted.status },
+      { ...changeSetSummaryFixture(), change_set_id: other.change_set_id, status: original.status },
+    ])
+    vi.mocked(getChangeSet).mockImplementation(async (id) => id === other.change_set_id ? other : persisted)
+    const { result } = renderHook(() => useChangeSets(changeSetProjectId))
+    await waitFor(() => expect(result.current.detail?.change_set_id).toBe(original.change_set_id))
+    act(() => { void result.current[kind]() })
+    act(() => result.current.select(other.change_set_id))
+    await waitFor(() => expect(result.current.detail?.change_set_id).toBe(other.change_set_id))
+    act(() => result.current.select(original.change_set_id))
+    await waitFor(() => expect(result.current.detail?.change_set_id).toBe(original.change_set_id))
+    expect(result.current.action?.kind).toBe(kind)
+    act(() => { void result.current[kind]() })
+    expect(endpoint).toHaveBeenCalledOnce()
+    persisted = updated
+    await act(async () => finish(updated))
+    await waitFor(() => expect(result.current.detail?.status).toBe(updated.status))
+    expect(result.current.action).toBeNull()
+  })
+
+  it.each(['apply', 'rollback'] as const)('%s rechecks disk after a lost response while switching away and back', async (kind) => {
+    const original = changeSetFixture({ status: kind === 'apply' ? 'ready' : 'applied', decision: 'accepted' })
+    const updated = { ...original, status: kind === 'apply' ? 'applied' as const : 'rolled_back' as const }
+    let persisted = original
+    let reject!: (error: Error) => void
+    const pending = new Promise<typeof updated>((_, no) => { reject = no })
+    vi.mocked(kind === 'apply' ? applyChangeSet : rollbackChangeSet).mockReturnValue(pending)
+    vi.mocked(listProjectChangeSets).mockImplementation(async (pid) => pid === changeSetProjectId
+      ? [{ ...changeSetSummaryFixture(), status: persisted.status }] : [])
+    vi.mocked(getChangeSet).mockImplementation(async () => persisted)
+    const changed = vi.fn()
+    const { result, rerender } = renderHook(({ pid }) => useChangeSets(pid, changed), { initialProps: { pid: changeSetProjectId } })
+    await waitFor(() => expect(result.current.detail?.status).toBe(original.status))
+    act(() => { void result.current[kind]() })
+    rerender({ pid: 'another-project' })
+    await waitFor(() => expect(result.current.records).toEqual([]))
+    rerender({ pid: changeSetProjectId })
+    await waitFor(() => expect(result.current.detail?.status).toBe(original.status))
+    persisted = updated
+    await act(async () => reject(new Error('Connection lost after saving')))
+    await waitFor(() => expect(result.current.detail?.status).toBe(updated.status))
+    expect(changed).toHaveBeenCalledOnce()
+    expect(result.current.action).toBeNull()
+    expect(result.current.actionError).toBe('Connection lost after saving')
+  })
+
+  it.each(['apply', 'rollback'] as const)('%s does not refresh an unrelated project or an unmounted workspace', async (kind) => {
+    const original = changeSetFixture({ status: kind === 'apply' ? 'ready' : 'applied', decision: 'accepted' })
+    const updated = { ...original, status: kind === 'apply' ? 'applied' as const : 'rolled_back' as const }
+    let finish!: (value: typeof updated) => void
+    const pending = new Promise<typeof updated>((resolve) => { finish = resolve })
+    vi.mocked(kind === 'apply' ? applyChangeSet : rollbackChangeSet).mockReturnValue(pending)
+    vi.mocked(getChangeSet).mockResolvedValue(original)
+    vi.mocked(listProjectChangeSets).mockImplementation(async pid => pid === changeSetProjectId ? [changeSetSummaryFixture()] : [])
+    const changed = vi.fn()
+    const { result, rerender, unmount } = renderHook(({ pid }) => useChangeSets(pid, changed), { initialProps: { pid: changeSetProjectId } })
+    await waitFor(() => expect(result.current.detail).toEqual(original))
+    act(() => { void result.current[kind]() })
+    rerender({ pid: 'unrelated-project' })
+    await waitFor(() => expect(result.current.records).toEqual([]))
+    await act(async () => finish(updated))
+    expect(changed).not.toHaveBeenCalled()
+    expect(result.current.records).toEqual([])
+    expect(result.current.detail).toBeNull()
+    rerender({ pid: changeSetProjectId })
+    await waitFor(() => expect(result.current.detail).toEqual(original))
+    vi.mocked(kind === 'apply' ? applyChangeSet : rollbackChangeSet).mockReturnValueOnce(new Promise(resolve => { finish = resolve }))
+    act(() => { void result.current[kind]() })
+    unmount()
+    await act(async () => finish(updated))
+    expect(changed).not.toHaveBeenCalled()
   })
 })

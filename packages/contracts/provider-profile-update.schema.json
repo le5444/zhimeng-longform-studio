@@ -1,0 +1,407 @@
+{
+  "$defs": {
+    "ModelOverrideUpdate": {
+      "description": "单个模型对渠道级配置的覆盖。api_key / extra_headers 的值只进不出。",
+      "properties": {
+        "api_key": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Api Key"
+        },
+        "base_url": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Base Url"
+        },
+        "extra_headers": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Extra Headers"
+        },
+        "max_output_tokens": {
+          "anyOf": [
+            {
+              "maximum": 1000000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Output Tokens"
+        },
+        "reasoning_effort": {
+          "anyOf": [
+            {
+              "enum": [
+                "auto",
+                "none",
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max",
+                "ultra"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reasoning Effort"
+        },
+        "wire_format": {
+          "anyOf": [
+            {
+              "enum": [
+                "chat",
+                "responses",
+                "anthropic_messages"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wire Format"
+        }
+      },
+      "title": "ModelOverrideUpdate",
+      "type": "object"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/provider-profile-update.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "accepted_reported_models": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Accepted Reported Models",
+      "type": "array"
+    },
+    "api_key": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Api Key"
+    },
+    "auth_type": {
+      "anyOf": [
+        {
+          "enum": [
+            "bearer",
+            "x-api-key",
+            "custom",
+            "none"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Auth Type"
+    },
+    "base_url": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Base Url"
+    },
+    "circuit_breaker_cooldown_seconds": {
+      "anyOf": [
+        {
+          "maximum": 3600,
+          "minimum": 1,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Circuit Breaker Cooldown Seconds"
+    },
+    "circuit_breaker_threshold": {
+      "anyOf": [
+        {
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Circuit Breaker Threshold"
+    },
+    "context_window": {
+      "anyOf": [
+        {
+          "enum": [
+            "256k",
+            "1m"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Context Window"
+    },
+    "expected_revision": {
+      "anyOf": [
+        {
+          "pattern": "^(?:[a-f0-9]{64}|missing)$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Revision"
+    },
+    "extra_headers": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Extra Headers"
+    },
+    "make_active": {
+      "default": false,
+      "title": "Make Active",
+      "type": "boolean"
+    },
+    "max_concurrent_requests": {
+      "anyOf": [
+        {
+          "maximum": 32,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Max Concurrent Requests"
+    },
+    "max_retries": {
+      "anyOf": [
+        {
+          "maximum": 10,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Max Retries"
+    },
+    "model": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model"
+    },
+    "model_overrides": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/ModelOverrideUpdate"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model Overrides"
+    },
+    "models_url": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Models Url"
+    },
+    "name": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "provider_id": {
+      "anyOf": [
+        {
+          "maxLength": 80,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Provider Id"
+    },
+    "reasoning_effort": {
+      "default": "auto",
+      "enum": [
+        "auto",
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra"
+      ],
+      "title": "Reasoning Effort",
+      "type": "string"
+    },
+    "remove_header_names": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Remove Header Names",
+      "type": "array"
+    },
+    "request_timeout_seconds": {
+      "anyOf": [
+        {
+          "maximum": 3600,
+          "minimum": 1,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Request Timeout Seconds"
+    },
+    "selected_models": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 200,
+      "title": "Selected Models",
+      "type": "array"
+    },
+    "stream_idle_timeout_seconds": {
+      "anyOf": [
+        {
+          "maximum": 3600,
+          "minimum": 1,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Stream Idle Timeout Seconds"
+    },
+    "wire_format": {
+      "anyOf": [
+        {
+          "enum": [
+            "auto",
+            "chat",
+            "responses",
+            "anthropic_messages"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Wire Format"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "title": "ProviderProfileUpdate",
+  "type": "object"
+}

@@ -44,6 +44,19 @@
           ],
           "default": null
         },
+        "runtime_distillation_invocation_id": {
+          "anyOf": [
+            {
+              "pattern": "^distillation-invocation-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Runtime Distillation Invocation Id"
+        },
         "card_id": {
           "maxLength": 160,
           "minLength": 1,

@@ -1,0 +1,146 @@
+/* ---------- 左栏 ---------- */
+.zm-side {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--zm-bg-side);
+}
+/* 左栏收起来：一条 54px 的图标轨，按钮和展开时同一组、同一顺序。 */
+.zm-rail { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 0; }
+.zm-rail .zm-spacer { flex: 1; }
+.zm-side-brand { display: flex; align-items: center; gap: 10px; min-height: var(--zm-head-h); padding: 12px 18px; }
+.zm-side-brand svg { width: 24px; height: 24px; color: var(--zm-accent); stroke-width: 1.7; }
+.zm-side-brand strong { display: block; font-size: var(--zm-fs-4); font-weight: 650; line-height: 1.4; }
+.zm-side-brand small { display: block; font-size: var(--zm-fs-1); color: var(--zm-fg-3); line-height: 1.4; }
+.zm-side-top { display: flex; flex-direction: column; gap: 10px; padding: 4px 14px 18px; }
+.zm-side-new, .zm-side-foot-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--zm-r-2);
+  background: transparent;
+  color: var(--zm-fg);
+  font-size: var(--zm-fs-3);
+  font-weight: 500;
+  cursor: pointer;
+}
+.zm-side-new { height: 38px; background: var(--zm-primary); color: var(--zm-primary-fg); }
+.zm-side-new:hover { background: color-mix(in srgb, var(--zm-primary) 86%, var(--zm-bg)); }
+.zm-side-foot-btn:hover { background: var(--zm-bg-hover); }
+.zm-side-new svg, .zm-side-foot-btn svg { width: 16px; height: 16px; color: var(--zm-fg-2); }
+.zm-side-new svg { color: inherit; }
+.zm-side-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--zm-r-2);
+  color: var(--zm-fg-3);
+}
+.zm-side-search:focus-within { background: var(--zm-bg); box-shadow: inset 0 0 0 1px var(--zm-line-2); }
+.zm-side-search svg { width: 16px; height: 16px; }
+.zm-side-search input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; font-size: var(--zm-fs-3); color: var(--zm-fg); }
+.zm-side-search input::placeholder { color: var(--zm-fg-3); }
+.zm-side-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 16px; scrollbar-color: transparent transparent; }
+.zm-side-scroll:hover { scrollbar-color: var(--zm-line-2) transparent; }
+.zm-side-section + .zm-side-section { margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--zm-line); }
+.zm-side-head { display: flex; align-items: center; gap: 4px; height: 28px; padding: 0 2px 0 10px; }
+.zm-side-head-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--zm-fg-3);
+  font-size: var(--zm-fs-1);
+  font-weight: 600;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+.zm-side-head-toggle svg { width: 13px; height: 13px; opacity: 0; transition: opacity 0.12s ease; }
+.zm-side-head:hover .zm-side-head-toggle svg, .zm-side-head-toggle:focus-visible svg, .zm-side-head-toggle[aria-expanded="false"] svg { opacity: 1; }
+.zm-side-list { list-style: none; margin: 0; padding: 0; }
+.zm-side-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 36px;
+  padding-right: 4px;
+  border-radius: var(--zm-r-2);
+}
+.zm-side-row:hover, .zm-side-row:focus-within { background: var(--zm-bg-hover); }
+.zm-side-row.is-active { background: var(--zm-bg); box-shadow: inset 3px 0 var(--zm-accent), var(--zm-shadow-1); }
+.zm-side-row.is-active .zm-side-row-main { color: var(--zm-fg); }
+.zm-side-row-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 4px 8px 10px;
+  border: 0;
+  background: none;
+  color: var(--zm-fg);
+  font-size: var(--zm-fs-3);
+  text-align: left;
+  cursor: pointer;
+}
+.zm-side-row.is-nested .zm-side-row-main { padding-left: 34px; }
+.zm-side-row-title { flex: 1; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; line-height: 1.5; }
+.zm-side-row.is-active .zm-side-row-title { font-weight: 600; }
+.zm-side-row-time, .zm-side-row-context { flex: none; color: var(--zm-fg-3); font-size: var(--zm-fs-1); }
+.zm-side-row-status { display: inline-flex; flex: none; width: 14px; height: 14px; color: var(--zm-accent); }
+.zm-side-row-status .zm-spinner { width: 14px; height: 14px; }
+.zm-side-row-context { max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zm-side-row:hover .zm-side-row-time, .zm-side-row:focus-within .zm-side-row-time { display: none; }
+.zm-side-row-more { display: none; }
+.zm-side-row:hover .zm-side-row-more, .zm-side-row:focus-within .zm-side-row-more, .zm-side-row-more.is-open { display: inline-grid; }
+.zm-side-pin { width: 13px; height: 13px; color: var(--zm-fg-3); }
+.zm-side-folder { width: 16px; height: 16px; color: var(--zm-fg-2); }
+.zm-side-row.is-project .zm-side-row-main { font-weight: 500; }
+.zm-side-project-body { margin: 2px 0 8px 16px; padding-left: 6px; border-left: 1px solid var(--zm-line-2); }
+.zm-side-project-body .zm-side-row.is-nested .zm-side-row-main { padding-left: 12px; }
+.zm-side-rename {
+  flex: 1;
+  height: 28px;
+  margin: 2px 4px;
+  padding: 0 8px;
+  border: 1px solid var(--zm-line-2);
+  border-radius: var(--zm-r-1);
+  background: var(--zm-bg);
+  color: var(--zm-fg);
+  font-size: var(--zm-fs-3);
+  outline: none;
+}
+.zm-side-more {
+  display: block;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  background: none;
+  color: var(--zm-fg-3);
+  font-size: var(--zm-fs-2);
+  cursor: pointer;
+}
+.zm-side-more.is-nested { padding-left: 34px; }
+.zm-side-more:hover { color: var(--zm-fg); }
+.zm-side-note { padding: 4px 10px; color: var(--zm-fg-3); font-size: var(--zm-fs-2); line-height: 1.6; }
+.zm-side-removed { margin-top: 8px; }
+.zm-side-removed > summary { padding: 4px 10px; color: var(--zm-fg-3); font-size: var(--zm-fs-2); cursor: pointer; }
+.zm-side-removed-row { display: flex; align-items: center; gap: 8px; padding: 4px 10px; color: var(--zm-fg-2); font-size: var(--zm-fs-2); }
+.zm-side-removed-row svg { width: 14px; height: 14px; }
+.zm-side-removed-row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zm-side-foot { display: flex; align-items: center; gap: 4px; margin: 0 12px; padding: 10px 0; border-top: 1px solid var(--zm-line); }
+.zm-side-foot-btn { flex: 1; }

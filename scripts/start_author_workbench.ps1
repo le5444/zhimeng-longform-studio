@@ -59,6 +59,25 @@ function Test-DevelopmentProjectName {
     )
 }
 
+function Test-HiddenOrTempDirectoryName {
+    param([Parameter(Mandatory = $true)][string]$Name)
+
+    # 以 . 或 _ 开头的是隐藏/临时目录（.context_extract、_tmp_… 这类机器产物），不是书。
+    # 2026-09-20 实测：inspect 放开「任何文件夹都能当书」之后，它们会被这里扫上书架。
+    return $Name -match '^[._]'
+}
+
+function Get-AuthorWorkbenchJson {
+    param([Parameter(Mandatory = $true)][string]$Uri)
+
+    # Windows PowerShell 5.1 的 Invoke-RestMethod 对不带 charset 的 JSON 按 ISO-8859-1 解码，
+    # 中文书名和路径全变乱码，「已经在书架上」的比对永远不命中，每次启动都把每本书重扫一遍
+    # （974 章那本一次十几秒）。这里按字节取回、明确用 UTF-8 解码。
+    $response = Invoke-WebRequest -Uri $Uri -UseBasicParsing -TimeoutSec 15
+    $bytes = $response.RawContentStream.ToArray()
+    return ([Text.Encoding]::UTF8.GetString($bytes) | ConvertFrom-Json)
+}
+
 function Sync-AuthorBookshelf {
     param([Parameter(Mandatory = $true)][string]$BooksRoot)
 
@@ -66,7 +85,7 @@ function Sync-AuthorBookshelf {
         return [pscustomobject]@{ total = 0; development = 0; added = 0; skipped = 0 }
     }
 
-    $current = Invoke-RestMethod -Uri "$RuntimeUrl/api/v1/projects" -TimeoutSec 15
+    $current = Get-AuthorWorkbenchJson -Uri "$RuntimeUrl/api/v1/projects"
     $knownRoots = @{}
     foreach ($project in @($current.projects)) {
         $knownRoots[(Get-NormalizedPathKey -Path ([string]$project.root_path))] = $true
@@ -76,6 +95,11 @@ function Sync-AuthorBookshelf {
     $skipped = 0
     $directories = @(Get-ChildItem -LiteralPath $BooksRoot -Directory -ErrorAction Stop)
     foreach ($directory in $directories) {
+        if (Test-HiddenOrTempDirectoryName -Name $directory.Name) {
+            $skipped++
+            Write-Host "      [隐藏/临时目录] $($directory.Name)（不放进书架）" -ForegroundColor DarkGray
+            continue
+        }
         if (Test-DevelopmentProjectName -Name $directory.Name) {
             $skipped++
             Write-Host "      [开发项目] $($directory.Name)（不放进默认书架）" -ForegroundColor DarkGray
@@ -105,7 +129,7 @@ function Sync-AuthorBookshelf {
         }
     }
 
-    $after = Invoke-RestMethod -Uri "$RuntimeUrl/api/v1/projects" -TimeoutSec 15
+    $after = Get-AuthorWorkbenchJson -Uri "$RuntimeUrl/api/v1/projects"
     $visibleBookCount = 0
     $developmentProjectCount = 0
     foreach ($project in @($after.projects)) {
@@ -142,6 +166,9 @@ function Stop-NewAuthorWorkbenchProcesses {
 }
 
 try {
+    # 按作者登录时的环境起服务（见 Use-AuthorLoginEnvironment）：AI 从自己的会话里重启时，别把会话的令牌、代理这些带进作者那套。
+    # 跑完（包括出错、已经在运行直接退出）在最后的 finally 里还原，调用方自己的环境不受影响。
+    $callerEnvironment = Use-AuthorLoginEnvironment
     if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) {
         throw "找不到后端环境：$Python"
     }
@@ -186,7 +213,7 @@ try {
                 Wait-AuthorWorkbenchEndpoint -Uri "$RuntimeUrl/health/ready" -TimeoutSeconds 3 | Out-Null
                 Wait-AuthorWorkbenchEndpoint -Uri $WorkbenchUrl -TimeoutSeconds 3 | Out-Null
                 Write-Host ""
-                Write-Host "织梦作者工作台已经在运行。" -ForegroundColor Green
+                Write-Host "织梦已经在运行。" -ForegroundColor Green
                 Write-Host "地址：$WorkbenchUrl"
                 if (-not $NoBrowser) {
                     Start-Process $WorkbenchUrl
@@ -225,6 +252,20 @@ try {
         $trustedProjectRoots -join [IO.Path]::PathSeparator
     )
     $env:ZHIMENG_ALLOWED_ORIGINS = "$WorkbenchUrl,http://localhost:$WorkbenchPort"
+    # 常用中转站首包普遍偏慢，默认 120 秒会把长上下文请求误判为超时。
+    if (-not $env:ZHIMENG_AGENT_PROVIDER_TIMEOUT_SECONDS) {
+        $env:ZHIMENG_AGENT_PROVIDER_TIMEOUT_SECONDS = '300'
+    }
+    # 「接受的上报名」不再写死在这里——2026-09-12 实测这条硬编码已经变成一个洞：
+    # 它是 2026-09-05 加的，当时作者的默认模型就是 deepseek-v4-flash，中转只是
+    # 加了厂商前缀和日期后缀（请求 flash / 上报 deepseek-ai/deepseek-v4-flash-0731），
+    # 属于正常改名。但作者 9-10 之后把默认模型换成了 pro，这条别名的效果就变成了
+    # 「pro 被降级成这个 flash 时自动放行」——正是 AGENTS.md 3.49/3.58 明令禁止的
+    # 「把 flash 名字加进接受列表等于默许降级」。
+    # 现在名单按渠道配在设置 → 模型服务 →「接受的上报名」里（3.58 建的入口），
+    # 作者自己就能加，不必改脚本；环境变量仍然可用，只是不再预置任何名字。
+    #
+    # 环境变量名单与界面名单是合并生效的，核对逻辑一个字没改。
     $env:VITE_RUNTIME_URL = $RuntimeUrl
     $env:VITE_RUNTIME_PROXY_TARGET = $RuntimeUrl
 
@@ -334,7 +375,7 @@ try {
 
     Write-Host "[4/4] 核对书架 ..."
     if ($SkipBookshelfScan) {
-        $projects = Invoke-RestMethod -Uri "$RuntimeUrl/api/v1/projects" -TimeoutSec 15
+        $projects = Get-AuthorWorkbenchJson -Uri "$RuntimeUrl/api/v1/projects"
         $visibleBookCount = 0
         $developmentProjectCount = 0
         foreach ($project in @($projects.projects)) {
@@ -361,7 +402,7 @@ try {
     Write-AuthorWorkbenchState -StatePath $StatePath -State $state
 
     Write-Host ""
-    Write-Host "织梦作者工作台已就绪。" -ForegroundColor Green
+    Write-Host "织梦已就绪。" -ForegroundColor Green
     Write-Host "地址：$WorkbenchUrl"
     Write-Host "小说目录：$BooksRoot"
     Write-Host "书架作品：$($bookshelf.total) 本（本次新增 $($bookshelf.added) 本）"
@@ -417,4 +458,9 @@ catch {
         Write-Host "前端错误日志：$workbenchErr"
     }
     exit 1
+}
+finally {
+    if (Get-Variable -Name callerEnvironment -ErrorAction SilentlyContinue) {
+        Restore-AuthorWorkbenchEnvironment -Saved $callerEnvironment
+    }
 }

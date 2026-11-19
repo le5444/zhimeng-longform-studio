@@ -41,6 +41,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--workbench-dist", type=Path, default=None)
     parser.add_argument("--runtime-src-root", type=Path, default=None)
     parser.add_argument("--managed-skills-source", type=Path, default=None)
+    parser.add_argument("--skill-contracts-source", type=Path, default=None)
+    parser.add_argument("--four-skills-runtime-source", type=Path, default=None)
     parser.add_argument("--skip-managed-skills", action="store_true")
     parser.add_argument("--verify-only", action="store_true")
     args = parser.parse_args(argv)
@@ -57,6 +59,22 @@ def main(argv: list[str] | None = None) -> int:
             None if managed_skills_source is None else Path(managed_skills_source).resolve()
         )
     output_dir = args.output_dir.resolve()
+    skill_contracts_source = args.skill_contracts_source
+    if skill_contracts_source is None:
+        candidate = defaults.get("skill_contracts_source")
+        skill_contracts_source = candidate if candidate and candidate.is_dir() else None
+    elif not skill_contracts_source.is_dir():
+        parser.error(f"skill contracts source is not a directory: {skill_contracts_source}")
+    if skill_contracts_source is not None:
+        skill_contracts_source = skill_contracts_source.resolve()
+    four_skills_runtime_source = args.four_skills_runtime_source
+    if four_skills_runtime_source is None:
+        candidate = defaults.get("four_skills_runtime_source")
+        four_skills_runtime_source = candidate if candidate and candidate.is_dir() else None
+    elif not four_skills_runtime_source.is_dir():
+        parser.error(f"four-skills runtime source is not a directory: {four_skills_runtime_source}")
+    if four_skills_runtime_source is not None:
+        four_skills_runtime_source = four_skills_runtime_source.resolve()
 
     if args.verify_only:
         manifest = verify_portable_bundle(output_dir)
@@ -67,6 +85,8 @@ def main(argv: list[str] | None = None) -> int:
             workbench_dist=workbench_dist,
             runtime_src_root=runtime_src_root,
             managed_skills_source=managed_skills_source,
+            four_skills_runtime_source=four_skills_runtime_source,
+            skill_contracts_source=skill_contracts_source,
             git_commit=_git_commit(repo_root),
         )
         verify_portable_bundle(output_dir)

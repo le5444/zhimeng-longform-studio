@@ -1,0 +1,25 @@
+{
+  "$id": "https://zhimeng.local/contracts/command-resize-request.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "columns": {
+      "maximum": 32767,
+      "minimum": 1,
+      "title": "Columns",
+      "type": "integer"
+    },
+    "rows": {
+      "maximum": 32767,
+      "minimum": 1,
+      "title": "Rows",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "rows",
+    "columns"
+  ],
+  "title": "CommandResizeRequest",
+  "type": "object"
+}

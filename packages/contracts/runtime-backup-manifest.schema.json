@@ -1,0 +1,160 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "default": "zhimeng.runtime-backup-manifest.v2",
+      "enum": [
+        "zhimeng.runtime-backup-manifest.v1",
+        "zhimeng.runtime-backup-manifest.v2"
+      ],
+      "title": "Schema",
+      "type": "string"
+    },
+    "backup_id": {
+      "pattern": "^runtime-backup-[0-9a-f]{32}$",
+      "title": "Backup Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "product_version": {
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Product Version",
+      "type": "string"
+    },
+    "environment": {
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Environment",
+      "type": "string"
+    },
+    "database_schema_version": {
+      "minimum": 0,
+      "title": "Database Schema Version",
+      "type": "integer"
+    },
+    "journal_mode": {
+      "maxLength": 32,
+      "minLength": 1,
+      "title": "Journal Mode",
+      "type": "string"
+    },
+    "database_relative_path": {
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "Database Relative Path",
+      "type": "string"
+    },
+    "database_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Database Sha256",
+      "type": "string"
+    },
+    "database_size_bytes": {
+      "minimum": 0,
+      "title": "Database Size Bytes",
+      "type": "integer"
+    },
+    "integrity_check": {
+      "enum": [
+        "ok",
+        "failed",
+        "unavailable"
+      ],
+      "title": "Integrity Check",
+      "type": "string"
+    },
+    "foreign_key_violations": {
+      "minimum": 0,
+      "title": "Foreign Key Violations",
+      "type": "integer"
+    },
+    "includes_secrets": {
+      "anyOf": [
+        {
+          "const": false,
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Includes Secrets"
+    },
+    "includes_novel_body": {
+      "anyOf": [
+        {
+          "const": false,
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Includes Novel Body"
+    },
+    "content_scope": {
+      "anyOf": [
+        {
+          "const": "runtime_database_unredacted",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Content Scope"
+    },
+    "includes_project_files": {
+      "const": false,
+      "default": false,
+      "title": "Includes Project Files",
+      "type": "boolean"
+    },
+    "formal_draft_allowed": {
+      "const": false,
+      "default": false,
+      "title": "Formal Draft Allowed",
+      "type": "boolean"
+    },
+    "policy_version": {
+      "default": "local-v1-runtime-backup-2",
+      "enum": [
+        "local-v1-runtime-backup-1",
+        "local-v1-runtime-backup-2"
+      ],
+      "title": "Policy Version",
+      "type": "string"
+    },
+    "manifest_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Manifest Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "backup_id",
+    "created_at",
+    "product_version",
+    "environment",
+    "database_schema_version",
+    "journal_mode",
+    "database_relative_path",
+    "database_sha256",
+    "database_size_bytes",
+    "integrity_check",
+    "foreign_key_violations",
+    "manifest_hash"
+  ],
+  "title": "RuntimeBackupManifest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/runtime-backup-manifest.schema.json"
+}

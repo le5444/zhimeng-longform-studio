@@ -1,0 +1,132 @@
+{
+  "$id": "https://zhimeng.local/contracts/provider-model-override-patch.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "api_key": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Api Key"
+    },
+    "base_url": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Base Url"
+    },
+    "expected_revision": {
+      "anyOf": [
+        {
+          "pattern": "^(?:[a-f0-9]{64}|missing)$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Revision"
+    },
+    "extra_headers": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Extra Headers"
+    },
+    "inherit_api_key": {
+      "default": false,
+      "title": "Inherit Api Key",
+      "type": "boolean"
+    },
+    "max_output_tokens": {
+      "anyOf": [
+        {
+          "maximum": 1000000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Max Output Tokens"
+    },
+    "reasoning_effort": {
+      "anyOf": [
+        {
+          "enum": [
+            "auto",
+            "none",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max",
+            "ultra"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reasoning Effort"
+    },
+    "remove_header_names": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Remove Header Names",
+      "type": "array"
+    },
+    "reset": {
+      "default": false,
+      "title": "Reset",
+      "type": "boolean"
+    },
+    "wire_format": {
+      "anyOf": [
+        {
+          "enum": [
+            "chat",
+            "responses",
+            "anthropic_messages"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Wire Format"
+    }
+  },
+  "title": "ProviderModelOverridePatch",
+  "type": "object"
+}

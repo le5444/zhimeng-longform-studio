@@ -298,7 +298,7 @@ def _bind_payload_to_manifest(
     payload["project_kb_manifest_hash"] = manifest.manifest_hash
 
 
-def test_context_pack_uses_one_snapshot_reads_project_truth_and_complete_history(
+def test_chat_context_uses_one_snapshot_reads_project_truth_and_complete_history(
     harness: Harness,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -309,12 +309,27 @@ def test_context_pack_uses_one_snapshot_reads_project_truth_and_complete_history
         inspect_calls.append(Path(root))
         return real_inspect(root)
 
+    real_completed_history = harness.agent_store.completed_history
+    history_limits: list[tuple[int, int, int]] = []
+
+    def completed_history(session_id: str, *, max_runs: int = 20, **kwargs):
+        history_limits.append(
+            (max_runs, kwargs["max_characters"], kwargs["max_tokens"])
+        )
+        return real_completed_history(session_id, max_runs=max_runs, **kwargs)
+
     monkeypatch.setattr(harness.reader, "inspect", inspect)
+    monkeypatch.setattr(harness.agent_store, "completed_history", completed_history)
     with TestClient(harness.app()) as client:
-        response = _post_pack(client, harness)
+        response = _post_pack(
+            client,
+            harness,
+            payload=harness.request(profile="chat"),
+        )
 
     assert response.status_code == 201, response.text
     assert inspect_calls == [harness.project] * 7
+    assert history_limits == [(8, 12_000, 6_000)]
     pack = ContextPack.model_validate(response.json()["pack"])
     assert pack.readiness.value == "degraded"
     assert pack.history_through_ordinal == 3
@@ -354,6 +369,68 @@ def test_context_pack_uses_one_snapshot_reads_project_truth_and_complete_history
     assert pack.provider_messages_hash == response.json()["pack"][
         "provider_messages_hash"
     ]
+
+
+def test_chapter_context_tracks_history_ordinal_without_injecting_chat(
+    harness: Harness,
+) -> None:
+    with TestClient(harness.app()) as client:
+        response = _post_pack(
+            client,
+            harness,
+            key="chapter-without-chat-history",
+        )
+
+    assert response.status_code == 201, response.text
+    pack = ContextPack.model_validate(response.json()["pack"])
+    assert pack.profile == "chapter"
+    assert pack.history_through_ordinal == 3
+    assert pack.history_message_count == 0
+    assert pack.include_session_history is False
+    assert [message.role for message in pack.exact_provider_messages] == [
+        "system",
+        "user",
+    ]
+    rendered_messages = json.dumps(
+        [item.model_dump() for item in pack.exact_provider_messages],
+        ensure_ascii=False,
+    )
+    assert "先确认第三章留下了什么" not in rendered_messages
+    assert "第三章留下了带血钥匙" not in rendered_messages
+
+
+def test_include_session_history_brings_completed_turns_into_chapter_context(
+    harness: Harness,
+) -> None:
+    payload = harness.request()
+    payload["include_session_history"] = True
+    with TestClient(harness.app()) as client:
+        response = _post_pack(
+            client,
+            harness,
+            key="chapter-with-session-history",
+            payload=payload,
+        )
+
+    assert response.status_code == 201, response.text
+    pack = ContextPack.model_validate(response.json()["pack"])
+    assert pack.profile == "chapter"
+    assert pack.history_through_ordinal == 3
+    assert pack.history_message_count == 2
+    assert pack.include_session_history is True
+    assert [message.role for message in pack.exact_provider_messages] == [
+        "system",
+        "user",
+        "assistant",
+        "user",
+    ]
+    rendered_messages = json.dumps(
+        [item.model_dump() for item in pack.exact_provider_messages],
+        ensure_ascii=False,
+    )
+    assert "先确认第三章留下了什么" in rendered_messages
+    assert "第三章留下了带血钥匙" in rendered_messages
+    assert "这条失败消息不能进入上下文" not in rendered_messages
 
 
 def test_formal_cards_are_injected_while_risk_cards_remain_excluded(
@@ -420,29 +497,9 @@ def test_formal_cards_are_injected_while_risk_cards_remain_excluded(
     assert pack.knowledge_fingerprint == canonical_json_hash(
         {"library_fingerprint": "d" * 64, "tool_fingerprint": "e" * 64}
     )
+    # NLCL 路由回执不再为对话白建（2026-09-24）：两条只读路由还在，只保证能打开。
     assert route_response.status_code == 200, route_response.text
-    route = route_response.json()
-    assert route["source"] == "external_distillation"
-    assert route["status"] == "ready"
-    assert [card["card_id"] for card in route["selected_cards"]] == ["card-formal"]
-    assert route["formal_draft_allowed"] is False
-    assert [call["skill_id"] for call in route["chapter_call_list"]] == [
-        "novel-creation-suite.project-audit",
-        "novel-creation-suite.prewrite-gate",
-        "novel-creation-suite.creation-handoff",
-    ]
-    assert all(
-        call["execution_status"] == "requires_runtime_catalog_check"
-        for call in route["chapter_call_list"]
-    )
     assert operation_package_response.status_code == 200
-    operation_package = operation_package_response.json()
-    assert operation_package["context_pack_hash"] == pack.pack_hash
-    assert operation_package["route_receipt_hash"] == route["receipt_hash"]
-    assert operation_package["formal_draft_allowed"] is False
-    assert operation_package["style_output_contract"]["selected_card_ids"] == [
-        "card-formal"
-    ]
 
     class GatedDistillation:
         def coverage(self, request):
@@ -480,8 +537,6 @@ def test_formal_cards_are_injected_while_risk_cards_remain_excluded(
         for item in gated_pack.excluded
     )
     assert gated_route_response.status_code == 200
-    assert gated_route_response.json()["status"] == "risk_ready"
-    assert gated_route_response.json()["selected_cards"] == []
 
 
 def test_missing_active_chapter_produces_a_blocked_pack(harness: Harness) -> None:
@@ -1045,6 +1100,47 @@ def test_idempotency_retrieval_run_binding_and_restart_recovery(
     assert by_run.json()["consumed_by_run_id"] == run.run_id
 
 
+def test_history_opt_in_is_part_of_context_idempotency(harness: Harness) -> None:
+    without_history = harness.request()
+    with_history = harness.request()
+    with_history["include_session_history"] = True
+
+    with TestClient(harness.app()) as client:
+        created_without = _post_pack(
+            client,
+            harness,
+            key="history-opt-in-conflict-off",
+            payload=without_history,
+        )
+        conflict_on = _post_pack(
+            client,
+            harness,
+            key="history-opt-in-conflict-off",
+            payload=with_history,
+        )
+        created_with = _post_pack(
+            client,
+            harness,
+            key="history-opt-in-conflict-on",
+            payload=with_history,
+        )
+        conflict_off = _post_pack(
+            client,
+            harness,
+            key="history-opt-in-conflict-on",
+            payload=without_history,
+        )
+
+    assert created_without.status_code == 201, created_without.text
+    assert created_without.json()["pack"]["include_session_history"] is False
+    assert conflict_on.status_code == 409
+    assert conflict_on.json()["error"]["code"] == "context_conflict"
+    assert created_with.status_code == 201, created_with.text
+    assert created_with.json()["pack"]["include_session_history"] is True
+    assert conflict_off.status_code == 409
+    assert conflict_off.json()["error"]["code"] == "context_conflict"
+
+
 def test_context_api_requires_idempotency_key_and_reports_unavailable(
     harness: Harness,
 ) -> None:
@@ -1065,3 +1161,39 @@ def test_context_api_requires_idempotency_key_and_reports_unavailable(
     assert missing_header.json()["error"]["code"] == "request_validation_failed"
     assert unavailable.status_code == 503
     assert unavailable.json()["error"]["code"] == "context_unavailable"
+
+
+def test_chat_pack_with_chapter_objective_and_unsectioned_root_files(
+    harness: Harness,
+) -> None:
+    """回归：目标里点了章号 + 书根有非 0N_ 前缀的散文件（section_index 为
+    None），装配不能再崩成 503（int(None) TypeError，2026-09-22 T9 验收在
+    测试副本_宗门七骗子 上抓到：「把第 3 章改名成…」直接 503）。"""
+    (harness.project / "项目审稿报告_自动体检.md").write_text(
+        "审稿记录。\n", encoding="utf-8"
+    )
+    snapshot = harness.reader.inspect(harness.project)
+    binding = harness.database.sync_project_binding(
+        project_id=harness.project_id,
+        root_path=str(harness.project),
+        display_name="novel",
+        fingerprint=str(snapshot["project"]["fingerprint"]),
+    )
+    manifest = _rebuild_project_kb(
+        harness,
+        project_revision=binding.revision,
+        project_fingerprint=binding.fingerprint,
+    )
+    payload = harness.request(
+        objective="把第 3 章改名成 第 003 章 试剑",
+        active_chapter_id=None,
+        profile="chat",
+    )
+    payload["expected_project_revision"] = binding.revision
+    payload["expected_project_fingerprint"] = binding.fingerprint
+    _bind_payload_to_manifest(payload, manifest)
+
+    with TestClient(harness.app()) as client:
+        response = _post_pack(client, harness, payload=payload)
+
+    assert response.status_code == 201, response.text

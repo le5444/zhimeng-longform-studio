@@ -1,0 +1,16 @@
+{
+  "$id": "https://zhimeng.local/contracts/local-file-reveal-request.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "path": {
+      "minLength": 1,
+      "title": "Path",
+      "type": "string"
+    }
+  },
+  "required": [
+    "path"
+  ],
+  "title": "RevealLocalFileRequest",
+  "type": "object"
+}

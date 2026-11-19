@@ -1,0 +1,32 @@
+{
+  "$id": "https://zhimeng.local/contracts/goal-update-arguments.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "evidence": {
+      "default": "",
+      "title": "Evidence",
+      "type": "string"
+    },
+    "progress": {
+      "minLength": 1,
+      "title": "Progress",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "active",
+        "completed",
+        "blocked"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "status",
+    "progress"
+  ],
+  "title": "GoalUpdateArguments",
+  "type": "object"
+}

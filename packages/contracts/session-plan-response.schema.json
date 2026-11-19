@@ -1,0 +1,127 @@
+{
+  "$defs": {
+    "RunStatus": {
+      "enum": [
+        "queued",
+        "starting",
+        "running",
+        "awaiting_approval",
+        "paused",
+        "cancelling",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "interrupted"
+      ],
+      "title": "RunStatus",
+      "type": "string"
+    },
+    "SessionPlan": {
+      "properties": {
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "run_ordinal": {
+          "title": "Run Ordinal",
+          "type": "integer"
+        },
+        "run_status": {
+          "$ref": "#/$defs/RunStatus"
+        },
+        "tool_call_id": {
+          "title": "Tool Call Id",
+          "type": "string"
+        },
+        "updated_at": {
+          "title": "Updated At",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "tool_result",
+            "legacy_arguments"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "status_source": {
+          "const": "agent",
+          "default": "agent",
+          "title": "Status Source",
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/SessionPlanItem"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "run_id",
+        "run_ordinal",
+        "run_status",
+        "tool_call_id",
+        "updated_at",
+        "source",
+        "items"
+      ],
+      "title": "SessionPlan",
+      "type": "object"
+    },
+    "SessionPlanItem": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Content",
+          "type": "string"
+        },
+        "status": {
+          "default": "pending",
+          "enum": [
+            "pending",
+            "in_progress",
+            "completed"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "title": "SessionPlanItem",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "plan": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SessionPlan"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "session_id",
+    "plan"
+  ],
+  "title": "SessionPlanResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/session-plan-response.schema.json"
+}

@@ -4,7 +4,7 @@
   "display_name": "Novel Distillation Deep Instruction",
   "description": "Provides an immutable, review-only deep-distillation instruction source for Runtime-owned work, voice, and validator candidate drafting.",
   "kind": "instruction_source",
-  "version": "2026.07.23-o3.1",
+  "version": "2026.08.07-o3.3",
   "source": {
     "type": "builtin_managed",
     "reference": "PROVENANCE.md",

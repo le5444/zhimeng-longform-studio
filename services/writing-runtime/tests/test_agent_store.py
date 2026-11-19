@@ -14,8 +14,12 @@ from zhimeng_runtime.agent_store import (
     AgentStore,
     AgentStoreConflict,
     AgentStoreInvalidState,
+    AgentStoreNotFound,
 )
-from zhimeng_runtime.agent_models import AgentSessionCreateRequest
+from zhimeng_runtime.agent_models import (
+    AgentSessionCreateRequest,
+    AgentSessionUpdateRequest,
+)
 from zhimeng_runtime.context_compiler import compile_context_pack
 from zhimeng_runtime.context_models import (
     ContextAuthority,
@@ -230,7 +234,9 @@ def test_session_run_messages_and_idempotency_are_durable(tmp_path: Path) -> Non
     assert replayed_again is True
     assert replay_run.run_id == run.run_id
     assert replay_message == user_message
-    assert [item.root.sequence for item in store.list_activities(run.run_id)] == [1, 2]
+    # 9-18 起绑了书的 Run 也记一份写作意图（writer_intent 工件，装着 manual_file_ids），
+    # 所以建 Run 落三条活动而不是两条。
+    assert [item.root.sequence for item in store.list_activities(run.run_id)] == [1, 2, 3]
     assert [item.content for item in store.list_messages(session.session_id)] == [
         "收紧开头，但不要改动关键线索。"
     ]
@@ -415,6 +421,58 @@ def test_nonlegacy_session_executor_drift_is_rejected(tmp_path: Path) -> None:
     assert store.list_runs(session.session_id) == []
 
 
+def test_provider_rebind_keeps_the_same_session_and_history(tmp_path: Path) -> None:
+    store = initialized_store(tmp_path)
+    first_executor = executor().model_copy(
+        update={"instance_id": f"provider-config-{'a' * 64}"}
+    )
+    session = store.create_session(
+        project_id=PROJECT_ID,
+        title="Writing Agent",
+        executor=first_executor,
+        capabilities=capabilities(),
+    )
+    completed, _, _ = create_run(store, session.session_id)
+    start_run(store, completed.run_id)
+    store.complete_run(
+        completed.run_id,
+        message_id="message-before-provider-rebind",
+        content="先保留上一轮对话。",
+        finish_reason="stop",
+        usage=None,
+    )
+    before_rebind = store.list_messages(session.session_id)
+    before_rebind_session = store.get_session(session.session_id)
+    changed_executor = first_executor.model_copy(
+        update={"instance_id": f"provider-config-{'b' * 64}"}
+    )
+
+    rebound = store.update_session(
+        session.session_id,
+        executor=changed_executor,
+        capabilities=capabilities(),
+    )
+
+    assert rebound.session_id == session.session_id
+    assert rebound.executor == changed_executor
+    assert rebound.revision == before_rebind_session.revision + 1
+    assert store.list_messages(session.session_id) == before_rebind
+
+    next_run, _, replayed = store.create_run(
+        session_id=session.session_id,
+        message="继续同一条对话。",
+        expected_project_revision=1,
+        expected_project_fingerprint=FINGERPRINT,
+        active_chapter_id="chapter-001",
+        idempotency_key="turn-after-provider-rebind",
+        current_executor=changed_executor,
+        current_capabilities=capabilities(),
+    )
+    assert replayed is False
+    assert next_run.session_id == session.session_id
+    assert next_run.executor == changed_executor
+
+
 def test_new_run_uses_current_capability_snapshot_for_same_executor(
     tmp_path: Path,
 ) -> None:
@@ -459,14 +517,72 @@ def test_blank_session_title_is_rejected() -> None:
         AgentSessionCreateRequest(title="   ")
 
 
+def test_session_history_can_be_renamed_pinned_and_removed(tmp_path: Path) -> None:
+    store = initialized_store(tmp_path)
+    first = create_session(store)
+    second = store.create_session(
+        project_id=PROJECT_ID,
+        title="Second conversation",
+        executor=executor(),
+        capabilities=capabilities(),
+    )
+
+    updated = store.update_session(
+        first.session_id,
+        title="  第一章重写  ",
+        pinned=True,
+    )
+
+    assert updated.title == "第一章重写"
+    assert updated.pinned is True
+    assert updated.revision == 2
+    assert updated.updated_at == first.updated_at
+    assert [item.session_id for item in store.list_sessions(PROJECT_ID)] == [
+        first.session_id,
+        second.session_id,
+    ]
+
+    store.close_session(first.session_id)
+
+    assert [item.session_id for item in store.list_sessions(PROJECT_ID)] == [
+        second.session_id,
+    ]
+    assert store.get_session(first.session_id).status.value == "closed"
+    store.close_session(first.session_id)
+
+
+def test_session_history_rejects_empty_update_and_active_run_removal(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="at least one session field"):
+        AgentSessionUpdateRequest()
+
+    store = initialized_store(tmp_path)
+    session = create_session(store)
+    create_run(store, session.session_id)
+
+    with pytest.raises(AgentStoreConflict, match="未结束"):
+        store.close_session(session.session_id)
+
+    changed_executor = executor().model_copy(
+        update={"instance_id": f"provider-config-{'b' * 64}"}
+    )
+    with pytest.raises(AgentStoreConflict, match="未结束"):
+        store.update_session(
+            session.session_id,
+            executor=changed_executor,
+            capabilities=capabilities(),
+        )
+
+
 def test_provider_history_uses_latest_messages_after_storage_window(tmp_path: Path) -> None:
     store = initialized_store(tmp_path)
     session = create_session(store)
     run, _, _ = create_run(store, session.session_id)
 
     with store.database.connection() as connection:
+        # 建 Run 现在落三条活动：1 writer_intent 工件、2 作者的话、3 queued。
+        # 模板要按种类取那条「话」，追加的历史从序号 4 起排，别撞上已有的三条。
         template_row = connection.execute(
-            "SELECT payload_json FROM activity WHERE run_id = ? AND sequence = 1",
+            "SELECT payload_json FROM activity WHERE run_id = ? AND kind = 'message'",
             (run.run_id,),
         ).fetchone()
         template = json.loads(str(template_row["payload_json"]))
@@ -474,7 +590,7 @@ def test_provider_history_uses_latest_messages_after_storage_window(tmp_path: Pa
             activity_id = f"activity-history-{ordinal:04d}"
             message_id = f"message-history-{ordinal:04d}"
             template["activity_id"] = activity_id
-            template["sequence"] = ordinal + 1
+            template["sequence"] = ordinal + 2
             template["payload"]["message_id"] = message_id
             template["payload"]["content"] = f"message {ordinal}"
             connection.execute(
@@ -489,7 +605,7 @@ def test_provider_history_uses_latest_messages_after_storage_window(tmp_path: Pa
                     activity_id,
                     session.session_id,
                     run.run_id,
-                    ordinal + 1,
+                    ordinal + 2,
                     json.dumps(template, ensure_ascii=False),
                     FINGERPRINT,
                     run.correlation_id,
@@ -554,8 +670,10 @@ def test_concurrent_activity_sequences_remain_contiguous(tmp_path: Path) -> None
         )
 
     persisted = store.list_activities(run.run_id)
-    assert [item.root.sequence for item in persisted] == list(range(1, 17))
-    assert sorted(item.root.sequence for item in activities) == list(range(5, 17))
+    # 建 Run 三条（writer_intent 工件、作者的话、queued）+ 开跑两条状态 + 12 段增量
+    # = 17 条，从 1 连到 17，增量占 6–17。
+    assert [item.root.sequence for item in persisted] == list(range(1, 18))
+    assert sorted(item.root.sequence for item in activities) == list(range(6, 18))
     assert all(item.root.kind is ActivityKind.MESSAGE for item in activities)
 
 
@@ -1513,3 +1631,151 @@ def test_completed_history_omits_failed_run_user_message(tmp_path: Path) -> None
         "收紧开头，但不要改动关键线索。",
         "保留既有线索。",
     ]
+
+    _, token_limited = store.completed_history(
+        session.session_id,
+        max_characters=10_000,
+        max_tokens=10,
+    )
+    assert token_limited == []
+
+
+def test_append_run_event_logs_lifecycle_events_off_the_activity_feed(
+    tmp_path: Path,
+) -> None:
+    store = initialized_store(tmp_path)
+    session = create_session(store)
+    run, _, _ = create_run(store, session.session_id)
+    start_run(store, run.run_id)
+
+    store.append_run_event(
+        run.run_id,
+        "model_turn_started",
+        {"turn": 1, "wrap_up": False, "tools_offered": 5},
+    )
+    # 生命周期事件与 activity 事件穿插时 sequence 也不能撞号。
+    store.append_assistant_delta(run.run_id, message_id="message-events-1", delta="你好")
+    store.append_run_event(
+        run.run_id,
+        "model_turn_completed",
+        {
+            "turn": 1,
+            "finish_reason": "stop",
+            "tool_calls": 0,
+            "usage": {"input_tokens": 10, "output_tokens": 4, "total_tokens": 14},
+        },
+    )
+    store.append_run_event(
+        run.run_id,
+        "context_folded",
+        {
+            "turn": 2,
+            "reason": "token_budget",
+            "folded_results": 2,
+            "saved_characters": 1234,
+        },
+    )
+
+    with store.database.connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT sequence, event_type, activity_id, payload_json
+            FROM run_event
+            WHERE run_id = ? AND event_type != 'activity'
+            ORDER BY sequence ASC
+            """,
+            (run.run_id,),
+        ).fetchall()
+        all_sequences = [
+            int(row[0])
+            for row in connection.execute(
+                "SELECT sequence FROM run_event WHERE run_id = ?",
+                (run.run_id,),
+            ).fetchall()
+        ]
+    assert [str(row["event_type"]) for row in rows] == [
+        "model_turn_started",
+        "model_turn_completed",
+        "context_folded",
+    ]
+    assert all(row["activity_id"] is None for row in rows)
+    assert json.loads(str(rows[2]["payload_json"]))["saved_characters"] == 1234
+    assert len(all_sequences) == len(set(all_sequences))
+
+    # SSE 活动流只捞 event_type='activity'，新事件类型不会混进去。
+    assert len(store.list_run_events(run.run_id)) == len(
+        store.list_activities(run.run_id)
+    )
+
+    with pytest.raises(AgentStoreNotFound, match="not found"):
+        store.append_run_event("run-missing-0000000001", "model_turn_started", {})
+
+
+# ---------------------------------------------------------------------------
+# 对话与小说的归属：一部小说下面挂多条对话，另有不绑任何书的纯对话。
+# 界面左栏按「独立对话 / 小说分组」两段渲染，靠 list_all_sessions 一次列全；
+# 中栏「选择小说」靠 rebind_session 改归属。
+
+
+def test_list_all_sessions_covers_bound_and_unbound(tmp_path: Path) -> None:
+    store = initialized_store(tmp_path)
+    bound = create_session(store)
+    casual = store.create_session(
+        project_id=None,
+        title="随便聊",
+        executor=executor(),
+        capabilities=capabilities(),
+    )
+
+    everything = store.list_all_sessions()
+    ids = {item.session_id for item in everything}
+    assert ids == {bound.session_id, casual.session_id}
+
+    # 归属看 project_revision：绑了书的有，纯对话没有。
+    by_id = {item.session_id: item for item in everything}
+    assert by_id[bound.session_id].project_revision is not None
+    assert by_id[bound.session_id].project_revision.project_id == PROJECT_ID
+    assert by_id[casual.session_id].project_revision is None
+
+    # 原来那两个清单不受影响：一个只列这本书的，一个只列不绑书的。
+    assert [item.session_id for item in store.list_sessions(PROJECT_ID)] == [bound.session_id]
+    assert [item.session_id for item in store.list_unbound_sessions()] == [casual.session_id]
+
+
+def test_rebind_session_moves_a_conversation_between_books(tmp_path: Path) -> None:
+    store = initialized_store(tmp_path)
+    other_id = "project-89abcdef0123456789abcdef"
+    store.database.sync_project_binding(
+        project_id=other_id,
+        root_path=str(tmp_path / "other"),
+        display_name="Other Novel",
+        fingerprint="b" * 64,
+    )
+    session = create_session(store)
+
+    moved = store.rebind_session(session.session_id, project_id=other_id)
+    assert moved.project_revision is not None
+    assert moved.project_revision.project_id == other_id
+    assert moved.revision == session.revision + 1
+    assert [item.session_id for item in store.list_sessions(other_id)] == [session.session_id]
+    assert store.list_sessions(PROJECT_ID) == []
+
+    # 解绑：变回不针对任何书的纯对话，历史消息还在。
+    unbound = store.rebind_session(session.session_id, project_id=None)
+    assert unbound.project_revision is None
+    assert [item.session_id for item in store.list_unbound_sessions()] == [session.session_id]
+
+
+def test_rebind_session_rejects_unknown_book_and_running_conversation(tmp_path: Path) -> None:
+    store = initialized_store(tmp_path)
+    session = create_session(store)
+
+    with pytest.raises(AgentStoreNotFound):
+        store.rebind_session(session.session_id, project_id="project-ffffffffffffffffffffffff")
+    with pytest.raises(AgentStoreNotFound):
+        store.rebind_session("session-does-not-exist", project_id=None)
+
+    # 正在跑的对话不许改绑：这一轮的上下文是按原来那本书装配的。
+    create_run(store, session.session_id)
+    with pytest.raises(AgentStoreConflict):
+        store.rebind_session(session.session_id, project_id=None)

@@ -13,7 +13,11 @@ dependencies = [
   "fastapi>=0.115,<1.0",
   "httpx>=0.28,<1.0",
   "jsonschema>=4.23,<5.0",
+  "mcp==2.3.0",
   "pydantic>=2.10,<3.0",
+  "Pillow>=12.3,<13",
+  "playwright>=1.51,<2",
+  "pywinpty==3.1.2; sys_platform == 'win32'",
   "PyYAML>=6.0,<7.0",
   "uvicorn[standard]>=0.34,<1.0",
 ]
@@ -21,6 +25,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pytest>=8.3,<9.0",
+  "pytest-xdist>=3.8",
 ]
 
 [project.scripts]

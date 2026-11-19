@@ -663,7 +663,7 @@ def test_v19_context_history_migrates_with_null_project_kb_bindings(
         )
 
     reopened = SqliteStore(database.path)
-    assert reopened.initialize().schema_version == 20
+    assert reopened.initialize().schema_version == SCHEMA_VERSION
     migrated = ContextStore(reopened)
 
     assert migrated.get_pack(pack.context_pack_id).pack == pack
@@ -786,7 +786,7 @@ def test_v20_restart_self_heals_project_kb_binding_triggers(
         connection.execute("PRAGMA user_version = 20")
 
     reopened = SqliteStore(database.path)
-    assert reopened.initialize().schema_version == 20
+    assert reopened.initialize().schema_version == SCHEMA_VERSION
     with reopened.connection() as connection:
         restored = {
             str(row[0]): str(row[1]).lower()

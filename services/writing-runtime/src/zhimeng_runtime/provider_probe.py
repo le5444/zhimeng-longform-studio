@@ -28,6 +28,7 @@ from urllib.parse import urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from zhimeng_runtime.fs_atomic import replace_with_retry
 
 
 _MAX_JSON_RESPONSE_BYTES = 2 * 1024 * 1024
@@ -431,7 +432,13 @@ def normalize_base_url(
     *,
     allow_insecure_loopback_http: bool = False,
 ) -> str:
-    """Validate a credential-free OpenAI-compatible API base URL."""
+    """Validate a credential-free OpenAI-compatible API base URL.
+
+    分工说明：这是独立 CLI 能力探测工具的严格入口校验（https-only、
+    拒绝 query/凭证）。作者界面配置与 Agent 运行时的宽容解析走
+    `provider_url_resolver`（含 provider_settings_service.normalize_base_url），
+    两边用途不同，不要互相替换。
+    """
 
     candidate = value.strip()
     parsed = urlsplit(candidate)
@@ -1439,7 +1446,7 @@ def write_provider_probe_report(
             json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
-        temporary.replace(target)
+        replace_with_retry(temporary, target)
     finally:
         if temporary.exists():
             temporary.unlink(missing_ok=True)

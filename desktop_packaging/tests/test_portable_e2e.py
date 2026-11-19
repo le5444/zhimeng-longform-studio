@@ -164,8 +164,20 @@ def test_real_bundle_install_runtime_ready_backup_and_restore(tmp_path: Path) ->
         assert (
             (layout.skills_root / name / "SKILL.md").is_file()
             or (layout.skills_root / name / "skill.json").is_file()
+            # four-skills-family-* 等内置包用 skill.manifest.json 声明。
+            or (layout.skills_root / name / "skill.manifest.json").is_file()
             or any((layout.skills_root / name).glob("**/SKILL.md"))
+            or any((layout.skills_root / name).glob("**/skill.manifest.json"))
         ), name
+    # 四个 family 执行壳必须随包：app.py 的 BUILTIN_MANAGED_SKILL_PACKAGES 要求
+    # 它们，缺一个运行时就少装一个包，而缺失是静默的（register 时 continue）。
+    for family in (
+        "four-skills-family-source-ingest",
+        "four-skills-family-distillation",
+        "four-skills-family-knowledge-context",
+        "four-skills-family-creation-suite",
+    ):
+        assert family in managed_names, f"missing family shell in bundle: {family}"
     seeded_marker = layout.skills_root / ".seeded-from-bundle.txt"
     assert seeded_marker.is_file()
     seeded_text = seeded_marker.read_text(encoding="utf-8")

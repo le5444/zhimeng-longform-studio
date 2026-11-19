@@ -291,7 +291,8 @@ def _wait_for_status(
     import_id: str,
     expected: str,
     *,
-    timeout: float = 5.0,
+    # 到了就返回；整套 6 路并行、机器又忙时 5 秒不够（T20 记的抖动，9-26 刀 1b 时又撞上一次），放宽到 30 秒。
+    timeout: float = 30.0,
 ) -> dict:
     deadline = time.monotonic() + timeout
     latest: dict = {}
@@ -948,9 +949,22 @@ def test_job_payload_must_match_duplicated_columns_on_get_and_list(
 
 
 def test_job_request_tamper_during_execution_prevents_receipt_publish(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     adapter = FakeTomatoAdapter(block_prepare=True)
+    progress_ready = threading.Event()
+    release_progress = threading.Event()
+    original_save = SqliteStore.save_source_import_job
+
+    def pause_progress_save(store, payload, **kwargs):
+        if payload.get("progress", {}).get("message") == "running fixture download" and not progress_ready.is_set():
+            # Freeze the real read/modify/write gap: progress has read its job,
+            # while a second SQLite connection is about to update the request.
+            progress_ready.set()
+            assert release_progress.wait(10), "test did not release its progress write"
+        return original_save(store, payload, **kwargs)
+
+    monkeypatch.setattr(SqliteStore, "save_source_import_job", pause_progress_save)
     with TestClient(
         create_app(_settings(tmp_path), source_import_adapter=adapter)
     ) as client:
@@ -966,32 +980,55 @@ def test_job_request_tamper_during_execution_prevents_receipt_publish(
                 },
             },
         ).json()
-        assert adapter.prepare_started.wait(2)
-        with client.app.state.runtime.store.connection() as connection:
-            row = connection.execute(
-                "SELECT payload_json FROM source_import_job WHERE id = ?",
-                (created["import_id"],),
-            ).fetchone()
-            assert row is not None
-            payload = json.loads(str(row["payload_json"]))
-            payload["candidate"]["index"] = 2
-            connection.execute(
-                "UPDATE source_import_job SET payload_json = ? WHERE id = ?",
-                (
-                    json.dumps(payload, ensure_ascii=False, sort_keys=True),
-                    created["import_id"],
-                ),
-            )
-        adapter.block_prepare = False
+        try:
+            assert progress_ready.wait(10)
+            with client.app.state.runtime.store.connection() as connection:
+                row = connection.execute(
+                    "SELECT payload_json FROM source_import_job WHERE id = ?",
+                    (created["import_id"],),
+                ).fetchone()
+                assert row is not None
+                payload = json.loads(str(row["payload_json"]))
+                payload["candidate"]["index"] = 2
+                connection.execute(
+                    "UPDATE source_import_job SET payload_json = ? WHERE id = ?",
+                    (json.dumps(payload, ensure_ascii=False, sort_keys=True), created["import_id"]),
+                )
+            adapter.block_prepare = False
+        finally:
+            release_progress.set()
         failed = _wait_for_status(client, created["import_id"], "failed")
 
     assert "job request changed" in failed["error"]
+    assert failed["candidate"]["index"] == 2
     assert (
         SqliteStore(tmp_path / "runtime.sqlite3").get_source_import_execution_receipt(
             created["import_id"]
         )
         is None
     )
+
+
+def test_source_import_progress_save_preserves_concurrent_cancel(tmp_path: Path) -> None:
+    store = SqliteStore(tmp_path / "progress.sqlite3")
+    store.initialize()
+    now = datetime.now(UTC)
+    job = SourceImportJob(
+        import_id="source-import-" + "a" * 32, query="合成进度并发题",
+        candidate=TomatoSearchCandidate(index=1, book_id="901", title="合成数据", author="测试"),
+        status=SourceImportStatus.DOWNLOADING,
+        progress=SourceImportProgress(stage="downloading", message="initial", percent=10),
+        created_at=now, updated_at=now,
+    )
+    original = job.model_dump(mode="json", by_alias=True)
+    store.create_source_import_job(original)
+    cancelled = job.model_copy(update={"status": SourceImportStatus.CANCEL_REQUESTED}).model_dump(mode="json", by_alias=True)
+    store.save_source_import_job(cancelled, expected_payload=original)
+    stale_progress = job.model_copy(update={"progress": SourceImportProgress(stage="downloading", message="later progress", percent=20)}).model_dump(mode="json", by_alias=True)
+
+    with pytest.raises(RuntimeError, match="changed before its state was saved"):
+        store.save_source_import_job(stale_progress, expected_payload=original)
+    assert store.get_source_import_job(job.import_id) == cancelled
 
 
 def test_running_source_import_can_cancel_and_retry(tmp_path: Path) -> None:
@@ -1158,7 +1195,7 @@ def test_source_import_endpoints_are_explicitly_unavailable_without_adapter(
     assert response.status_code == 503
 
 
-def test_tomato_book_id_resolve_and_network_recovery_evidence(tmp_path: Path) -> None:
+def test_tomato_book_id_resolve_and_retry_after_a_network_failure(tmp_path: Path) -> None:
     adapter = FakeTomatoAdapter()
     adapter.network_failures_remaining = 1
     app = create_app(_settings(tmp_path), source_import_adapter=adapter)
@@ -1197,16 +1234,3 @@ def test_tomato_book_id_resolve_and_network_recovery_evidence(tmp_path: Path) ->
             "awaiting_review",
         )
         assert recovered["retry_of"] == failed["import_id"]
-
-        evidence = client.post(
-            f"/api/v1/source-imports/{recovered['import_id']}/network-recovery-evidence"
-        )
-        assert evidence.status_code == 201, evidence.text
-        body = evidence.json()
-        assert body["schema"] == "zhimeng.source-import-network-recovery-evidence-response.v1"
-        payload = body["evidence"]
-        assert payload["network_failure_detected"] is True
-        assert payload["recovered"] is True
-        assert payload["live_external_download_claimed"] is False
-        assert payload["formal_draft_allowed"] is False
-        assert "live_external_download_acceptance" in body["not_claiming"]

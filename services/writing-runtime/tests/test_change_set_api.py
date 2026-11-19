@@ -144,6 +144,499 @@ def test_public_create_rejects_forged_agent_provenance(tmp_path: Path) -> None:
     assert response.json()["error"]["code"] == "change_set_origin_untrusted"
 
 
+def test_author_can_edit_a_candidate_hunk_before_accepting_it(tmp_path: Path) -> None:
+    library = tmp_path / "library"
+    library.mkdir()
+    project = library / "book"
+    paths = _create_project(project)
+
+    with _client(tmp_path, library) as client:
+        snapshot = _inspect(client, project)
+        chapter = _file(snapshot, "CH001_正文.md")
+        created_response = client.post(
+            f"/api/v1/projects/{snapshot['project']['project_id']}/change-sets",
+            json={
+                "base_revision": snapshot["project"]["revision"],
+                "base_fingerprint": snapshot["project"]["fingerprint"],
+                "title": "作者修改候选",
+                "summary": "AI 给出候选后由作者继续修改。",
+                "origin": "manual",
+                "changes": [
+                    {
+                        "operation": "update",
+                        "file_id": chapter["file_id"],
+                        "after_content": "AI版本\nkeep\nomega\n",
+                        "rationale": "验证作者可以改候选文字。",
+                    }
+                ],
+            },
+        )
+        assert created_response.status_code == 201, created_response.text
+        created = created_response.json()
+        hunk = created["changes"][0]["hunks"][0]
+
+        edited_response = client.patch(
+            f"/api/v1/change-sets/{created['change_set_id']}/hunks/{hunk['hunk_id']}",
+            json={
+                "expected_review_revision": created["review_revision"],
+                "after_text": "作者自己改的开头\n",
+            },
+        )
+        assert edited_response.status_code == 200, edited_response.text
+        edited = edited_response.json()
+        edited_hunk = edited["changes"][0]["hunks"][0]
+        assert edited["status"] == "reviewing"
+        assert edited["review_revision"] == created["review_revision"] + 1
+        expected_hunk_text = "作者自己改的开头\r\n"
+        assert edited_hunk["after_text"] == expected_hunk_text
+        assert edited_hunk["decision"] == "pending"
+        assert edited_hunk["after_sha256"] == hashlib.sha256(
+            expected_hunk_text.encode("utf-8")
+        ).hexdigest()
+
+        stale_response = client.patch(
+            f"/api/v1/change-sets/{created['change_set_id']}/hunks/{hunk['hunk_id']}",
+            json={
+                "expected_review_revision": created["review_revision"],
+                "after_text": "过期的修改\n",
+            },
+        )
+        assert stale_response.status_code == 409
+
+        ready = _accept_or_reject(client, edited, ["accepted"])
+        applied_response = client.post(
+            f"/api/v1/change-sets/{ready['change_set_id']}/apply",
+            json={"expected_review_revision": ready["review_revision"]},
+        )
+        assert applied_response.status_code == 200, applied_response.text
+        assert paths["chapter"].read_text(encoding="utf-8") == (
+            "作者自己改的开头\nkeep\nomega\n"
+        )
+
+
+def test_author_can_discard_a_pending_proposal_without_touching_files(
+    tmp_path: Path,
+) -> None:
+    """作者不想逐条审的过期候选：一键作废，正文一个字节不动。"""
+    library = tmp_path / "library"
+    library.mkdir()
+    project = library / "book"
+    paths = _create_project(project)
+
+    with _client(tmp_path, library) as client:
+        snapshot = _inspect(client, project)
+        chapter = _file(snapshot, "CH001_正文.md")
+        created_response = client.post(
+            f"/api/v1/projects/{snapshot['project']['project_id']}/change-sets",
+            json={
+                "base_revision": snapshot["project"]["revision"],
+                "base_fingerprint": snapshot["project"]["fingerprint"],
+                "title": "不再想看的候选",
+                "summary": "一键作废验证。",
+                "origin": "manual",
+                "changes": [
+                    {
+                        "operation": "update",
+                        "file_id": chapter["file_id"],
+                        "after_content": "永远不会被写入\nkeep\nomega\n",
+                        "rationale": "丢弃后正文必须保持原样。",
+                    }
+                ],
+            },
+        )
+        assert created_response.status_code == 201, created_response.text
+        created = created_response.json()
+        assert created["status"] == "reviewing"
+
+        # 列表摘要带 base 版本绑定，界面才能区分「可应用」和「已过期」。
+        listed_response = client.get(
+            f"/api/v1/projects/{snapshot['project']['project_id']}/change-sets"
+        )
+        assert listed_response.status_code == 200, listed_response.text
+        summary = next(
+            item
+            for item in listed_response.json()["change_sets"]
+            if item["change_set_id"] == created["change_set_id"]
+        )
+        assert summary["base_revision"] == snapshot["project"]["revision"]
+        assert summary["base_fingerprint"] == snapshot["project"]["fingerprint"]
+
+        stale_guard = client.post(
+            f"/api/v1/change-sets/{created['change_set_id']}/discard",
+            json={"expected_review_revision": created["review_revision"] + 7},
+        )
+        assert stale_guard.status_code == 409, stale_guard.text
+
+        discard_response = client.post(
+            f"/api/v1/change-sets/{created['change_set_id']}/discard",
+            json={"expected_review_revision": created["review_revision"]},
+        )
+        assert discard_response.status_code == 200, discard_response.text
+        discarded = discard_response.json()
+        assert discarded["status"] == "discarded"
+        assert paths["chapter"].read_text(encoding="utf-8") == "alpha\nkeep\nomega\n"
+
+        again = client.post(
+            f"/api/v1/change-sets/{created['change_set_id']}/discard",
+            json={"expected_review_revision": discarded["review_revision"]},
+        )
+        assert again.status_code == 409, again.text
+
+
+def test_direct_apply_writes_one_safe_file_and_rollback_ignores_unrelated_changes(
+    tmp_path: Path,
+) -> None:
+    library = tmp_path / "library"
+    library.mkdir()
+    project = library / "book"
+    paths = _create_project(project)
+
+    with _client(tmp_path, library) as client:
+        snapshot = _inspect(client, project)
+        chapter = _file(snapshot, "CH001_正文.md")
+        created_response = client.post(
+            f"/api/v1/projects/{snapshot['project']['project_id']}/change-sets",
+            json={
+                "base_revision": snapshot["project"]["revision"],
+                "base_fingerprint": snapshot["project"]["fingerprint"],
+                "title": "直接改这一章",
+                "summary": "像普通编辑器一样直接保存，同时保留旧版本。",
+                "origin": "manual",
+                "changes": [
+                    {
+                        "operation": "update",
+                        "file_id": chapter["file_id"],
+                        "after_content": "ALPHA\nkeep\nomega\n",
+                        "rationale": "验证直接修改与撤销。",
+                    }
+                ],
+            },
+        )
+        assert created_response.status_code == 201, created_response.text
+        created = created_response.json()
+
+        applied_response = client.post(
+            f"/api/v1/change-sets/{created['change_set_id']}/apply-direct",
+            json={"expected_review_revision": created["review_revision"]},
+        )
+        assert applied_response.status_code == 200, applied_response.text
+        applied = applied_response.json()
+        assert applied["status"] == "applied"
+        assert applied["review_revision"] == created["review_revision"] + 1
+        assert paths["chapter"].read_text(encoding="utf-8") == "ALPHA\nkeep\nomega\n"
+
+        # Retrying after a lost response is idempotent and never writes twice.
+        retried = client.post(
+            f"/api/v1/change-sets/{created['change_set_id']}/apply-direct",
+            json={"expected_review_revision": created["review_revision"]},
+        )
+        assert retried.status_code == 200, retried.text
+        assert retried.json()["writeback"] == applied["writeback"]
+
+        # Editing a different project file must not make this chapter's undo unusable.
+        paths["outline"].write_text("# 主线\n作者后来补充的全书大纲。\n", encoding="utf-8")
+        rolled_response = client.post(
+            f"/api/v1/change-sets/{applied['change_set_id']}/rollback",
+            json={"expected_review_revision": applied["review_revision"]},
+        )
+        assert rolled_response.status_code == 200, rolled_response.text
+        assert rolled_response.json()["status"] == "rolled_back"
+        assert paths["chapter"].read_text(encoding="utf-8") == "alpha\nkeep\nomega\n"
+        assert paths["outline"].read_text(encoding="utf-8") == (
+            "# 主线\n作者后来补充的全书大纲。\n"
+        )
+
+
+def test_direct_apply_creates_an_empty_file_in_an_authors_own_folder_and_rolls_it_back(
+    tmp_path: Path,
+) -> None:
+    """资料页「建好这份资料」：新建时先写空文件，作者当场就能打字。
+
+    文件夹名字不在 01-09 模板里也得认，撤销要把文件和空夹子一起收掉。
+    """
+
+    library = tmp_path / "library"
+    library.mkdir()
+    project = library / "book"
+    _create_project(project)
+
+    with _client(tmp_path, library) as client:
+        snapshot = _inspect(client, project)
+        target = project / "配角" / "剑奴.md"
+        created_response = client.post(
+            f"/api/v1/projects/{snapshot['project']['project_id']}/change-sets",
+            json={
+                "base_revision": snapshot["project"]["revision"],
+                "base_fingerprint": snapshot["project"]["fingerprint"],
+                "title": "新建资料：剑奴",
+                "summary": "先建一份空白资料，作者马上在里面打字。",
+                "origin": "manual",
+                "gate_required": False,
+                "changes": [
+                    {
+                        "operation": "create",
+                        "relative_path": "配角/剑奴.md",
+                        "after_content": "",
+                        "rationale": "验证空白新建也能落盘并撤回。",
+                    }
+                ],
+            },
+        )
+        assert created_response.status_code == 201, created_response.text
+        created = created_response.json()
+
+        applied_response = client.post(
+            f"/api/v1/change-sets/{created['change_set_id']}/apply-direct",
+            json={"expected_review_revision": created["review_revision"]},
+        )
+        assert applied_response.status_code == 200, applied_response.text
+        applied = applied_response.json()
+        assert applied["status"] == "applied"
+        assert target.exists()
+        assert target.read_text(encoding="utf-8") == ""
+        written = next(
+            item
+            for item in applied["writeback"]["files"]
+            if item["relative_path"] == "配角/剑奴.md"
+        )
+        assert written["result_file_id"]
+
+        rolled_response = client.post(
+            f"/api/v1/change-sets/{applied['change_set_id']}/rollback",
+            json={"expected_review_revision": applied["review_revision"]},
+        )
+        assert rolled_response.status_code == 200, rolled_response.text
+        assert rolled_response.json()["status"] == "rolled_back"
+        assert not target.exists()
+
+
+def test_direct_apply_rollback_never_overwrites_later_edits_to_the_same_chapter(
+    tmp_path: Path,
+) -> None:
+    library = tmp_path / "library"
+    library.mkdir()
+    project = library / "book"
+    paths = _create_project(project)
+
+    with _client(tmp_path, library) as client:
+        snapshot = _inspect(client, project)
+        chapter = _file(snapshot, "CH001_正文.md")
+        created_response = client.post(
+            f"/api/v1/projects/{snapshot['project']['project_id']}/change-sets",
+            json={
+                "base_revision": snapshot["project"]["revision"],
+                "base_fingerprint": snapshot["project"]["fingerprint"],
+                "title": "直接改这一章",
+                "summary": "保存后仍允许作者继续手写。",
+                "origin": "manual",
+                "changes": [
+                    {
+                        "operation": "update",
+                        "file_id": chapter["file_id"],
+                        "after_content": "ALPHA\nkeep\nomega\n",
+                        "rationale": "验证撤销不会覆盖作者后写的内容。",
+                    }
+                ],
+            },
+        )
+        assert created_response.status_code == 201, created_response.text
+        created = created_response.json()
+        applied_response = client.post(
+            f"/api/v1/change-sets/{created['change_set_id']}/apply-direct",
+            json={"expected_review_revision": created["review_revision"]},
+        )
+        assert applied_response.status_code == 200, applied_response.text
+        applied = applied_response.json()
+
+        later_text = "ALPHA\nkeep\n作者后来亲手补写的结尾。\n"
+        paths["chapter"].write_text(later_text, encoding="utf-8")
+        rolled_response = client.post(
+            f"/api/v1/change-sets/{applied['change_set_id']}/rollback",
+            json={"expected_review_revision": applied["review_revision"]},
+        )
+        assert rolled_response.status_code == 409, rolled_response.text
+        assert rolled_response.json()["error"]["code"] == "change_set_conflict"
+        assert paths["chapter"].read_text(encoding="utf-8") == later_text
+
+
+def test_direct_apply_updates_three_existing_files_and_rolls_them_back(tmp_path: Path) -> None:
+    library = tmp_path / "library"
+    library.mkdir()
+    project = library / "book"
+    paths = _create_project(project)
+
+    with _client(tmp_path, library) as client:
+        snapshot = _inspect(client, project)
+        outline = _file(snapshot, "全书大纲.md")
+        character = _file(snapshot, "主角.md")
+        world = _file(snapshot, "规则.md")
+        created_response = client.post(
+            f"/api/v1/projects/{snapshot['project']['project_id']}/change-sets",
+            json={
+                "base_revision": snapshot["project"]["revision"],
+                "base_fingerprint": snapshot["project"]["fingerprint"],
+                "title": "补齐本章记录",
+                "summary": "一次更新人物状态、伏笔和章节梗概。",
+                "origin": "manual",
+                "changes": [
+                    {
+                        "operation": "update",
+                        "file_id": outline["file_id"],
+                        "after_content": "# 主线\n本章局面已经推进。\n",
+                        "rationale": "补本章梗概。",
+                    },
+                    {
+                        "operation": "update",
+                        "file_id": character["file_id"],
+                        "after_content": "# 青崖\n当前已离开旧港。\n",
+                        "rationale": "更新人物位置。",
+                    },
+                    {
+                        "operation": "update",
+                        "file_id": world["file_id"],
+                        "after_content": "# 信息边界\n角色已经确认血钥。\n",
+                        "rationale": "更新已揭晓信息。",
+                    },
+                ],
+            },
+        )
+        assert created_response.status_code == 201, created_response.text
+        created = created_response.json()
+        applied_response = client.post(
+            f"/api/v1/change-sets/{created['change_set_id']}/apply-direct",
+            json={"expected_review_revision": created["review_revision"]},
+        )
+        assert applied_response.status_code == 200, applied_response.text
+        applied = applied_response.json()
+        assert applied["status"] == "applied"
+        assert paths["outline"].read_text(encoding="utf-8") == "# 主线\n本章局面已经推进。\n"
+        assert paths["character"].read_text(encoding="utf-8") == "# 青崖\n当前已离开旧港。\n"
+        assert paths["world"].read_text(encoding="utf-8") == "# 信息边界\n角色已经确认血钥。\n"
+
+        rolled_response = client.post(
+            f"/api/v1/change-sets/{created['change_set_id']}/rollback",
+            json={"expected_review_revision": applied["review_revision"]},
+        )
+        assert rolled_response.status_code == 200, rolled_response.text
+        assert rolled_response.json()["status"] == "rolled_back"
+        assert "青崖要夺回旧港钥匙" in paths["outline"].read_text(encoding="utf-8")
+        assert "当前在旧港" in paths["character"].read_text(encoding="utf-8")
+        assert "角色尚未确认" in paths["world"].read_text(encoding="utf-8")
+
+
+def test_direct_apply_takes_delete_and_wide_changes_without_bounce(tmp_path: Path) -> None:
+    """「直接保存」不再弹回（2026-09-20 P2 第 7 条）：含删除、超过 3 份的批
+    都直接落盘；撤回链兜底——删掉的文件能撤回，多文件批能整体回滚。"""
+    library = tmp_path / "library"
+    library.mkdir()
+    project = library / "book"
+    paths = _create_project(project)
+
+    with _client(tmp_path, library) as client:
+        snapshot = _inspect(client, project)
+        notes = _file(snapshot, "旧素材.md")
+
+        # 含删除的批：直接保存直接删，不再 409 弹回。
+        created_response = client.post(
+            f"/api/v1/projects/{snapshot['project']['project_id']}/change-sets",
+            json={
+                "base_revision": snapshot["project"]["revision"],
+                "base_fingerprint": snapshot["project"]["fingerprint"],
+                "title": "删掉旧素材",
+                "summary": "作者选了直接保存。",
+                "origin": "manual",
+                "changes": [
+                    {
+                        "operation": "delete",
+                        "file_id": notes["file_id"],
+                        "rationale": "作者要求删除。",
+                    }
+                ],
+            },
+        )
+        assert created_response.status_code == 201, created_response.text
+        created = created_response.json()
+        applied_response = client.post(
+            f"/api/v1/change-sets/{created['change_set_id']}/apply-direct",
+            json={"expected_review_revision": created["review_revision"]},
+        )
+        assert applied_response.status_code == 200, applied_response.text
+        assert applied_response.json()["status"] == "applied"
+        assert not paths["notes"].exists()
+
+        # 撤回链兜底：删掉的文件原样撤回来。
+        rolled_response = client.post(
+            f"/api/v1/change-sets/{created['change_set_id']}/rollback",
+            json={"expected_review_revision": applied_response.json()["review_revision"]},
+        )
+        assert rolled_response.status_code == 200, rolled_response.text
+        assert paths["notes"].read_text(encoding="utf-8") == "old notes\n"
+
+        # 超过 3 份的批：直接保存一次全收。
+        snapshot = _inspect(client, project)
+        chapter = _file(snapshot, "CH001_正文.md")
+        notes = _file(snapshot, "旧素材.md")
+        outline = _file(snapshot, "全书大纲.md")
+        character = _file(snapshot, "主角.md")
+        created_response = client.post(
+            f"/api/v1/projects/{snapshot['project']['project_id']}/change-sets",
+            json={
+                "base_revision": snapshot["project"]["revision"],
+                "base_fingerprint": snapshot["project"]["fingerprint"],
+                "title": "四份一起收",
+                "summary": "作者选了直接保存。",
+                "origin": "manual",
+                "changes": [
+                    {
+                        "operation": "update",
+                        "file_id": chapter["file_id"],
+                        "after_content": "new chapter\n",
+                        "rationale": "第一份文件。",
+                    },
+                    {
+                        "operation": "update",
+                        "file_id": notes["file_id"],
+                        "after_content": "new notes\n",
+                        "rationale": "第二份文件。",
+                    },
+                    {
+                        "operation": "update",
+                        "file_id": outline["file_id"],
+                        "after_content": "new outline\n",
+                        "rationale": "第三份文件。",
+                    },
+                    {
+                        "operation": "update",
+                        "file_id": character["file_id"],
+                        "after_content": "new character\n",
+                        "rationale": "第四份文件。",
+                    },
+                ],
+            },
+        )
+        assert created_response.status_code == 201, created_response.text
+        created = created_response.json()
+        applied_response = client.post(
+            f"/api/v1/change-sets/{created['change_set_id']}/apply-direct",
+            json={"expected_review_revision": created["review_revision"]},
+        )
+        assert applied_response.status_code == 200, applied_response.text
+        assert applied_response.json()["status"] == "applied"
+        assert paths["chapter"].read_text(encoding="utf-8") == "new chapter\n"
+        assert paths["notes"].read_text(encoding="utf-8") == "new notes\n"
+        assert paths["outline"].read_text(encoding="utf-8") == "new outline\n"
+        assert paths["character"].read_text(encoding="utf-8") == "new character\n"
+
+        # 整体回滚：四个文件一起回到改前。
+        rolled_response = client.post(
+            f"/api/v1/change-sets/{created['change_set_id']}/rollback",
+            json={"expected_review_revision": applied_response.json()["review_revision"]},
+        )
+        assert rolled_response.status_code == 200, rolled_response.text
+        assert paths["chapter"].read_text(encoding="utf-8") == "alpha\nkeep\nomega\n"
+        assert paths["notes"].read_text(encoding="utf-8") == "old notes\n"
+
+
 def test_update_supports_per_hunk_apply_persistence_and_rollback(tmp_path: Path) -> None:
     library = tmp_path / "library"
     library.mkdir()
@@ -207,24 +700,6 @@ def test_update_supports_per_hunk_apply_persistence_and_rollback(tmp_path: Path)
         assert applied["writeback"]["files"][0]["result_file_id"]
         assert paths["chapter"].read_text(encoding="utf-8") == "ALPHA\nkeep\nomega\n"
 
-        evidence_after_apply = client.get(
-            f"/api/v1/change-sets/{applied['change_set_id']}/writeback-evidence"
-        )
-        assert evidence_after_apply.status_code == 200, evidence_after_apply.text
-        applied_evidence = evidence_after_apply.json()
-        assert applied_evidence["schema"] == "zhimeng.writeback-evidence-response.v1"
-        assert applied_evidence["receipt"]["schema"] == "zhimeng.writeback-evidence-receipt.v1"
-        assert applied_evidence["receipt"]["outcome"] == "applied"
-        assert applied_evidence["receipt"]["formal_draft_allowed"] is False
-        assert applied_evidence["receipt"]["quality_assessed"] is False
-        assert applied_evidence["receipt"]["novel_state_synced"] is False
-        assert applied_evidence["receipt"]["result_revision"] == 2
-        assert applied_evidence["receipt"]["formal_draft_authorization_receipt_id"].startswith(
-            "formal-draft-auth-"
-        )
-        assert len(applied_evidence["receipt"]["formal_draft_authorization_receipt_hash"]) == 64
-        assert len(applied_evidence["history"]) == 1
-
         listed = client.get(
             f"/api/v1/projects/{snapshot['project']['project_id']}/change-sets"
         )
@@ -247,1349 +722,9 @@ def test_update_supports_per_hunk_apply_persistence_and_rollback(tmp_path: Path)
         assert rolled["rollback"]["result_revision"] == 3
         assert paths["chapter"].read_text(encoding="utf-8") == "alpha\nkeep\nomega\n"
 
-        evidence_after_rollback = client.get(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/writeback-evidence"
-        )
-        assert evidence_after_rollback.status_code == 200, evidence_after_rollback.text
-        rolled_evidence = evidence_after_rollback.json()
-        assert rolled_evidence["receipt"]["outcome"] == "rolled_back"
-        assert rolled_evidence["receipt"]["result_revision"] == 3
-        assert rolled_evidence["receipt"]["formal_draft_allowed"] is False
-        assert rolled_evidence["receipt"]["novel_state_synced"] is False
-        assert rolled_evidence["receipt"]["formal_draft_authorization_receipt_id"].startswith(
-            "formal-draft-auth-"
-        )
-        assert len(rolled_evidence["receipt"]["formal_draft_authorization_receipt_hash"]) == 64
-        assert len(rolled_evidence["history"]) == 2
-        assert [item["outcome"] for item in rolled_evidence["history"]] == [
-            "applied",
-            "rolled_back",
-        ]
-
-        empty_sync = client.get(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-writeback-sync"
-        )
-        assert empty_sync.status_code == 200, empty_sync.text
-        assert empty_sync.json()["schema"] == "zhimeng.nlcl-writeback-sync-response.v1"
-        assert empty_sync.json()["receipt"] is None
-
-        sync_response = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-writeback-sync",
-            json={
-                "expected_writeback_evidence_receipt_hash": rolled_evidence[
-                    "receipt"
-                ]["receipt_hash"]
-            },
-        )
-        assert sync_response.status_code == 200, sync_response.text
-        synced = sync_response.json()
-        assert synced["schema"] == "zhimeng.nlcl-writeback-sync-response.v1"
-        receipt = synced["receipt"]
-        assert receipt["schema"] == "zhimeng.nlcl-writeback-sync-receipt.v1"
-        assert receipt["outcome"] == "rolled_back"
-        assert receipt["writeback_evidence_receipt_hash"] == rolled_evidence[
-            "receipt"
-        ]["receipt_hash"]
-        assert receipt["sync_scope"] == "product_native_evidence_continuity"
-        assert receipt["original_nlcl_chapter_ops_usage_synced"] is False
-        assert receipt["formal_draft_allowed"] is False
-        assert receipt["quality_assessed"] is False
-        assert receipt["novel_state_synced"] is False
-        assert "05_正文内容/第一卷/CH001_正文.md" in receipt["affected_relative_paths"]
-        assert receipt["chapter_relative_paths"] == [
-            "05_正文内容/第一卷/CH001_正文.md"
-        ]
-        assert len(synced["history"]) == 1
-
-        replay = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-writeback-sync",
-            json={
-                "expected_writeback_evidence_receipt_hash": rolled_evidence[
-                    "receipt"
-                ]["receipt_hash"]
-            },
-        )
-        assert replay.status_code == 200, replay.text
-        assert replay.json()["receipt"]["receipt_id"] == receipt["receipt_id"]
-        assert replay.json()["receipt"]["receipt_hash"] == receipt["receipt_hash"]
-
-        stale = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-writeback-sync",
-            json={"expected_writeback_evidence_receipt_hash": "0" * 64},
-        )
-        assert stale.status_code == 409, stale.text
-        assert stale.json()["error"]["code"] == "change_set_conflict"
-
-        empty_usage = client.get(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-call-usage-continuity"
-        )
-        assert empty_usage.status_code == 200, empty_usage.text
-        assert empty_usage.json()["schema"] == (
-            "zhimeng.nlcl-call-usage-continuity-response.v1"
-        )
-        assert empty_usage.json()["receipt"] is None
-
-        usage_response = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-call-usage-continuity",
-            json={
-                "expected_nlcl_writeback_sync_receipt_hash": receipt["receipt_hash"]
-            },
-        )
-        assert usage_response.status_code == 200, usage_response.text
-        usage = usage_response.json()
-        assert usage["schema"] == "zhimeng.nlcl-call-usage-continuity-response.v1"
-        usage_receipt = usage["receipt"]
-        assert usage_receipt["schema"] == (
-            "zhimeng.nlcl-call-usage-continuity-receipt.v1"
-        )
-        assert usage_receipt["outcome"] == "rolled_back"
-        assert usage_receipt["nlcl_writeback_sync_receipt_hash"] == receipt[
-            "receipt_hash"
-        ]
-        assert usage_receipt["usage_scope"] == (
-            "product_native_selected_card_continuity"
-        )
-        assert usage_receipt["record_mode"] == "product_native_writeback_bound"
-        assert usage_receipt["original_nlcl_call_usage_recorded"] is False
-        assert usage_receipt["original_nlcl_chapter_ops_usage_synced"] is False
-        assert usage_receipt["formal_draft_allowed"] is False
-        assert usage_receipt["novel_state_synced"] is False
-        assert usage_receipt["chapter_relative_paths"] == [
-            "05_正文内容/第一卷/CH001_正文.md"
-        ]
-        # Rollback voids the product-native used set for this outcome.
-        assert usage_receipt["used_card_ids"] == []
-        assert usage_receipt["unused_card_ids"] == []
-        assert usage_receipt["missed_card_ids"] == []
-        assert len(usage["history"]) == 1
-
-        usage_replay = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-call-usage-continuity",
-            json={
-                "expected_nlcl_writeback_sync_receipt_hash": receipt["receipt_hash"]
-            },
-        )
-        assert usage_replay.status_code == 200, usage_replay.text
-        assert usage_replay.json()["receipt"]["receipt_id"] == usage_receipt[
-            "receipt_id"
-        ]
-        assert usage_replay.json()["receipt"]["receipt_hash"] == usage_receipt[
-            "receipt_hash"
-        ]
-
-        usage_stale = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-call-usage-continuity",
-            json={"expected_nlcl_writeback_sync_receipt_hash": "0" * 64},
-        )
-        assert usage_stale.status_code == 409, usage_stale.text
-        assert usage_stale.json()["error"]["code"] == "change_set_conflict"
-
-        empty_export = client.get(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-call-usage-export"
-        )
-        assert empty_export.status_code == 200, empty_export.text
-        assert empty_export.json()["schema"] == (
-            "zhimeng.nlcl-original-call-usage-export-response.v1"
-        )
-        assert empty_export.json()["receipt"] is None
-
-        export_response = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-call-usage-export",
-            json={
-                "expected_nlcl_call_usage_continuity_receipt_hash": usage_receipt[
-                    "receipt_hash"
-                ]
-            },
-        )
-        assert export_response.status_code == 200, export_response.text
-        exported = export_response.json()
-        assert exported["schema"] == (
-            "zhimeng.nlcl-original-call-usage-export-response.v1"
-        )
-        export_receipt = exported["receipt"]
-        assert export_receipt["schema"] == (
-            "zhimeng.nlcl-original-call-usage-export-receipt.v1"
-        )
-        assert export_receipt["outcome"] == "rolled_back"
-        assert export_receipt["nlcl_call_usage_continuity_receipt_hash"] == (
-            usage_receipt["receipt_hash"]
-        )
-        assert export_receipt["chapter_id"] == "CH001"
-        assert export_receipt["canonical_chapter_key"] == "chapter:1"
-        assert export_receipt["export_relative_path"] == (
-            "07_运营数据/nlcl_feedback/call_usage.jsonl"
-        )
-        assert export_receipt["record_mode"] == "product_bridge_from_continuity"
-        assert export_receipt["original_nlcl_call_usage_recorded"] is True
-        assert export_receipt["original_nlcl_chapter_ops_usage_synced"] is False
-        assert export_receipt["formal_draft_allowed"] is False
-        assert export_receipt["quality_assessed"] is False
-        assert export_receipt["novel_state_synced"] is False
-        assert export_receipt["export_byte_offset"] == 0
-        assert len(exported["history"]) == 1
-
-        export_file = (
-            project
-            / "07_运营数据"
-            / "nlcl_feedback"
-            / "call_usage.jsonl"
-        )
-        assert export_file.is_file()
-        export_lines = [
-            line
-            for line in export_file.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
-        assert len(export_lines) == 1
-        export_row = json.loads(export_lines[0])
-        assert export_row["bridge_schema"] == (
-            "zhimeng.original-nlcl-call-usage-bridge-row.v1"
-        )
-        assert export_row["chapter_id"] == "CH001"
-        assert export_row["canonical_chapter_key"] == "chapter:1"
-        assert export_row["record_mode"] == "product_bridge_from_continuity"
-        assert export_row["formal_draft_allowed"] is False
-        assert export_row["product_continuity_receipt_hash"] == usage_receipt[
-            "receipt_hash"
-        ]
-        assert export_receipt["export_file_sha256"] == hashlib.sha256(
-            export_file.read_bytes()
-        ).hexdigest()
-        assert export_receipt["export_row_sha256"] == hashlib.sha256(
-            (export_lines[0] + "\n").encode("utf-8")
-        ).hexdigest()
-
-        export_replay = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-call-usage-export",
-            json={
-                "expected_nlcl_call_usage_continuity_receipt_hash": usage_receipt[
-                    "receipt_hash"
-                ]
-            },
-        )
-        assert export_replay.status_code == 200, export_replay.text
-        assert export_replay.json()["receipt"]["receipt_id"] == export_receipt[
-            "receipt_id"
-        ]
-        assert export_replay.json()["receipt"]["receipt_hash"] == export_receipt[
-            "receipt_hash"
-        ]
-        replay_lines = [
-            line
-            for line in export_file.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
-        assert len(replay_lines) == 1
-
-        export_stale = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-call-usage-export",
-            json={"expected_nlcl_call_usage_continuity_receipt_hash": "0" * 64},
-        )
-        assert export_stale.status_code == 409, export_stale.text
-        assert export_stale.json()["error"]["code"] == "change_set_conflict"
-
-        empty_ops = client.get(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-chapter-ops-usage-export"
-        )
-        assert empty_ops.status_code == 200, empty_ops.text
-        assert empty_ops.json()["schema"] == (
-            "zhimeng.nlcl-original-chapter-ops-usage-export-response.v1"
-        )
-        assert empty_ops.json()["receipt"] is None
-
-        ops_response = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-chapter-ops-usage-export",
-            json={
-                "expected_nlcl_original_call_usage_export_receipt_hash": export_receipt[
-                    "receipt_hash"
-                ]
-            },
-        )
-        assert ops_response.status_code == 200, ops_response.text
-        ops_exported = ops_response.json()
-        assert ops_exported["schema"] == (
-            "zhimeng.nlcl-original-chapter-ops-usage-export-response.v1"
-        )
-        ops_receipt = ops_exported["receipt"]
-        assert ops_receipt["schema"] == (
-            "zhimeng.nlcl-original-chapter-ops-usage-export-receipt.v1"
-        )
-        assert ops_receipt["outcome"] == "rolled_back"
-        assert ops_receipt["nlcl_original_call_usage_export_receipt_hash"] == (
-            export_receipt["receipt_hash"]
-        )
-        assert ops_receipt["chapter_id"] == "CH001"
-        assert ops_receipt["canonical_chapter_key"] == "chapter:1"
-        assert ops_receipt["export_relative_path"] == (
-            "07_运营数据/nlcl_feedback/chapter_ops_usage.jsonl"
-        )
-        assert ops_receipt["record_mode"] == (
-            "product_bridge_chapter_ops_from_call_usage_export"
-        )
-        assert ops_receipt["original_nlcl_call_usage_recorded"] is True
-        assert ops_receipt["original_nlcl_chapter_ops_usage_synced"] is True
-        assert ops_receipt["formal_draft_allowed"] is False
-        assert ops_receipt["quality_assessed"] is False
-        assert ops_receipt["novel_state_synced"] is False
-        assert ops_receipt["export_byte_offset"] == 0
-        assert len(ops_exported["history"]) == 1
-
-        ops_file = (
-            project
-            / "07_运营数据"
-            / "nlcl_feedback"
-            / "chapter_ops_usage.jsonl"
-        )
-        assert ops_file.is_file()
-        ops_lines = [
-            line
-            for line in ops_file.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
-        assert len(ops_lines) == 1
-        ops_row = json.loads(ops_lines[0])
-        assert ops_row["bridge_schema"] == (
-            "zhimeng.original-nlcl-chapter-ops-usage-bridge-row.v1"
-        )
-        assert ops_row["chapter_id"] == "CH001"
-        assert ops_row["canonical_chapter_key"] == "chapter:1"
-        assert ops_row["record_mode"] == (
-            "product_bridge_chapter_ops_from_call_usage_export"
-        )
-        assert ops_row["original_nlcl_chapter_ops_usage_synced"] is True
-        assert ops_row["formal_draft_allowed"] is False
-        assert ops_row["novel_state_synced"] is False
-        assert ops_row["product_call_usage_export_receipt_hash"] == export_receipt[
-            "receipt_hash"
-        ]
-        assert ops_receipt["export_file_sha256"] == hashlib.sha256(
-            ops_file.read_bytes()
-        ).hexdigest()
-        assert ops_receipt["export_row_sha256"] == hashlib.sha256(
-            (ops_lines[0] + "\n").encode("utf-8")
-        ).hexdigest()
-
-        ops_replay = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-chapter-ops-usage-export",
-            json={
-                "expected_nlcl_original_call_usage_export_receipt_hash": export_receipt[
-                    "receipt_hash"
-                ]
-            },
-        )
-        assert ops_replay.status_code == 200, ops_replay.text
-        assert ops_replay.json()["receipt"]["receipt_id"] == ops_receipt["receipt_id"]
-        assert ops_replay.json()["receipt"]["receipt_hash"] == ops_receipt[
-            "receipt_hash"
-        ]
-        replay_ops_lines = [
-            line
-            for line in ops_file.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
-        assert len(replay_ops_lines) == 1
-
-        ops_stale = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-chapter-ops-usage-export",
-            json={
-                "expected_nlcl_original_call_usage_export_receipt_hash": "0" * 64
-            },
-        )
-        assert ops_stale.status_code == 409, ops_stale.text
-        assert ops_stale.json()["error"]["code"] == "change_set_conflict"
-
-        empty_state = client.get(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-novel-state-bridge"
-        )
-        assert empty_state.status_code == 200, empty_state.text
-        assert empty_state.json()["schema"] == (
-            "zhimeng.nlcl-original-novel-state-bridge-response.v1"
-        )
-        assert empty_state.json()["receipt"] is None
-
-        state_response = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-novel-state-bridge",
-            json={
-                "expected_nlcl_original_chapter_ops_usage_export_receipt_hash": ops_receipt[
-                    "receipt_hash"
-                ]
-            },
-        )
-        assert state_response.status_code == 200, state_response.text
-        state_exported = state_response.json()
-        assert state_exported["schema"] == (
-            "zhimeng.nlcl-original-novel-state-bridge-response.v1"
-        )
-        state_receipt = state_exported["receipt"]
-        assert state_receipt["schema"] == (
-            "zhimeng.nlcl-original-novel-state-bridge-receipt.v1"
-        )
-        assert state_receipt["outcome"] == "rolled_back"
-        assert state_receipt["nlcl_original_chapter_ops_usage_export_receipt_hash"] == (
-            ops_receipt["receipt_hash"]
-        )
-        assert state_receipt["export_relative_path"] == (
-            "07_运营数据/nlcl_feedback/novel_state_bridge.jsonl"
-        )
-        assert state_receipt["record_mode"] == (
-            "product_bridge_novel_state_inventory_from_chapter_ops"
-        )
-        assert state_receipt["original_nlcl_call_usage_recorded"] is True
-        assert state_receipt["original_nlcl_chapter_ops_usage_synced"] is True
-        assert state_receipt["original_nlcl_novel_state_bridge_recorded"] is True
-        assert state_receipt["formal_draft_allowed"] is False
-        assert state_receipt["quality_assessed"] is False
-        assert state_receipt["novel_state_synced"] is False
-        assert isinstance(state_receipt["character_state_refs"], list)
-        assert isinstance(state_receipt["plot_state_refs"], list)
-        assert isinstance(state_receipt["foreshadowing_state_refs"], list)
-        assert isinstance(state_receipt["project_status_refs"], list)
-        total_refs = (
-            len(state_receipt["character_state_refs"])
-            + len(state_receipt["plot_state_refs"])
-            + len(state_receipt["foreshadowing_state_refs"])
-            + len(state_receipt["project_status_refs"])
-        )
-        assert total_refs >= 1
-        assert len(state_receipt["plot_state_refs"]) >= 1
-        assert all(
-            item["domain"] == "plot" for item in state_receipt["plot_state_refs"]
-        )
-        assert len(state_exported["history"]) == 1
-
-        state_file = (
-            project
-            / "07_运营数据"
-            / "nlcl_feedback"
-            / "novel_state_bridge.jsonl"
-        )
-        assert state_file.is_file()
-        state_lines = [
-            line
-            for line in state_file.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
-        assert len(state_lines) == 1
-        state_row = json.loads(state_lines[0])
-        assert state_row["bridge_schema"] == (
-            "zhimeng.original-nlcl-novel-state-bridge-row.v1"
-        )
-        assert state_row["original_nlcl_novel_state_bridge_recorded"] is True
-        assert state_row["novel_state_synced"] is False
-        assert state_receipt["export_file_sha256"] == hashlib.sha256(
-            state_file.read_bytes()
-        ).hexdigest()
-
-        state_replay = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-novel-state-bridge",
-            json={
-                "expected_nlcl_original_chapter_ops_usage_export_receipt_hash": ops_receipt[
-                    "receipt_hash"
-                ]
-            },
-        )
-        assert state_replay.status_code == 200, state_replay.text
-        assert state_replay.json()["receipt"]["receipt_id"] == state_receipt["receipt_id"]
-        replay_state_lines = [
-            line
-            for line in state_file.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
-        assert len(replay_state_lines) == 1
-
-        state_stale = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-novel-state-bridge",
-            json={
-                "expected_nlcl_original_chapter_ops_usage_export_receipt_hash": "0" * 64
-            },
-        )
-        assert state_stale.status_code == 409, state_stale.text
-        assert state_stale.json()["error"]["code"] == "change_set_conflict"
-
-        empty_sync = client.get(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-novel-state-sync"
-        )
-        assert empty_sync.status_code == 200, empty_sync.text
-        assert empty_sync.json()["schema"] == (
-            "zhimeng.nlcl-original-novel-state-sync-response.v1"
-        )
-        assert empty_sync.json()["receipt"] is None
-
-        sync_response = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-novel-state-sync",
-            json={
-                "expected_nlcl_original_novel_state_bridge_receipt_hash": state_receipt[
-                    "receipt_hash"
-                ]
-            },
-        )
-        assert sync_response.status_code == 200, sync_response.text
-        sync_body = sync_response.json()
-        sync_receipt = sync_body["receipt"]
-        assert sync_receipt["schema"] == (
-            "zhimeng.nlcl-original-novel-state-sync-receipt.v1"
-        )
-        assert sync_receipt["novel_state_synced"] is True
-        assert sync_receipt["original_nlcl_novel_state_synced"] is True
-        assert sync_receipt["original_nlcl_truth_matrix_synced"] is True
-        assert sync_receipt["formal_draft_allowed"] is False
-        assert sync_receipt["quality_assessed"] is False
-        assert sync_receipt["state_root_relative_path"] == "state"
-        assert len(sync_receipt["written_files"]) == 7
-        domains = {item["domain"] for item in sync_receipt["written_files"]}
-        assert domains == {
-            "character",
-            "plot",
-            "foreshadowing",
-            "project_status",
-            "truth_character_matrix",
-            "truth_foreshadow_lifecycle",
-            "truth_info_boundary",
-        }
-        for item in sync_receipt["written_files"]:
-            path = project.joinpath(*item["relative_path"].split("/"))
-            assert path.is_file()
-            assert item["source_hash"] == hashlib.sha256(path.read_bytes()).hexdigest()
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            assert payload["_meta"]["last_updated_from_chapter"] == sync_receipt["chapter_id"]
-
-        status_payload = json.loads(
-            (project / "state" / "project_status.json").read_text(encoding="utf-8")
-        )
-        assert status_payload["last_updated_from_chapter"] == "CH001"
-        assert status_payload["state_sync_status"] == "product_bridge_writeback_synced"
-        truth_character = json.loads(
-            (project / "state" / "truth_character_matrix.json").read_text(encoding="utf-8")
-        )
-        assert truth_character["_meta"]["external_alignment"] == "真相文件_角色状态矩阵"
-        assert "characters" in truth_character
-        truth_foreshadow = json.loads(
-            (project / "state" / "truth_foreshadow_lifecycle.json").read_text(encoding="utf-8")
-        )
-        assert truth_foreshadow["_meta"]["external_alignment"] == "真相文件_伏笔生命周期"
-        assert "open_debts" in truth_foreshadow
-        truth_info = json.loads(
-            (project / "state" / "truth_info_boundary.json").read_text(encoding="utf-8")
-        )
-        assert truth_info["_meta"]["external_alignment"] == "真相文件_信息边界图"
-        assert "forbidden_cross_knowledge" in truth_info
-
-        sync_replay = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-novel-state-sync",
-            json={
-                "expected_nlcl_original_novel_state_bridge_receipt_hash": state_receipt[
-                    "receipt_hash"
-                ]
-            },
-        )
-        assert sync_replay.status_code == 200, sync_replay.text
-        assert sync_replay.json()["receipt"]["receipt_id"] == sync_receipt["receipt_id"]
-
-        sync_stale = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-novel-state-sync",
-            json={
-                "expected_nlcl_original_novel_state_bridge_receipt_hash": "0" * 64
-            },
-        )
-        assert sync_stale.status_code == 409, sync_stale.text
-        assert sync_stale.json()["error"]["code"] == "change_set_conflict"
-
-        empty_extract = client.get(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-truth-content-extract"
-        )
-        assert empty_extract.status_code == 200, empty_extract.text
-        assert empty_extract.json()["schema"] == (
-            "zhimeng.nlcl-original-truth-content-extract-response.v1"
-        )
-        assert empty_extract.json()["receipt"] is None
-
-        extract_response = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-truth-content-extract",
-            json={
-                "expected_nlcl_original_novel_state_sync_receipt_hash": sync_receipt[
-                    "receipt_hash"
-                ]
-            },
-        )
-        assert extract_response.status_code == 200, extract_response.text
-        extract_body = extract_response.json()
-        extract_receipt = extract_body["receipt"]
-        assert extract_receipt["schema"] == (
-            "zhimeng.nlcl-original-truth-content-extract-receipt.v1"
-        )
-        assert extract_receipt["truth_content_extracted"] is True
-        assert extract_receipt["formal_draft_allowed"] is False
-        assert extract_receipt["quality_assessed"] is False
-        assert extract_receipt["extracted_character_count"] >= 1
-        assert extract_receipt["extracted_foreshadow_count"] >= 1
-        assert len(extract_receipt["written_files"]) == 6
-        char_state = json.loads(
-            (project / "state" / "character_state.json").read_text(encoding="utf-8")
-        )
-        assert any("青崖" in str(v.get("name", "")) for v in char_state.get("characters", {}).values())
-        truth_char = json.loads(
-            (project / "state" / "truth_character_matrix.json").read_text(encoding="utf-8")
-        )
-        assert any("青崖" in str(v.get("name", "")) for v in truth_char.get("characters", {}).values())
-        foreshadow = json.loads(
-            (project / "state" / "truth_foreshadow_lifecycle.json").read_text(encoding="utf-8")
-        )
-        assert any("伏笔" in str(item.get("title", "")) for item in foreshadow.get("open_debts", []))
-
-        extract_replay = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-truth-content-extract",
-            json={
-                "expected_nlcl_original_novel_state_sync_receipt_hash": sync_receipt[
-                    "receipt_hash"
-                ]
-            },
-        )
-        assert extract_replay.status_code == 200, extract_replay.text
-        assert extract_replay.json()["receipt"]["receipt_id"] == extract_receipt["receipt_id"]
-
-        extract_stale = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-truth-content-extract",
-            json={
-                "expected_nlcl_original_novel_state_sync_receipt_hash": "0" * 64
-            },
-        )
-        assert extract_stale.status_code == 409, extract_stale.text
-        assert extract_stale.json()["error"]["code"] == "change_set_conflict"
-
-        empty_plan = client.get(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-mandatory-usage-plan"
-        )
-        assert empty_plan.status_code == 200, empty_plan.text
-        assert empty_plan.json()["schema"] == (
-            "zhimeng.nlcl-original-mandatory-usage-plan-response.v1"
-        )
-        assert empty_plan.json()["receipt"] is None
-
-        plan_response = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-mandatory-usage-plan",
-            json={
-                "expected_nlcl_original_truth_content_extract_receipt_hash": extract_receipt[
-                    "receipt_hash"
-                ]
-            },
-        )
-        assert plan_response.status_code == 200, plan_response.text
-        plan_receipt = plan_response.json()["receipt"]
-        assert plan_receipt["schema"] == (
-            "zhimeng.nlcl-original-mandatory-usage-plan-receipt.v1"
-        )
-        assert plan_receipt["mandatory_usage_plan_synced"] is True
-        assert plan_receipt["mandatory_usage_closure_closed"] is False
-        assert plan_receipt["formal_draft_allowed"] is False
-        assert plan_receipt["quality_assessed"] is False
-        assert len(plan_receipt["items"]) >= 1
-        assert (
-            project / "chapter_context" / f"{plan_receipt['chapter_id']}_mandatory_usage_plan_latest.json"
-        ).is_file()
-        assert (
-            project / "chapter_context" / f"{plan_receipt['chapter_id']}_mandatory_usage_plan_latest.md"
-        ).is_file()
-
-        plan_replay = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-mandatory-usage-plan",
-            json={
-                "expected_nlcl_original_truth_content_extract_receipt_hash": extract_receipt[
-                    "receipt_hash"
-                ]
-            },
-        )
-        assert plan_replay.status_code == 200, plan_replay.text
-        assert plan_replay.json()["receipt"]["receipt_id"] == plan_receipt["receipt_id"]
-
-        plan_stale = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-mandatory-usage-plan",
-            json={
-                "expected_nlcl_original_truth_content_extract_receipt_hash": "0" * 64
-            },
-        )
-        assert plan_stale.status_code == 409, plan_stale.text
-        assert plan_stale.json()["error"]["code"] == "change_set_conflict"
-
-        empty_closure = client.get(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-mandatory-usage-closure"
-        )
-        assert empty_closure.status_code == 200, empty_closure.text
-        assert empty_closure.json()["schema"] == (
-            "zhimeng.nlcl-original-mandatory-usage-closure-response.v1"
-        )
-        assert empty_closure.json()["receipt"] is None
-
-        incomplete_closure = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-mandatory-usage-closure",
-            json={
-                "expected_nlcl_original_mandatory_usage_plan_receipt_hash": plan_receipt[
-                    "receipt_hash"
-                ],
-                "decisions": [
-                    {
-                        "item_id": plan_receipt["items"][0]["item_id"],
-                        "status": "used",
-                        "note": "only first item",
-                    }
-                ],
-                "finalize": True,
-            },
-        )
-        assert incomplete_closure.status_code == 409, incomplete_closure.text
-
-        closure_response = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-mandatory-usage-closure",
-            json={
-                "expected_nlcl_original_mandatory_usage_plan_receipt_hash": plan_receipt[
-                    "receipt_hash"
-                ],
-                "decisions": [
-                    {
-                        "item_id": item["item_id"],
-                        "status": "used" if item["kind"] in {"character", "foreshadow", "plot_thread"} else "suppressed_for_project_truth",
-                        "note": "author decided in product bridge test",
-                    }
-                    for item in plan_receipt["items"]
-                ],
-                "finalize": True,
-            },
-        )
-        assert closure_response.status_code == 200, closure_response.text
-        closure_receipt = closure_response.json()["receipt"]
-        assert closure_receipt["schema"] == (
-            "zhimeng.nlcl-original-mandatory-usage-closure-receipt.v1"
-        )
-        assert closure_receipt["mandatory_usage_closure_closed"] is True
-        assert closure_receipt["route_validated"] is False
-        assert closure_receipt["formal_draft_allowed"] is False
-        assert closure_receipt["quality_assessed"] is False
-        assert closure_receipt["overall_status"] == "closed"
-        assert len(closure_receipt["items"]) == len(plan_receipt["items"])
-        assert (
-            project
-            / "chapter_context"
-            / f"{closure_receipt['chapter_id']}_mandatory_usage_closure_latest.json"
-        ).is_file()
-
-        closure_replay = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-mandatory-usage-closure",
-            json={
-                "expected_nlcl_original_mandatory_usage_plan_receipt_hash": plan_receipt[
-                    "receipt_hash"
-                ],
-                "decisions": [
-                    {
-                        "item_id": item["item_id"],
-                        "status": "used" if item["kind"] in {"character", "foreshadow", "plot_thread"} else "suppressed_for_project_truth",
-                        "note": "author decided in product bridge test",
-                    }
-                    for item in plan_receipt["items"]
-                ],
-                "finalize": True,
-            },
-        )
-        assert closure_replay.status_code == 200, closure_replay.text
-        assert closure_replay.json()["receipt"]["receipt_id"] == closure_receipt["receipt_id"]
-
-        closure_stale = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-mandatory-usage-closure",
-            json={
-                "expected_nlcl_original_mandatory_usage_plan_receipt_hash": "0" * 64,
-                "decisions": [
-                    {
-                        "item_id": plan_receipt["items"][0]["item_id"],
-                        "status": "used",
-                    }
-                ],
-                "finalize": True,
-            },
-        )
-        assert closure_stale.status_code == 409, closure_stale.text
-        assert closure_stale.json()["error"]["code"] == "change_set_conflict"
-
-        empty_package = client.get(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-operation-package-like"
-        )
-        assert empty_package.status_code == 200, empty_package.text
-        assert empty_package.json()["receipt"] is None
-
-        package_response = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-operation-package-like",
-            json={
-                "expected_nlcl_original_mandatory_usage_closure_receipt_hash": closure_receipt[
-                    "receipt_hash"
-                ]
-            },
-        )
-        assert package_response.status_code == 200, package_response.text
-        package_receipt = package_response.json()["receipt"]
-        assert package_receipt["operation_package_like_synced"] is True
-        assert package_receipt["readiness"] == "risk_draft_only"
-        assert package_receipt["formal_draft_allowed"] is False
-        assert package_receipt["route_validated"] is False
-        assert (
-            project
-            / "chapter_context"
-            / f"{package_receipt['chapter_id']}_operation_package_like_latest.json"
-        ).is_file()
-
-        package_replay = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-operation-package-like",
-            json={
-                "expected_nlcl_original_mandatory_usage_closure_receipt_hash": closure_receipt[
-                    "receipt_hash"
-                ]
-            },
-        )
-        assert package_replay.status_code == 200, package_replay.text
-        assert package_replay.json()["receipt"]["receipt_id"] == package_receipt["receipt_id"]
-
-        package_stale = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-operation-package-like",
-            json={
-                "expected_nlcl_original_mandatory_usage_closure_receipt_hash": "0" * 64
-            },
-        )
-        assert package_stale.status_code == 409, package_stale.text
-        assert package_stale.json()["error"]["code"] == "change_set_conflict"
-
-        empty_layout = client.get(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-library-layout-inventory"
-        )
-        assert empty_layout.status_code == 200, empty_layout.text
-        assert empty_layout.json()["receipt"] is None
-
-        layout_response = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-library-layout-inventory",
-            json={
-                "expected_nlcl_original_operation_package_like_receipt_hash": package_receipt[
-                    "receipt_hash"
-                ]
-            },
-        )
-        assert layout_response.status_code == 200, layout_response.text
-        layout_receipt = layout_response.json()["receipt"]
-        assert layout_receipt["library_layout_inventoried"] is True
-        assert layout_receipt["library_layout_complete"] is False
-        assert layout_receipt["whole_library_load_forbidden"] is True
-        assert layout_receipt["formal_draft_allowed"] is False
-        assert layout_receipt["present_slot_count"] >= 1
-        assert (
-            project
-            / "chapter_context"
-            / f"{layout_receipt['chapter_id']}_library_layout_inventory_latest.json"
-        ).is_file()
-
-        layout_replay = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-library-layout-inventory",
-            json={
-                "expected_nlcl_original_operation_package_like_receipt_hash": package_receipt[
-                    "receipt_hash"
-                ]
-            },
-        )
-        assert layout_replay.status_code == 200, layout_replay.text
-        assert layout_replay.json()["receipt"]["receipt_id"] == layout_receipt["receipt_id"]
-
-        layout_stale = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-library-layout-inventory",
-            json={
-                "expected_nlcl_original_operation_package_like_receipt_hash": "0" * 64
-            },
-        )
-        assert layout_stale.status_code == 409, layout_stale.text
-        assert layout_stale.json()["error"]["code"] == "change_set_conflict"
-
-        empty_complete = client.get(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-library-layout-completeness"
-        )
-        assert empty_complete.status_code == 200, empty_complete.text
-        assert empty_complete.json()["receipt"] is None
-
-        complete_response = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-library-layout-completeness",
-            json={
-                "expected_nlcl_original_library_layout_inventory_receipt_hash": layout_receipt[
-                    "receipt_hash"
-                ]
-            },
-        )
-        assert complete_response.status_code == 200, complete_response.text
-        complete_receipt = complete_response.json()["receipt"]
-        assert complete_receipt["library_layout_assessed"] is True
-        assert complete_receipt["whole_library_load_forbidden"] is True
-        assert complete_receipt["formal_draft_allowed"] is False
-        assert complete_receipt["library_layout_complete"] is (
-            complete_receipt["missing_required_slot_count"] == 0
-        )
-        assert complete_receipt["completeness_status"] in {"complete", "incomplete"}
-        assert (
-            project
-            / "chapter_context"
-            / f"{complete_receipt['chapter_id']}_library_layout_completeness_latest.json"
-        ).is_file()
-
-        complete_replay = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-library-layout-completeness",
-            json={
-                "expected_nlcl_original_library_layout_inventory_receipt_hash": layout_receipt[
-                    "receipt_hash"
-                ]
-            },
-        )
-        assert complete_replay.status_code == 200, complete_replay.text
-        assert complete_replay.json()["receipt"]["receipt_id"] == complete_receipt["receipt_id"]
-
-        complete_stale = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-library-layout-completeness",
-            json={
-                "expected_nlcl_original_library_layout_inventory_receipt_hash": "0" * 64
-            },
-        )
-        assert complete_stale.status_code == 409, complete_stale.text
-        assert complete_stale.json()["error"]["code"] == "change_set_conflict"
-
-        empty_activation = client.get(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-bounded-library-activation"
-        )
-        assert empty_activation.status_code == 200, empty_activation.text
-        assert empty_activation.json()["receipt"] is None
-
-        activation_response = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-bounded-library-activation",
-            json={
-                "expected_nlcl_original_library_layout_completeness_receipt_hash": complete_receipt[
-                    "receipt_hash"
-                ],
-                "max_sources": 8,
-            },
-        )
-        assert activation_response.status_code == 200, activation_response.text
-        activation_receipt = activation_response.json()["receipt"]
-        assert activation_receipt["bounded_library_activated"] is True
-        assert activation_receipt["whole_library_load"] is False
-        assert activation_receipt["whole_library_load_forbidden"] is True
-        assert activation_receipt["formal_draft_allowed"] is False
-        assert activation_receipt["max_sources"] == 8
-        assert activation_receipt["activated_count"] == len(
-            activation_receipt["activated_source_ids"]
-        )
-        assert activation_receipt["activated_count"] <= 8
-        assert (
-            project
-            / "chapter_context"
-            / f"{activation_receipt['chapter_id']}_bounded_library_activation_latest.json"
-        ).is_file()
-
-        activation_replay = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-bounded-library-activation",
-            json={
-                "expected_nlcl_original_library_layout_completeness_receipt_hash": complete_receipt[
-                    "receipt_hash"
-                ],
-                "max_sources": 8,
-            },
-        )
-        assert activation_replay.status_code == 200, activation_replay.text
-        assert (
-            activation_replay.json()["receipt"]["receipt_id"]
-            == activation_receipt["receipt_id"]
-        )
-
-        activation_stale = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-bounded-library-activation",
-            json={
-                "expected_nlcl_original_library_layout_completeness_receipt_hash": "0" * 64,
-                "max_sources": 8,
-            },
-        )
-        assert activation_stale.status_code == 409, activation_stale.text
-        assert activation_stale.json()["error"]["code"] == "change_set_conflict"
-
-        empty_prewrite = client.get(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-prewrite-context-report"
-        )
-        assert empty_prewrite.status_code == 200, empty_prewrite.text
-        assert empty_prewrite.json()["schema"] == (
-            "zhimeng.nlcl-original-prewrite-context-report-response.v1"
-        )
-        assert empty_prewrite.json()["receipt"] is None
-
-        prewrite_response = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-prewrite-context-report",
-            json={
-                "expected_nlcl_original_novel_state_sync_receipt_hash": sync_receipt[
-                    "receipt_hash"
-                ]
-            },
-        )
-        assert prewrite_response.status_code == 200, prewrite_response.text
-        prewrite_body = prewrite_response.json()
-        prewrite_receipt = prewrite_body["receipt"]
-        assert prewrite_receipt["schema"] == (
-            "zhimeng.nlcl-original-prewrite-context-report-receipt.v1"
-        )
-        assert prewrite_receipt["prewrite_context_report_synced"] is True
-        assert prewrite_receipt["original_nlcl_truth_matrix_synced"] is True
-        assert prewrite_receipt["formal_draft_allowed"] is False
-        assert prewrite_receipt["quality_assessed"] is False
-        assert prewrite_receipt["bounded_library_activated"] is True
-        assert prewrite_receipt["activated_source_count"] == activation_receipt["activated_count"]
-        assert (
-            prewrite_receipt["nlcl_original_bounded_library_activation_receipt_hash"]
-            == activation_receipt["receipt_hash"]
-        )
-        assert prewrite_receipt["whole_library_load_forbidden"] is True
-        assert len(prewrite_receipt["written_files"]) == 4
-        report_json = (
-            project
-            / "chapter_context"
-            / f"{prewrite_receipt['chapter_id']}_prewrite_context_report_latest.json"
-        )
-        report_payload = __import__("json").loads(report_json.read_text(encoding="utf-8"))
-        library_activation = report_payload.get("library_activation") or report_payload.get(
-            "prewrite_context_report", {}
-        ).get("library_activation")
-        assert library_activation is not None
-        assert library_activation["bounded_library_activated"] is True
-        assert library_activation["whole_library_load"] is False
-        for item in prewrite_receipt["written_files"]:
-            path = project.joinpath(*item["relative_path"].split("/"))
-            assert path.is_file()
-            assert item["source_hash"] == hashlib.sha256(path.read_bytes()).hexdigest()
-        latest_json = project / "chapter_context" / f"{prewrite_receipt['chapter_id']}_prewrite_context_report_latest.json"
-        latest_payload = json.loads(latest_json.read_text(encoding="utf-8"))
-        assert "prewrite_context_report" in latest_payload
-        assert latest_payload["prewrite_context_report"]["chapter_id"] == prewrite_receipt["chapter_id"]
-        latest_md = project / "chapter_context" / f"{prewrite_receipt['chapter_id']}_prewrite_context_report_latest.md"
-        assert "前情写作上下文报告" in latest_md.read_text(encoding="utf-8")
-
-        prewrite_replay = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-prewrite-context-report",
-            json={
-                "expected_nlcl_original_novel_state_sync_receipt_hash": sync_receipt[
-                    "receipt_hash"
-                ]
-            },
-        )
-        assert prewrite_replay.status_code == 200, prewrite_replay.text
-        assert prewrite_replay.json()["receipt"]["receipt_id"] == prewrite_receipt["receipt_id"]
-
-        prewrite_stale = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/nlcl-original-prewrite-context-report",
-            json={
-                "expected_nlcl_original_novel_state_sync_receipt_hash": "0" * 64
-            },
-        )
-        assert prewrite_stale.status_code == 409, prewrite_stale.text
-        assert prewrite_stale.json()["error"]["code"] == "change_set_conflict"
-
-        empty_reader = client.get(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/reader-review"
-        )
-        assert empty_reader.status_code == 200, empty_reader.text
-        assert empty_reader.json()["schema"] == "zhimeng.reader-review-response.v1"
-        assert empty_reader.json()["receipt"] is None
-
-        reader_response = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/reader-review",
-            json={
-                "expected_result_fingerprint": rolled["writeback"]["result_fingerprint"]
-            },
-        )
-        assert reader_response.status_code == 200, reader_response.text
-        reviewed = reader_response.json()
-        assert reviewed["schema"] == "zhimeng.reader-review-response.v1"
-        reader_receipt = reviewed["receipt"]
-        assert reader_receipt["schema"] == "zhimeng.reader-review-receipt.v1"
-        assert reader_receipt["evaluator_kind"] == "deterministic_cold_read_v1"
-        assert reader_receipt["evaluator_id"] == "zhimeng.reader.deterministic-cold-read"
-        assert reader_receipt["model_id"] == "none"
-        assert reader_receipt["prompt_fingerprint"]
-        assert reader_receipt["context_fingerprint"]
-        assert reader_receipt["evaluator_fingerprint"]
-        assert reader_receipt["outcome"] == "rolled_back"
-        assert reader_receipt["review_mode"] == "deterministic_cold_read_v1"
-        assert reader_receipt["reader_opinion_recorded"] is True
-        assert reader_receipt["overrides_gate"] is False
-        assert reader_receipt["formal_draft_allowed"] is False
-        assert reader_receipt["quality_assessed"] is False
-        assert reader_receipt["novel_state_synced"] is False
-        assert "planner_context" in reader_receipt["excluded_input_classes"]
-        assert "prior_published_chapter_text" in reader_receipt["allowed_input_classes"]
-        assert len(reader_receipt["findings"]) >= 1
-        assert all(item["overrides_gate"] is False for item in reader_receipt["findings"])
-        assert len(reviewed["history"]) == 1
-
-        reader_replay = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/reader-review",
-            json={
-                "expected_result_fingerprint": rolled["writeback"]["result_fingerprint"]
-            },
-        )
-        assert reader_replay.status_code == 200, reader_replay.text
-        assert reader_replay.json()["receipt"]["receipt_id"] == reader_receipt[
-            "receipt_id"
-        ]
-        assert reader_replay.json()["receipt"]["receipt_hash"] == reader_receipt[
-            "receipt_hash"
-        ]
-
-        reader_stale = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/reader-review",
-            json={"expected_result_fingerprint": "0" * 64},
-        )
-        assert reader_stale.status_code == 409, reader_stale.text
-        assert reader_stale.json()["error"]["code"] == "change_set_conflict"
-
-        empty_decision = client.get(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/reader-review-decision"
-        )
-        assert empty_decision.status_code == 200, empty_decision.text
-        assert empty_decision.json()["schema"] == (
-            "zhimeng.reader-review-decision-response.v1"
-        )
-        assert empty_decision.json()["receipt"] is None
-
-        decision_payload = {
-            "expected_reader_review_receipt_hash": reader_receipt["receipt_hash"],
-            "finalize": True,
-            "decisions": [
-                {
-                    "finding_id": item["finding_id"],
-                    "decision": ("adopted" if index == 0 else "rejected"),
-                }
-                for index, item in enumerate(reader_receipt["findings"])
-            ],
-        }
-        decision_response = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/reader-review-decision",
-            json=decision_payload,
-        )
-        assert decision_response.status_code == 200, decision_response.text
-        decided = decision_response.json()
-        assert decided["schema"] == "zhimeng.reader-review-decision-response.v1"
-        decision_receipt = decided["receipt"]
-        assert decision_receipt["schema"] == (
-            "zhimeng.reader-review-decision-receipt.v1"
-        )
-        assert decision_receipt["finalized"] is True
-        assert decision_receipt["parent_reader_valid_for_new_candidate"] is False
-        assert decision_receipt["formal_draft_allowed"] is False
-        assert decision_receipt["quality_assessed"] is False
-        assert decision_receipt["reader_review_receipt_hash"] == reader_receipt[
-            "receipt_hash"
-        ]
-        assert len(decision_receipt["adopted_finding_ids"]) >= 1
-        assert decision_receipt["follow_up_change_set_id"]
-        follow_up = decided["follow_up_change_set"]
-        assert follow_up is not None
-        assert follow_up["change_set_id"] == decision_receipt["follow_up_change_set_id"]
-        assert follow_up["status"] == "reviewing"
-        assert follow_up["change_set_id"] != rolled["change_set_id"]
-        assert any(
-            change["relative_path"].endswith("reader_revision_notes.md")
-            for change in follow_up["changes"]
-        )
-
-        parent_reader = client.get(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/reader-review"
-        )
-        assert parent_reader.status_code == 200, parent_reader.text
-        assert parent_reader.json()["receipt"]["receipt_id"] == reader_receipt[
-            "receipt_id"
-        ]
-        follow_up_reader = client.get(
-            f"/api/v1/change-sets/{follow_up['change_set_id']}/reader-review"
-        )
-        assert follow_up_reader.status_code == 200, follow_up_reader.text
-        assert follow_up_reader.json()["receipt"] is None
-
-        decision_replay = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/reader-review-decision",
-            json=decision_payload,
-        )
-        assert decision_replay.status_code == 200, decision_replay.text
-        assert decision_replay.json()["receipt"]["receipt_id"] == decision_receipt[
-            "receipt_id"
-        ]
-        assert decision_replay.json()["receipt"]["follow_up_change_set_id"] == (
-            decision_receipt["follow_up_change_set_id"]
-        )
-
-        decision_stale = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/reader-review-decision",
-            json={
-                "expected_reader_review_receipt_hash": "0" * 64,
-                "finalize": True,
-                "decisions": decision_payload["decisions"],
-            },
-        )
-        assert decision_stale.status_code == 409, decision_stale.text
-        assert decision_stale.json()["error"]["code"] == "change_set_conflict"
-
-        feedback = client.get(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/feedback-candidates"
-        )
-        assert feedback.status_code == 200, feedback.text
-        feedback_body = feedback.json()
-        assert feedback_body["schema"] == "zhimeng.feedback-candidate-response.v1"
-        bundle = feedback_body["bundle"]
-        assert bundle is not None
-        assert bundle["schema"] == "zhimeng.feedback-candidate-bundle.v1"
-        assert bundle["reader_review_decision_receipt_hash"] == decision_receipt[
-            "receipt_hash"
-        ]
-        assert bundle["follow_up_change_set_id"] == decision_receipt[
-            "follow_up_change_set_id"
-        ]
-        assert len(bundle["candidates"]) == len(reader_receipt["findings"])
-        assert all(item["status"] == "candidate" for item in bundle["candidates"])
-        assert all(
-            item["promotion_status"] == "not_promoted" for item in bundle["candidates"]
-        )
-        assert all(
-            item["formal_knowledge_contaminated"] is False
-            for item in bundle["candidates"]
-        )
-        assert bundle["formal_draft_allowed"] is False
-        assert len(feedback_body["history"]) == 1
-
-        # Promote the first adopted candidate through FR-EVO controlled steps.
-        target = next(
-            item
-            for item in bundle["candidates"]
-            if item["candidate_id"]
-            and item["source_decision"] == "adopted"
-        )
-        steps = [
-            "verify_source",
-            "check_conflicts",
-            "evaluate_regression",
-            "approve",
-            "record_experience",
-        ]
-        current_hash = bundle["receipt_hash"]
-        for action in steps:
-            promo = client.post(
-                f"/api/v1/change-sets/{rolled['change_set_id']}/feedback-candidate-promotion",
-                json={
-                    "expected_feedback_candidate_bundle_hash": current_hash,
-                    "decisions": [
-                        {"candidate_id": target["candidate_id"], "action": action}
-                    ],
-                },
-            )
-            assert promo.status_code == 200, promo.text
-            promo_body = promo.json()
-            assert promo_body["schema"] == (
-                "zhimeng.feedback-candidate-promotion-response.v1"
-            )
-            assert promo_body["receipt"]["formal_knowledge_contaminated"] is False
-            assert promo_body["receipt"]["formal_draft_allowed"] is False
-            assert promo_body["bundle"] is not None
-            current_hash = promo_body["bundle"]["receipt_hash"]
-            updated = next(
-                item
-                for item in promo_body["bundle"]["candidates"]
-                if item["candidate_id"] == target["candidate_id"]
-            )
-            if action == "verify_source":
-                assert updated["promotion_status"] == "source_verified"
-            elif action == "check_conflicts":
-                assert updated["promotion_status"] == "conflict_checked"
-            elif action == "evaluate_regression":
-                assert updated["promotion_status"] == "regression_evaluated"
-                assert updated["regression_result"] == "pass_with_watch"
-            elif action == "approve":
-                assert updated["promotion_status"] == "author_approved"
-            elif action == "record_experience":
-                assert updated["promotion_status"] == "experience_recorded"
-                assert updated["status"] == "experience"
-                assert updated["experience_relative_path"] == (
-                    "07_运营数据/nlcl_feedback/experience_candidates.jsonl"
-                )
-                assert promo_body["receipt"]["experience_rows_appended"] == 1
-
-        experience_file = (
-            project
-            / "07_运营数据"
-            / "nlcl_feedback"
-            / "experience_candidates.jsonl"
-        )
-        assert experience_file.is_file()
-        experience_lines = [
-            line
-            for line in experience_file.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
-        assert len(experience_lines) == 1
-        experience_row = json.loads(experience_lines[0])
-        assert experience_row["bridge_schema"] == "zhimeng.feedback-experience-row.v1"
-        assert experience_row["formal_knowledge_contaminated"] is False
-        assert experience_row["formal_draft_allowed"] is False
-
-        # Reject another candidate directly.
-        other = next(
-            item
-            for item in promo_body["bundle"]["candidates"]
-            if item["candidate_id"] != target["candidate_id"]
-        )
-        reject = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/feedback-candidate-promotion",
-            json={
-                "expected_feedback_candidate_bundle_hash": current_hash,
-                "decisions": [
-                    {"candidate_id": other["candidate_id"], "action": "reject"}
-                ],
-            },
-        )
-        assert reject.status_code == 200, reject.text
-        rejected = next(
-            item
-            for item in reject.json()["bundle"]["candidates"]
-            if item["candidate_id"] == other["candidate_id"]
-        )
-        assert rejected["promotion_status"] == "rejected"
-        assert rejected["status"] == "rejected"
-
-        stale_promo = client.post(
-            f"/api/v1/change-sets/{rolled['change_set_id']}/feedback-candidate-promotion",
-            json={
-                "expected_feedback_candidate_bundle_hash": "0" * 64,
-                "decisions": [
-                    {"candidate_id": target["candidate_id"], "action": "verify_source"}
-                ],
-            },
-        )
-        assert stale_promo.status_code == 409, stale_promo.text
-        assert stale_promo.json()["error"]["code"] == "change_set_conflict"
-
     artifact_root = tmp_path / "change-sets" / change_set["change_set_id"]
     assert (artifact_root / "writeback-manifest.json").is_file()
     assert (artifact_root / "rollback-manifest.json").is_file()
-    assert (artifact_root / "writeback-evidence-receipt.json").is_file()
-    assert (artifact_root / "writeback-evidence-history.json").is_file()
-    assert (artifact_root / "nlcl-writeback-sync-receipt.json").is_file()
-    assert (artifact_root / "nlcl-writeback-sync-history.json").is_file()
-    assert (artifact_root / "nlcl-call-usage-continuity-receipt.json").is_file()
-    assert (artifact_root / "nlcl-call-usage-continuity-history.json").is_file()
-    assert (artifact_root / "nlcl-original-call-usage-export-receipt.json").is_file()
-    assert (artifact_root / "nlcl-original-call-usage-export-history.json").is_file()
-    assert (
-        artifact_root / "nlcl-original-chapter-ops-usage-export-receipt.json"
-    ).is_file()
-    assert (
-        artifact_root / "nlcl-original-chapter-ops-usage-export-history.json"
-    ).is_file()
-    assert (artifact_root / "reader-review-receipt.json").is_file()
-    assert (artifact_root / "reader-review-history.json").is_file()
-    assert (artifact_root / "reader-review-decision-receipt.json").is_file()
-    assert (artifact_root / "reader-review-decision-history.json").is_file()
-    assert (artifact_root / "feedback-candidate-bundle.json").is_file()
-    assert (artifact_root / "feedback-candidate-history.json").is_file()
-    assert (artifact_root / "feedback-candidate-promotion-receipt.json").is_file()
-    assert (artifact_root / "feedback-candidate-promotion-history.json").is_file()
 
     with _client(tmp_path, library) as restarted:
         persisted = restarted.get(
@@ -1751,7 +886,10 @@ def test_write_failure_restores_already_replaced_files(
     assert failed.json()["error"]["code"] == "change_set_writeback_failed"
     assert stored.json()["status"] == "failed"
     assert paths["chapter"].read_text(encoding="utf-8") == "alpha\nkeep\nomega\n"
-    assert paths["outline"].read_text(encoding="utf-8") == "old outline\n"
+    assert paths["outline"].read_text(encoding="utf-8") == (
+        "# 主线\n青崖要夺回旧港钥匙。\n\n"
+        "# 伏笔：血钥来历\n血钥不能提前揭穿。\n"
+    )
 
 
 def test_restart_recovers_keyboard_interrupt_during_multifile_apply(
@@ -1835,7 +973,10 @@ def test_restart_recovers_keyboard_interrupt_during_multifile_apply(
     assert recovered.json()["status"] == "failed"
     assert "restored to the pre-write" in recovered.json()["error"]
     assert paths["chapter"].read_text(encoding="utf-8") == "alpha\nkeep\nomega\n"
-    assert paths["outline"].read_text(encoding="utf-8") == "old outline\n"
+    assert paths["outline"].read_text(encoding="utf-8") == (
+        "# 主线\n青崖要夺回旧港钥匙。\n\n"
+        "# 伏笔：血钥来历\n血钥不能提前揭穿。\n"
+    )
 
 
 def test_restart_recovers_keyboard_interrupt_during_multifile_rollback(
@@ -2315,7 +1456,10 @@ def test_compensation_failure_stays_recoverable_until_restart(
     assert failed.status_code == 500, failed.text
     assert stored["status"] == "applying"
     assert paths["chapter"].read_text(encoding="utf-8") == "new chapter\n"
-    assert paths["outline"].read_text(encoding="utf-8") == "old outline\n"
+    assert paths["outline"].read_text(encoding="utf-8") == (
+        "# 主线\n青崖要夺回旧港钥匙。\n\n"
+        "# 伏笔：血钥来历\n血钥不能提前揭穿。\n"
+    )
 
     monkeypatch.setattr(
         ChangeSetService,
@@ -2335,7 +1479,10 @@ def test_compensation_failure_stays_recoverable_until_restart(
 
     assert recovered.json()["status"] == "failed"
     assert paths["chapter"].read_text(encoding="utf-8") == "alpha\nkeep\nomega\n"
-    assert paths["outline"].read_text(encoding="utf-8") == "old outline\n"
+    assert paths["outline"].read_text(encoding="utf-8") == (
+        "# 主线\n青崖要夺回旧港钥匙。\n\n"
+        "# 伏笔：血钥来历\n血钥不能提前揭穿。\n"
+    )
 
 
 def test_create_rejects_traversal_and_invalid_json(tmp_path: Path) -> None:
@@ -2386,3 +1533,193 @@ def test_create_rejects_traversal_and_invalid_json(tmp_path: Path) -> None:
     assert invalid_json.status_code == 422
     assert invalid_json.json()["error"]["code"] == "change_set_input_invalid"
     assert not (tmp_path / "outside.md").exists()
+
+
+def test_move_apply_and_rollback(tmp_path: Path) -> None:
+    """move = 目标改名 + 撤回挪回（一次 API 建案、落盘、撤回全链）。"""
+    library = tmp_path / "library"
+    library.mkdir()
+    project = library / "book"
+    paths = _create_project(project)
+
+    with _client(tmp_path, library) as client:
+        snapshot = _inspect(client, project)
+        chapter = _file(snapshot, "CH001_正文.md")
+        response = client.post(
+            f"/api/v1/projects/{snapshot['project']['project_id']}/change-sets",
+            json={
+                "base_revision": snapshot["project"]["revision"],
+                "base_fingerprint": snapshot["project"]["fingerprint"],
+                "title": "Rename the chapter",
+                "summary": "Move the chapter file to its new name.",
+                "changes": [
+                    {
+                        "operation": "move",
+                        "file_id": chapter["file_id"],
+                        "target_relative_path": "05_正文内容/第一卷/第 003 章 试剑.md",
+                        "rationale": "Rename per the author's request.",
+                    }
+                ],
+            },
+        )
+        assert response.status_code == 201, response.text
+        created = response.json()
+        assert created["changes"][0]["operation"] == "move"
+        assert (
+            created["changes"][0]["target_relative_path"]
+            == "05_正文内容/第一卷/第 003 章 试剑.md"
+        )
+        ready = _accept_or_reject(client, created, ["accepted"])
+        applied_response = client.post(
+            f"/api/v1/change-sets/{ready['change_set_id']}/apply",
+            json={"expected_review_revision": ready["review_revision"]},
+        )
+        assert applied_response.status_code == 200, applied_response.text
+        applied = applied_response.json()
+        moved = project / "05_正文内容" / "第一卷" / "第 003 章 试剑.md"
+        assert not paths["chapter"].exists()
+        assert moved.read_text(encoding="utf-8") == "alpha\nkeep\nomega\n"
+        result = applied["writeback"]["files"][0]
+        assert result["operation"] == "move"
+        assert result["relative_path"] == "05_正文内容/第一卷/CH001_正文.md"
+        assert result["target_relative_path"] == "05_正文内容/第一卷/第 003 章 试剑.md"
+        assert result["after_sha256"] == result["before_sha256"]
+
+        rolled = client.post(
+            f"/api/v1/change-sets/{ready['change_set_id']}/rollback",
+            json={"expected_review_revision": applied["review_revision"]},
+        )
+        assert rolled.status_code == 200, rolled.text
+        assert rolled.json()["status"] == "rolled_back"
+        assert paths["chapter"].read_text(encoding="utf-8") == "alpha\nkeep\nomega\n"
+        assert not moved.exists()
+
+
+def test_move_rejected_when_target_exists(tmp_path: Path) -> None:
+    library = tmp_path / "library"
+    library.mkdir()
+    project = library / "book"
+    _create_project(project)
+
+    with _client(tmp_path, library) as client:
+        snapshot = _inspect(client, project)
+        chapter = _file(snapshot, "CH001_正文.md")
+        notes = _file(snapshot, "旧素材.md")
+        response = client.post(
+            f"/api/v1/projects/{snapshot['project']['project_id']}/change-sets",
+            json={
+                "base_revision": snapshot["project"]["revision"],
+                "base_fingerprint": snapshot["project"]["fingerprint"],
+                "title": "Move onto an occupied path",
+                "summary": "The target already exists and must be rejected.",
+                "changes": [
+                    {
+                        "operation": "move",
+                        "file_id": chapter["file_id"],
+                        "target_relative_path": notes["relative_path"],
+                        "rationale": "Exercise the occupied-target guard.",
+                    }
+                ],
+            },
+        )
+        assert response.status_code == 422, response.text
+        assert response.json()["error"]["code"] == "change_set_input_invalid"
+        assert (project / "08_素材库" / "旧素材.md").read_text(encoding="utf-8") == "old notes\n"
+
+
+def test_move_into_new_folder_roundtrip(tmp_path: Path) -> None:
+    """挪进尚不存在的文件夹：落盘时顺手建目录，撤回时目录一并清掉。"""
+    library = tmp_path / "library"
+    library.mkdir()
+    project = library / "book"
+    paths = _create_project(project)
+
+    with _client(tmp_path, library) as client:
+        snapshot = _inspect(client, project)
+        notes = _file(snapshot, "旧素材.md")
+        response = client.post(
+            f"/api/v1/projects/{snapshot['project']['project_id']}/change-sets",
+            json={
+                "base_revision": snapshot["project"]["revision"],
+                "base_fingerprint": snapshot["project"]["fingerprint"],
+                "title": "Refile the note",
+                "summary": "Move the note into a new subfolder.",
+                "changes": [
+                    {
+                        "operation": "move",
+                        "file_id": notes["file_id"],
+                        "target_relative_path": "08_素材库/导入/旧素材搬移.md",
+                        "rationale": "Refile into the import folder.",
+                    }
+                ],
+            },
+        )
+        assert response.status_code == 201, response.text
+        ready = _accept_or_reject(client, response.json(), ["accepted"])
+        applied_response = client.post(
+            f"/api/v1/change-sets/{ready['change_set_id']}/apply",
+            json={"expected_review_revision": ready["review_revision"]},
+        )
+        assert applied_response.status_code == 200, applied_response.text
+        applied = applied_response.json()
+        moved = project / "08_素材库" / "导入" / "旧素材搬移.md"
+        assert moved.read_text(encoding="utf-8") == "old notes\n"
+        assert not paths["notes"].exists()
+        assert applied["writeback"]["created_directories"] == ["08_素材库/导入"]
+
+        rolled = client.post(
+            f"/api/v1/change-sets/{ready['change_set_id']}/rollback",
+            json={"expected_review_revision": applied["review_revision"]},
+        )
+        assert rolled.status_code == 200, rolled.text
+        assert paths["notes"].read_text(encoding="utf-8") == "old notes\n"
+        assert not moved.exists()
+        assert not (project / "08_素材库" / "导入").exists()
+
+
+def test_move_rollback_refused_after_later_edit(tmp_path: Path) -> None:
+    """挪走后作者又改了内容：撤回按既有规矩拒绝，现有内容留住。"""
+    library = tmp_path / "library"
+    library.mkdir()
+    project = library / "book"
+    _create_project(project)
+
+    with _client(tmp_path, library) as client:
+        snapshot = _inspect(client, project)
+        notes = _file(snapshot, "旧素材.md")
+        response = client.post(
+            f"/api/v1/projects/{snapshot['project']['project_id']}/change-sets",
+            json={
+                "base_revision": snapshot["project"]["revision"],
+                "base_fingerprint": snapshot["project"]["fingerprint"],
+                "title": "Refile the note",
+                "summary": "Move the note, then edit it in place.",
+                "changes": [
+                    {
+                        "operation": "move",
+                        "file_id": notes["file_id"],
+                        "target_relative_path": "08_素材库/搬走的素材.md",
+                        "rationale": "Rename for the rollback-conflict guard.",
+                    }
+                ],
+            },
+        )
+        assert response.status_code == 201, response.text
+        ready = _accept_or_reject(client, response.json(), ["accepted"])
+        applied_response = client.post(
+            f"/api/v1/change-sets/{ready['change_set_id']}/apply",
+            json={"expected_review_revision": ready["review_revision"]},
+        )
+        assert applied_response.status_code == 200, applied_response.text
+        applied = applied_response.json()
+        moved = project / "08_素材库" / "搬走的素材.md"
+        moved.write_text("old notes\n作者在挪走后又补了一句\n", encoding="utf-8")
+
+        rolled = client.post(
+            f"/api/v1/change-sets/{ready['change_set_id']}/rollback",
+            json={"expected_review_revision": applied["review_revision"]},
+        )
+        assert rolled.status_code == 409, rolled.text
+        assert "不能直接撤销" in rolled.json()["error"]["message"]
+        assert moved.read_text(encoding="utf-8") == "old notes\n作者在挪走后又补了一句\n"
+        assert not (project / "08_素材库" / "旧素材.md").exists()

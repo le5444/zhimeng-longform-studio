@@ -1,0 +1,8 @@
+{
+  "additionalProperties": false,
+  "properties": {},
+  "title": "PlanReadArguments",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/plan-read-arguments.schema.json"
+}

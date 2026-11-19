@@ -1,0 +1,43 @@
+{
+  "$id": "https://zhimeng.local/contracts/agent-image.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "height": {
+      "exclusiveMinimum": 0,
+      "title": "Height",
+      "type": "integer"
+    },
+    "image_id": {
+      "title": "Image Id",
+      "type": "string"
+    },
+    "mime_type": {
+      "title": "Mime Type",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "url": {
+      "title": "Url",
+      "type": "string"
+    },
+    "width": {
+      "exclusiveMinimum": 0,
+      "title": "Width",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "image_id",
+    "name",
+    "mime_type",
+    "width",
+    "height",
+    "url"
+  ],
+  "title": "AgentImage",
+  "type": "object"
+}

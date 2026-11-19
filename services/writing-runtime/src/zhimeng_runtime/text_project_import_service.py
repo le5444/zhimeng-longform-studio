@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from zhimeng_runtime.project_reader import SECTION_LABELS
+from zhimeng_runtime.fs_atomic import replace_with_retry
 
 
 MAX_IMPORTED_TEXT_CHARACTERS = 8 * 1024 * 1024
@@ -140,7 +141,7 @@ class TextProjectImportService:
                     encoding="utf-8",
                     newline="\n",
                 )
-            os.replace(temp_root, final_root)
+            replace_with_retry(temp_root, final_root)
         except Exception:
             shutil.rmtree(temp_root, ignore_errors=True)
             raise

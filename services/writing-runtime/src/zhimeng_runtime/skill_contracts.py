@@ -56,6 +56,10 @@ class SkillContractRegistry:
         ):
             raise SkillContractError("contracts_root must be a regular directory")
         self.root = candidate.resolve(strict=True)
+        # 校验器缓存：内容指纹不变就复用已构建的 validator（构建是这套里最贵的
+        # 一步）。每次 load 仍然重读文件、重算指纹、重查路径安全——文件变了
+        # 指纹就对不上，会重建，不牺牲完整性。
+        self._validator_cache: dict[str, tuple[str, SkillContractIdentity]] = {}
 
     def load(self, contract_uri: str) -> SkillContractIdentity:
         relative_path = self._relative_contract_path(contract_uri)
@@ -89,15 +93,21 @@ class SkillContractRegistry:
             )
         if _has_external_schema_reference(schema):
             raise SkillContractError("Skill contract contains an external $ref")
+        fingerprint = hashlib.sha256(content).hexdigest()
+        cached = self._validator_cache.get(contract_uri)
+        if cached is not None and cached[0] == fingerprint:
+            return cached[1]
         try:
             Draft202012Validator.check_schema(schema)
         except JsonSchemaError as exc:
             raise SkillContractError("Skill contract schema is invalid") from exc
-        return SkillContractIdentity(
+        identity = SkillContractIdentity(
             uri=contract_uri,
-            fingerprint=hashlib.sha256(content).hexdigest(),
+            fingerprint=fingerprint,
             validator=Draft202012Validator(schema),
         )
+        self._validator_cache[contract_uri] = (fingerprint, identity)
+        return identity
 
     def load_pair(self, input_uri: str, output_uri: str) -> SkillContractPair:
         input_contract = self.load(input_uri)

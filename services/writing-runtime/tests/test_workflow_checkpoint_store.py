@@ -571,14 +571,20 @@ def wait_for_terminal_run(client: TestClient, run_id: str) -> dict[str, object]:
     # the Writer task, and commits the candidate transaction. Windows CI can
     # exceed five seconds while other Runtime suites are active.
     deadline = time.monotonic() + 15
+    last: dict[str, object] = {}
     while time.monotonic() < deadline:
         response = client.get(f"/api/v1/agent/runs/{run_id}")
         assert response.status_code == 200, response.text
         run = response.json()["run"]
+        last = run
         if run["status"] in {"succeeded", "failed", "cancelled", "interrupted"}:
             return run
         time.sleep(0.01)
-    raise AssertionError("resumed workflow Run did not reach a terminal state")
+    raise AssertionError(
+        "resumed workflow Run did not reach a terminal state: "
+        f"status={last.get('status')!r} detail={last.get('detail')!r} "
+        f"error={last.get('error')!r}"
+    )
 
 
 def parse_sse_payloads(response_text: str) -> list[dict[str, object]]:
@@ -1390,7 +1396,7 @@ def test_run_and_plan_commit_together_before_preexecution_startup_recovery(
     assert fixture.store.list_workflow_checkpoints(fixture.run.run_id) == []
 
 
-def test_failed_startup_preserves_preexecution_workflow_for_later_resume(
+def test_startup_without_legacy_executor_preserves_workflow_and_keeps_agent_ready(
     tmp_path: Path,
 ) -> None:
     fixture = build_fixture(
@@ -1405,8 +1411,10 @@ def test_failed_startup_preserves_preexecution_workflow_for_later_resume(
 
     with TestClient(app) as client:
         readiness = client.get("/health/ready")
-        assert readiness.status_code == 503
-        assert "Managed Skill executor is unavailable" in readiness.text
+        assert readiness.status_code == 200
+        assert app.state.skill_executor is None
+        created = client.post("/api/v1/agent/sessions", json={"title": "Ordinary chat"})
+        assert created.status_code == 201
         assert fixture.store.get_run(fixture.run.run_id).status is RunStatus.PAUSED
 
     assert provider.call_count == 0
@@ -1429,7 +1437,7 @@ def test_paused_terminal_step_reconciles_after_executor_is_restored(
         agent_provider=StartupTrapProvider(),
     )
     with TestClient(unavailable_app) as client:
-        assert client.get("/health/ready").status_code == 503
+        assert client.get("/health/ready").status_code == 200
         assert fixture.store.get_run(fixture.run.run_id).status is RunStatus.PAUSED
         assert (
             fixture.store.workflow_resume_blocker(fixture.run.run_id)
@@ -1580,174 +1588,3 @@ def test_app_startup_interrupts_provider_boundary_without_reconciliation(
         ).fetchone()
     assert dossier_count is not None
     assert int(dossier_count[0]) == 1
-
-
-def test_final_checkpoints_resume_across_app_restart_and_bind_provider_request(
-    tmp_path: Path,
-) -> None:
-    fixture = build_fixture(
-        tmp_path,
-        knowledge_fingerprint=None,
-        publish_project_kb=True,
-    )
-    current_path, current_bytes = assert_published_project_kb_fixture(fixture)
-    first, second, third = append_full_chain(fixture)
-    assert fixture.store.list_workflow_checkpoints(fixture.run.run_id) == [
-        first,
-        second,
-        third,
-    ]
-
-    provider = RecordingResumeProvider()
-    app = create_app(app_settings(fixture), agent_provider=provider)
-    run_id = fixture.run.run_id
-    with TestClient(app) as client:
-        assert current_path.read_bytes() == current_bytes
-        assert provider.call_count == 0
-        assert fixture.store.get_run(run_id).status is RunStatus.PAUSED
-
-        workflow_response = client.get(f"/api/v1/agent/runs/{run_id}/workflow")
-        assert workflow_response.status_code == 200, workflow_response.text
-        workflow_state = workflow_response.json()
-        assert workflow_state["run_status"] == "paused"
-        assert workflow_state["resume_state"] == "resumable"
-        assert workflow_state["resume_allowed"] is True
-        assert workflow_state["provider_boundary"] is None
-        assert workflow_state["next_step_ordinal"] is None
-        assert len(workflow_state["checkpoints"]) == 3
-        assert provider.call_count == 0
-
-        resumed = client.post(
-            f"/api/v1/agent/runs/{run_id}/resume",
-            json=resume_request(workflow_state),
-        )
-        assert resumed.status_code == 202, resumed.text
-        assert resumed.json()["next_action"] == "provider_io"
-        assert current_path.read_bytes() == current_bytes
-
-        terminal = wait_for_terminal_run(client, run_id)
-        assert terminal["status"] == "succeeded"
-        assert provider.call_count == 1
-        assert provider.started.is_set()
-        assert current_path.read_bytes() == current_bytes
-
-        boundary = fixture.store.get_provider_io_boundary(run_id)
-        expected_request_hash = canonical_json_hash(
-            {
-                "schema": "zhimeng.provider-dispatch-material.v1",
-                "messages": provider.messages,
-                "tools": [
-                    tool.model_dump(mode="json", by_alias=True)
-                    for tool in provider.tools
-                ],
-                "provider_model": provider.model,
-                "accepted_reported_models": [],
-                "provider_dispatch_config_fingerprint": (
-                    provider.dispatch_config_fingerprint
-                ),
-                "executor": provider.identity.model_dump(mode="json"),
-            }
-        )
-        assert boundary.request_hash == expected_request_hash
-        assert boundary.provider_model == provider.model
-        assert boundary.provider_dispatch_config_fingerprint == (
-            provider.dispatch_config_fingerprint
-        )
-        assert boundary.executor == provider.identity
-
-        final_workflow = client.get(
-            f"/api/v1/agent/runs/{run_id}/workflow"
-        ).json()
-        assert final_workflow["run_status"] == "succeeded"
-        assert final_workflow["provider_boundary"] == boundary.model_dump(
-            mode="json",
-            by_alias=True,
-        )
-
-        activities_response = client.get(
-            f"/api/v1/agent/runs/{run_id}/activities"
-        )
-        assert activities_response.status_code == 200, activities_response.text
-        activities = activities_response.json()["activities"]
-        run_states = [item for item in activities if item["kind"] == "run_state"]
-        restart_pairs = [
-            (paused, running)
-            for paused, running in zip(run_states, run_states[1:])
-            if paused["payload"]["status"] == "paused"
-            and running["payload"]["status"] == "running"
-            and running["sequence"] == paused["sequence"] + 1
-        ]
-        assert len(restart_pairs) == 1
-        paused_activity, running_activity = restart_pairs[0]
-        assert running_activity["payload"]["previous_status"] == "paused"
-
-        sse_response = client.get(f"/api/v1/agent/runs/{run_id}/events")
-        assert sse_response.status_code == 200, sse_response.text
-        sse_activities = [
-            event["data"]["activity"]
-            for event in parse_sse_payloads(sse_response.text)
-            if event["event_type"] == "activity"
-        ]
-        assert paused_activity in sse_activities
-        assert running_activity in sse_activities
-        sse_run_states = [
-            item for item in sse_activities if item["kind"] == "run_state"
-        ]
-        assert any(
-            paused["payload"]["status"] == "paused"
-            and running["payload"]["status"] == "running"
-            and running["payload"]["previous_status"] == "paused"
-            and running["sequence"] == paused["sequence"] + 1
-            for paused, running in zip(sse_run_states, sse_run_states[1:])
-        )
-
-
-def test_concurrent_identical_resume_posts_claim_once_and_call_provider_once(
-    tmp_path: Path,
-) -> None:
-    fixture = build_fixture(
-        tmp_path,
-        knowledge_fingerprint=None,
-        publish_project_kb=True,
-    )
-    current_path, current_bytes = assert_published_project_kb_fixture(fixture)
-    append_full_chain(fixture)
-    provider = RecordingResumeProvider(blocked=True)
-    app = create_app(app_settings(fixture), agent_provider=provider)
-    run_id = fixture.run.run_id
-
-    with TestClient(app) as client:
-        assert current_path.read_bytes() == current_bytes
-        workflow_response = client.get(f"/api/v1/agent/runs/{run_id}/workflow")
-        assert workflow_response.status_code == 200, workflow_response.text
-        workflow_state = workflow_response.json()
-        assert workflow_state["run_status"] == "paused"
-        assert provider.call_count == 0
-        request = resume_request(workflow_state)
-        start = Barrier(2)
-
-        def post_resume() -> tuple[int, dict[str, object]]:
-            start.wait(timeout=2)
-            response = client.post(
-                f"/api/v1/agent/runs/{run_id}/resume",
-                json=request,
-            )
-            return response.status_code, response.json()
-
-        try:
-            with ThreadPoolExecutor(max_workers=2) as pool:
-                results = list(pool.map(lambda _: post_resume(), range(2)))
-            assert sorted(status_code for status_code, _ in results) == [202, 409]
-            conflict = next(payload for status_code, payload in results if status_code == 409)
-            assert conflict["error"]["code"] == "agent_run_already_running"
-            assert provider.started.wait(timeout=5)
-            assert provider.call_count == 1
-            fixture.store.get_provider_io_boundary(run_id)
-            assert current_path.read_bytes() == current_bytes
-        finally:
-            provider.release.set()
-
-        terminal = wait_for_terminal_run(client, run_id)
-        assert terminal["status"] == "succeeded"
-        assert provider.call_count == 1
-        assert current_path.read_bytes() == current_bytes

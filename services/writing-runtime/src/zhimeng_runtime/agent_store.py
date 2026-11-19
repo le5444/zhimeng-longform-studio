@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from zhimeng_runtime.session_goal import GoalAdmission, GoalStore
+
 import hashlib
 import json
+import os
+import re
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -9,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 from uuid import uuid4
+from zhimeng_runtime.agent_images import claim_images, fork_images, provider_image_message
 
 from zhimeng_runtime.agent_candidate_models import (
     AgentCandidateOutput,
@@ -21,8 +26,12 @@ from zhimeng_runtime.agent_candidate_models import (
     parse_agent_candidate_output_json,
 )
 from zhimeng_runtime.agent_models import (
+    AgentActivityListResponse,
     AgentMessageResponse,
+    AgentRunProcessSummary,
+    AgentRunContinuationResponse,
     AgentSessionResponse,
+    SessionCheckpointRecord,
 )
 from zhimeng_runtime.agent_tools import (
     CANDIDATE_OUTPUT_SUBMIT_TOOL_NAME,
@@ -31,6 +40,7 @@ from zhimeng_runtime.agent_tools import (
 from zhimeng_runtime.change_set_models import (
     ChangeSetResponse,
     change_set_payload_hash,
+    change_set_reference_hash_from_payload,
 )
 from zhimeng_runtime.context_models import (
     CompletedHistoryMessage,
@@ -38,6 +48,7 @@ from zhimeng_runtime.context_models import (
     KnowledgeFingerprintObservation,
     KnowledgeObservationState,
     canonical_json_hash,
+    conservative_token_estimate,
 )
 from zhimeng_runtime.context_store import ContextStore, ContextStoreError
 from zhimeng_runtime.creation_instruction_models import (
@@ -69,6 +80,7 @@ from zhimeng_runtime.execution_protocol import (
     MessagePayload,
     MessageUsage,
     ProjectRevision,
+    ReasoningPayload,
     Run,
     RunStatePayload,
     RunStatus,
@@ -98,6 +110,10 @@ from zhimeng_runtime.provider_turn_models import (
     ProviderTurnReceipt,
     ProviderTurnReceiptListResponse,
     build_provider_turn_receipt_list_response,
+)
+from zhimeng_runtime.session_checkpoint import (
+    checkpoint_content_hash,
+    render_checkpoint_block,
 )
 from zhimeng_runtime.skill_models import (
     CreationHandoffResult,
@@ -250,6 +266,36 @@ class WorkflowResumeClaim:
     next_step_ordinal: int | None
 
 
+# 拼对话历史时从库里最多读这么多条（摘要之后的）。只是读库的保险：压缩线（256K 6 万字、1M 24 万字）
+# 平时早就先到了。以前是 500，再往前还有一道 64 条的窗口（9-27 去掉）。
+PROVIDER_HISTORY_ROW_LIMIT = 5_000
+
+
+def _provider_message_characters(message: dict[str, object]) -> int:
+    """一条发给模型的消息有多长：正文 + 工具调用的参数（按字数）。"""
+    content = message.get("content")
+    if isinstance(content, list):
+        content = "\n".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
+    calls = message.get("tool_calls")
+    return (len(content) if isinstance(content, str) else 0) + (
+        len(json.dumps(calls, ensure_ascii=False)) if calls else 0
+    )
+
+
+def _provider_message_tokens(message: dict[str, object]) -> int:
+    """同上，按估算的 token（和一轮里算预算的 ``_estimate_provider_messages_tokens`` 同一个口径）。"""
+    content = message.get("content")
+    if isinstance(content, list):
+        content = "\n".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
+    calls = message.get("tool_calls")
+    return (
+        4
+        + conservative_token_estimate(str(message.get("role") or ""))
+        + (conservative_token_estimate(content) if isinstance(content, str) and content else 0)
+        + (conservative_token_estimate(json.dumps(calls, ensure_ascii=False, default=str)) if calls else 0)
+    )
+
+
 class AgentStoreError(RuntimeError):
     pass
 
@@ -260,6 +306,17 @@ class AgentStoreNotFound(AgentStoreError):
 
 class AgentStoreConflict(AgentStoreError):
     pass
+
+
+class AgentAdmissionWithdrawn(AgentStoreConflict):
+    code = "agent_admission_withdrawn"
+    retryable = False
+
+
+class AgentSteeringPending(AgentStoreConflict):
+    """A user input was admitted before completion; the same Run must consume it."""
+
+    code = "agent_steering_pending"
 
 
 class AgentExecutorConflict(AgentStoreConflict):
@@ -349,6 +406,40 @@ def _new_id(prefix: str) -> str:
     return f"{prefix}_{uuid4().hex}"
 
 
+_TITLE_PLACEHOLDER_PREFIXES = ("新对话 ·", "新对话:")
+# 「写作对话」：9-27 以前在书里直接打字开的对话都叫这个（前端写死），一直没被改名；现在当占位，下次说话收尾时补上名字。
+_TITLE_PLACEHOLDERS = {"Writing Agent", "随便聊聊", "写作助手", "写作对话"}
+
+
+def _title_is_placeholder(title: str) -> bool:
+    """占位标题才允许被第一轮对话自动覆盖；作者起过名字就绝不动。"""
+    normalized = title.strip()
+    if normalized in _TITLE_PLACEHOLDERS:
+        return True
+    return any(normalized.startswith(prefix) for prefix in _TITLE_PLACEHOLDER_PREFIXES)
+
+
+def _derive_session_title(message: str) -> str | None:
+    """从第一句话提炼对话标题：首行、去口语前缀、压到 24 字。"""
+    first_line = next(
+        (line.strip() for line in message.splitlines() if line.strip()),
+        "",
+    )
+    if not first_line:
+        return None
+    cleaned = re.sub(
+        r"^(?:帮我|请|我想|我们要?|麻烦|请问|大家好|你好[呀啊]?,?)",
+        "",
+        first_line,
+    ).strip()
+    if not cleaned:
+        cleaned = first_line
+    trimmed = cleaned[:24]
+    if len(cleaned) > 24:
+        trimmed = trimmed.rstrip("，。、；：,.:; ") + "…"
+    return trimmed or None
+
+
 def _json(value: object) -> str:
     return json.dumps(
         value,
@@ -369,7 +460,7 @@ class AgentStore:
     def create_session(
         self,
         *,
-        project_id: str,
+        project_id: str | None,
         title: str,
         executor: ExecutorIdentity,
         capabilities: CapabilityProfile,
@@ -380,18 +471,23 @@ class AgentStore:
         with self.database.connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             try:
-                project = connection.execute(
-                    "SELECT * FROM project_binding WHERE id = ?",
-                    (project_id,),
-                ).fetchone()
-                if project is None:
-                    raise AgentStoreNotFound("Project binding was not found")
-                fingerprint = str(project["fingerprint"])
-                revision = int(project["revision"])
-                if revision < 1 or len(fingerprint) != 64:
-                    raise AgentStoreConflict(
-                        "Project must have a current inspected snapshot before creating a session"
-                    )
+                if project_id is None:
+                    # 「随便聊」会话：不绑定小说项目，照常持久化历史。
+                    fingerprint = None
+                    revision = None
+                else:
+                    project = connection.execute(
+                        "SELECT * FROM project_binding WHERE id = ?",
+                        (project_id,),
+                    ).fetchone()
+                    if project is None:
+                        raise AgentStoreNotFound("Project binding was not found")
+                    fingerprint = str(project["fingerprint"])
+                    revision = int(project["revision"])
+                    if revision < 1 or len(fingerprint) != 64:
+                        raise AgentStoreConflict(
+                            "Project must have a current inspected snapshot before creating a session"
+                        )
                 timestamp = created_at.isoformat()
                 connection.execute(
                     """
@@ -427,6 +523,158 @@ class AgentStore:
             raise RuntimeError("session transaction produced no row")
         return self._session_from_row(row)
 
+    def fork_session(
+        self,
+        source_session_id: str,
+        *,
+        up_to_message_id: str,
+        title: str | None = None,
+    ) -> AgentSessionResponse:
+        """Copy a transcript boundary, never an execution or a file operation.
+
+        session_message requires a Run FK. conversation_fork rows are inert,
+        interrupted history containers, excluded from the execution list. Their
+        activities are rebuilt with local identities and contain only messages.
+        """
+        created_at = _now()
+        timestamp = created_at.isoformat()
+        new_session_id = _new_id("session")
+        with self.database.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                source = connection.execute(
+                    "SELECT * FROM execution_session WHERE id = ?", (source_session_id,)
+                ).fetchone()
+                if source is None:
+                    raise AgentStoreNotFound("Source agent session was not found")
+                target = connection.execute(
+                    "SELECT * FROM session_message WHERE session_id = ? AND message_id = ?",
+                    (source_session_id, up_to_message_id),
+                ).fetchone()
+                if target is None:
+                    raise AgentStoreNotFound("Target message was not found in source session")
+                if target["role"] not in ("user", "assistant"):
+                    raise AgentStoreConflict("只能从作者消息或完整回答新建分支")
+                messages = connection.execute(
+                    """
+                    SELECT sm.*, a.payload_json FROM session_message sm
+                    JOIN activity a ON a.id = sm.activity_id
+                    WHERE sm.session_id = ? AND sm.ordinal <= ?
+                      AND sm.role IN ('user', 'assistant')
+                    ORDER BY sm.ordinal
+                    """,
+                    (source_session_id, int(target["ordinal"])),
+                ).fetchall()
+                source_runs = list(dict.fromkeys(str(m["run_id"]) for m in messages))
+                # 没给名字就用源对话此刻的名字（第一轮答完后台会自动改名，前端手里那份可能还是旧的）；
+                # 从分支再分叉不叠成「（分支）（分支）」。
+                source_title = str(source["title"])
+                default_title = source_title if source_title.endswith("（分支）") else f"{source_title}（分支）"
+                connection.execute(
+                    """
+                    INSERT INTO execution_session(
+                        id, project_binding_id, title, status, revision,
+                        latest_project_revision, latest_project_fingerprint,
+                        executor_json, capabilities_json, correlation_id,
+                        last_run_ordinal, last_message_ordinal, created_at, updated_at
+                    ) VALUES (?, ?, ?, 'idle', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (new_session_id, source["project_binding_id"],
+                     (title.strip() if title and title.strip() else default_title)[:120],
+                     source["latest_project_revision"], source["latest_project_fingerprint"],
+                     source["executor_json"], source["capabilities_json"], _new_id("correlation"),
+                     len(source_runs), len(messages), timestamp, timestamp),
+                )
+                run_map: dict[str, str] = {}
+                for ordinal, old_id in enumerate(source_runs, 1):
+                    new_id = _new_id("run")
+                    run_map[old_id] = new_id
+                    source_run = connection.execute("SELECT * FROM run WHERE id = ?", (old_id,)).fetchone()
+                    message_count = sum(str(m["run_id"]) == old_id for m in messages)
+                    connection.execute(
+                        """
+                        INSERT INTO run(
+                            id, session_id, project_binding_id, context_pack_id, ordinal,
+                            run_type, status, objective, idempotency_key, request_hash,
+                            project_revision, project_fingerprint, executor_json, capabilities_json,
+                            correlation_id, causation_id, last_activity_sequence, error_json,
+                            created_at, started_at, updated_at, completed_at
+                        ) VALUES (?, ?, ?, NULL, ?, 'conversation_fork', 'interrupted', ?, ?, ?,
+                                  ?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?, ?, ?)
+                        """,
+                        (new_id, new_session_id, source_run["project_binding_id"], ordinal,
+                         source_run["objective"], f"fork:{source_session_id}:{old_id}",
+                         hashlib.sha256(f"{source_session_id}:{old_id}:{up_to_message_id}".encode()).hexdigest(),
+                         source_run["project_revision"], source_run["project_fingerprint"],
+                         source_run["executor_json"], source_run["capabilities_json"],
+                         _new_id("correlation"), message_count, timestamp, timestamp, timestamp, timestamp),
+                    )
+                    connection.execute("UPDATE run SET origin_kind=? WHERE id=?", (source_run["origin_kind"], new_id))
+                sequences: dict[str, int] = {}
+                ordinal_map: dict[int, int] = {}
+                for ordinal, old in enumerate(messages, 1):
+                    new_run_id = run_map[str(old["run_id"])]
+                    sequences[new_run_id] = sequences.get(new_run_id, 0) + 1
+                    new_message_id = _new_id("message")
+                    source_activity = ActivityItem.model_validate_json(str(old["payload_json"])).root
+                    payload = source_activity.payload.model_dump(mode="json")
+                    payload.update(message_id=new_message_id, usage=None, finish_reason=None)
+                    row = connection.execute("SELECT * FROM run WHERE id = ?", (new_run_id,)).fetchone()
+                    activity = self._insert_activity(
+                        connection, row, sequence=sequences[new_run_id], kind=ActivityKind.MESSAGE,
+                        payload=payload, causation_id=None, created_at=created_at,
+                    ).root
+                    connection.execute(
+                        """INSERT INTO session_message(
+                            activity_id, session_id, run_id, message_id, ordinal, role, format, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (activity.activity_id, new_session_id, new_run_id, new_message_id, ordinal,
+                         old["role"], old["format"], old["created_at"]),
+                    )
+                    ordinal_map[int(old["ordinal"])] = ordinal
+                    old_images = json.loads(old["images_json"]) if "images_json" in old.keys() else []
+                    if old_images:
+                        inherited_images = fork_images(connection, old_images, new_session_id)
+                        connection.execute("UPDATE session_message SET images_json=? WHERE message_id=?", (_json(inherited_images), new_message_id))
+                # Inherited summary must end before the selected message; later
+                # summaries would leak the abandoned future into this branch.
+                checkpoint = connection.execute(
+                    """SELECT * FROM session_checkpoint WHERE session_id = ? AND through_ordinal <= ?
+                       ORDER BY through_ordinal DESC LIMIT 1""",
+                    (source_session_id, int(target["ordinal"])),
+                ).fetchone()
+                if checkpoint is not None and int(checkpoint["through_ordinal"]) in ordinal_map:
+                    through = ordinal_map[int(checkpoint["through_ordinal"])]
+                    connection.execute(
+                        """INSERT INTO session_checkpoint(
+                            id, session_id, run_id, through_ordinal, source_message_count,
+                            content, content_hash, reported_model, created_at
+                        ) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?)""",
+                        (_new_id("checkpoint"), new_session_id, through,
+                         min(through, int(checkpoint["source_message_count"])), checkpoint["content"],
+                         checkpoint["content_hash"], checkpoint["reported_model"], timestamp),
+                    )
+                row = connection.execute("SELECT * FROM execution_session WHERE id = ?", (new_session_id,)).fetchone()
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+        return self._session_from_row(row)
+
+    def fork_context_messages(self, session_id: str, *, after_ordinal: int = 0) -> list[AgentMessageResponse]:
+        """Unanswered author messages inherited by a fork, without invented replies."""
+        with self.database.connection() as connection:
+            rows = connection.execute(
+                """SELECT sm.*, a.payload_json FROM session_message sm
+                   JOIN activity a ON a.id = sm.activity_id JOIN run r ON r.id = sm.run_id
+                   WHERE sm.session_id = ? AND sm.ordinal > ? AND sm.role = 'user'
+                     AND r.run_type = 'conversation_fork'
+                     AND NOT EXISTS (SELECT 1 FROM session_message reply
+                                     WHERE reply.run_id = r.id AND reply.role = 'assistant')
+                   ORDER BY sm.ordinal""", (session_id, after_ordinal),
+            ).fetchall()
+        return [self._message_from_row(row) for row in rows]
+
     def get_session(self, session_id: str) -> AgentSessionResponse:
         with self.database.connection() as connection:
             row = connection.execute(
@@ -436,6 +684,176 @@ class AgentStore:
         if row is None:
             raise AgentStoreNotFound("Agent session was not found")
         return self._session_from_row(row)
+
+    def update_session(
+        self,
+        session_id: str,
+        *,
+        title: str | None = None,
+        pinned: bool | None = None,
+        executor: ExecutorIdentity | None = None,
+        capabilities: CapabilityProfile | None = None,
+    ) -> AgentSessionResponse:
+        if (executor is None) != (capabilities is None):
+            raise AgentStoreInvalidState(
+                "executor and capabilities must be provided together"
+            )
+        if title is None and pinned is None and executor is None:
+            raise AgentStoreInvalidState("No session changes were provided")
+        with self.database.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                row = connection.execute(
+                    "SELECT * FROM execution_session WHERE id = ?",
+                    (session_id,),
+                ).fetchone()
+                if row is None or str(row["status"]) == "closed":
+                    raise AgentStoreNotFound("Agent session was not found")
+                if executor is not None:
+                    active_run = connection.execute(
+                        """
+                        SELECT id FROM run
+                        WHERE session_id = ?
+                          AND status NOT IN ('succeeded', 'failed', 'cancelled', 'interrupted')
+                        LIMIT 1
+                        """,
+                        (session_id,),
+                    ).fetchone()
+                    if active_run is not None:
+                        raise AgentStoreConflict(
+                            "当前对话还有未结束的任务，请先停止或等待任务完成"
+                        )
+                next_title = title.strip() if title is not None else str(row["title"])
+                if not next_title:
+                    raise AgentStoreInvalidState("Agent session title must not be blank")
+                next_pinned = int(pinned) if pinned is not None else int(row["pinned"])
+                next_executor_json = (
+                    _json(executor.model_dump(mode="json"))
+                    if executor is not None
+                    else str(row["executor_json"])
+                )
+                next_capabilities_json = (
+                    _json(capabilities.model_dump(mode="json"))
+                    if capabilities is not None
+                    else str(row["capabilities_json"])
+                )
+                connection.execute(
+                    """
+                    UPDATE execution_session
+                    SET title = ?, pinned = ?, executor_json = ?, capabilities_json = ?,
+                        revision = revision + 1
+                    WHERE id = ?
+                    """,
+                    (
+                        next_title,
+                        next_pinned,
+                        next_executor_json,
+                        next_capabilities_json,
+                        session_id,
+                    ),
+                )
+                updated = connection.execute(
+                    "SELECT * FROM execution_session WHERE id = ?",
+                    (session_id,),
+                ).fetchone()
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+        if updated is None:  # pragma: no cover - transaction invariant.
+            raise RuntimeError("session update produced no row")
+        return self._session_from_row(updated)
+
+    def first_session_objective(self, session_id: str) -> str | None:
+        """这段对话的第一句话（建第一个 Run 时的 objective），没有则为 None。"""
+        with self.database.connection() as connection:
+            row = connection.execute(
+                "SELECT objective FROM run WHERE session_id = ? ORDER BY ordinal ASC LIMIT 1",
+                (session_id,),
+            ).fetchone()
+        return None if row is None else str(row["objective"])
+
+    def maybe_update_auto_session_title(
+        self,
+        session_id: str,
+        *,
+        first_objective: str,
+        new_title: str,
+    ) -> bool:
+        """把第一轮的占位/提炼标题换成 AI 总结的名字。
+
+        只允许覆盖两种现状：还是占位标题，或正好等于从第一句话提炼出来的
+        那个标题——两者都是系统起的。作者自己改过的名字绝不覆盖。
+        """
+        cleaned = new_title.strip()
+        if not cleaned:
+            return False
+        with self.database.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                row = connection.execute(
+                    "SELECT title FROM execution_session WHERE id = ?",
+                    (session_id,),
+                ).fetchone()
+                if row is None:
+                    connection.rollback()
+                    return False
+                current = str(row["title"])
+                if not _title_is_placeholder(current) and current != _derive_session_title(first_objective):
+                    connection.rollback()
+                    return False
+                connection.execute(
+                    "UPDATE execution_session SET title = ?, revision = revision + 1 WHERE id = ?",
+                    (cleaned, session_id),
+                )
+                connection.commit()
+                return True
+            except Exception:
+                connection.rollback()
+                raise
+
+    def close_session(self, session_id: str) -> None:
+        timestamp = _now().isoformat()
+        with self.database.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                row = connection.execute(
+                    "SELECT status FROM execution_session WHERE id = ?",
+                    (session_id,),
+                ).fetchone()
+                if row is None:
+                    raise AgentStoreNotFound("Agent session was not found")
+                if str(row["status"]) == "closed":
+                    connection.commit()
+                    return
+                active_run = connection.execute(
+                    """
+                    SELECT id FROM run
+                    WHERE session_id = ?
+                      AND status NOT IN ('succeeded', 'failed', 'cancelled', 'interrupted')
+                    LIMIT 1
+                    """,
+                    (session_id,),
+                ).fetchone()
+                if active_run is not None:
+                    raise AgentStoreConflict(
+                        "当前对话还有未结束的任务，请先停止或等待任务完成"
+                    )
+                connection.execute(
+                    """
+                    UPDATE execution_session
+                    SET status = 'closed', pinned = 0,
+                        revision = revision + 1, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (timestamp, session_id),
+                )
+                from zhimeng_runtime.command_completion import CommandCompletionStore
+                CommandCompletionStore(self.database).bump_stop_generation(session_id, connection=connection)
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
 
     def list_sessions(self, project_id: str) -> list[AgentSessionResponse]:
         with self.database.connection() as connection:
@@ -448,10 +866,114 @@ class AgentStore:
             rows = connection.execute(
                 """
                 SELECT * FROM execution_session
-                WHERE project_binding_id = ?
-                ORDER BY updated_at DESC, id ASC
+                WHERE project_binding_id = ? AND status != 'closed'
+                ORDER BY pinned DESC, updated_at DESC, id ASC
                 """,
                 (project_id,),
+            ).fetchall()
+        return [self._session_from_row(row) for row in rows]
+
+    def list_all_sessions(self) -> list[AgentSessionResponse]:
+        """全部对话：绑在各部小说下的 + 不绑书的纯对话。
+
+        界面左栏按「独立对话 / 小说分组」两段渲染，一部小说下面挂它自己的对话；
+        一次列全，免得每本书各发一次请求。绑在哪部小说看 project_revision.project_id。
+        """
+        with self.database.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM execution_session
+                WHERE status != 'closed'
+                ORDER BY pinned DESC, updated_at DESC, id ASC
+                """
+            ).fetchall()
+        return [self._session_from_row(row) for row in rows]
+
+    def rebind_session(
+        self,
+        session_id: str,
+        *,
+        project_id: str | None,
+    ) -> AgentSessionResponse:
+        """把一条对话改挂到另一部小说下，或解绑成不针对任何书的纯对话。
+
+        正在跑的对话不许改绑：上下文已经按原来那本书装配好了，中途换书会让这一轮的
+        结果落到别的书上。历史消息原样保留，只换归属。
+        """
+        with self.database.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                row = connection.execute(
+                    "SELECT * FROM execution_session WHERE id = ?",
+                    (session_id,),
+                ).fetchone()
+                if row is None or str(row["status"]) == "closed":
+                    raise AgentStoreNotFound("Agent session was not found")
+                active_run = connection.execute(
+                    """
+                    SELECT id FROM run
+                    WHERE session_id = ?
+                      AND status NOT IN ('succeeded', 'failed', 'cancelled', 'interrupted')
+                    LIMIT 1
+                    """,
+                    (session_id,),
+                ).fetchone()
+                if active_run is not None:
+                    raise AgentStoreConflict(
+                        "当前对话还有未结束的任务，请先停止或等待任务完成"
+                    )
+                if project_id is None:
+                    revision: int | None = None
+                    fingerprint: str | None = None
+                else:
+                    project = connection.execute(
+                        "SELECT * FROM project_binding WHERE id = ?",
+                        (project_id,),
+                    ).fetchone()
+                    if project is None:
+                        raise AgentStoreNotFound("Project binding was not found")
+                    fingerprint = str(project["fingerprint"])
+                    revision = int(project["revision"])
+                    if revision < 1 or len(fingerprint) != 64:
+                        raise AgentStoreConflict(
+                            "Project must have a current inspected snapshot before creating a session"
+                        )
+                connection.execute(
+                    """
+                    UPDATE execution_session
+                    SET project_binding_id = ?,
+                        latest_project_revision = ?,
+                        latest_project_fingerprint = ?,
+                        revision = revision + 1,
+                        updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (project_id, revision, fingerprint, _now().isoformat(), session_id),
+                )
+                if row["project_binding_id"] != project_id:
+                    from zhimeng_runtime.command_completion import CommandCompletionStore
+                    CommandCompletionStore(self.database).bump_stop_generation(session_id, connection=connection)
+                updated = connection.execute(
+                    "SELECT * FROM execution_session WHERE id = ?",
+                    (session_id,),
+                ).fetchone()
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+        if updated is None:  # pragma: no cover - transaction invariant.
+            raise RuntimeError("session rebind transaction produced no row")
+        return self._session_from_row(updated)
+
+    def list_unbound_sessions(self) -> list[AgentSessionResponse]:
+        """「随便聊」会话清单：不绑定任何小说项目的 Agent 会话。"""
+        with self.database.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM execution_session
+                WHERE project_binding_id IS NULL AND status != 'closed'
+                ORDER BY pinned DESC, updated_at DESC, id ASC
+                """
             ).fetchall()
         return [self._session_from_row(row) for row in rows]
 
@@ -521,8 +1043,8 @@ class AgentStore:
         *,
         session_id: str,
         message: str,
-        expected_project_revision: int,
-        expected_project_fingerprint: str,
+        expected_project_revision: int | None,
+        expected_project_fingerprint: str | None,
         active_chapter_id: str | None,
         writer_mode: Literal[
             "repair_only",
@@ -535,7 +1057,17 @@ class AgentStore:
         current_executor: ExecutorIdentity | None = None,
         current_capabilities: CapabilityProfile | None = None,
         workflow_plan_builder: Callable[[Run], WorkflowPlan] | None = None,
-    ) -> tuple[Run, AgentMessageResponse, bool]:
+        continuation_source_run_id: str | None = None,
+        review_source_run_id: str | None = None,
+        manual_file_ids: list[str] | None = None,
+        open_file_path: str | None = None,
+        manual_skill_names: list[str] | None = None,
+        image_ids: list[str] | None = None,
+        completion_event_ids: list[str] | None = None,
+        goal: GoalAdmission | None = None,
+    ) -> tuple[Run, AgentMessageResponse | None, bool]:
+        if goal and (context_pack_id or review_source_run_id or completion_event_ids):
+            raise AgentStoreInvalidState("持续目标使用普通 Agent 执行。")
         if (context_pack_id is None) != (expected_context_pack_hash is None):
             raise AgentStoreInvalidState(
                 "context_pack_id and expected_context_pack_hash must be provided together"
@@ -543,12 +1075,6 @@ class AgentStore:
         if (current_executor is None) != (current_capabilities is None):
             raise AgentStoreInvalidState(
                 "current executor and capabilities must be provided together"
-            )
-        if writer_mode == "author_review_change_proposal" and (
-            context_pack_id is None or active_chapter_id is None
-        ):
-            raise AgentStoreInvalidState(
-                "author-review Writer mode requires a Context Pack and active chapter"
             )
         request_hash = hashlib.sha256(
             _json(
@@ -560,6 +1086,15 @@ class AgentStore:
                     "writer_mode": writer_mode,
                     "context_pack_id": context_pack_id,
                     "expected_context_pack_hash": expected_context_pack_hash,
+                    **({"manual_file_ids": sorted(set(manual_file_ids))} if manual_file_ids else {}),
+                    **({"manual_skill_names": list(manual_skill_names)} if manual_skill_names else {}),
+                    **({"image_ids": list(dict.fromkeys(image_ids))} if image_ids else {}),
+                    **({"completion_event_ids": completion_event_ids} if completion_event_ids else {}),
+                    **({"goal": goal.model_dump(mode="json")} if goal else {}),
+                    **({"open_file_path": open_file_path} if open_file_path else {}),
+                    **({"continuation_source_run_id": continuation_source_run_id}
+                       if continuation_source_run_id is not None else {}),
+                    **({"review_source_run_id": review_source_run_id} if review_source_run_id is not None else {}),
                 }
             ).encode("utf-8")
         ).hexdigest()
@@ -573,8 +1108,6 @@ class AgentStore:
                 ).fetchone()
                 if session is None:
                     raise AgentStoreNotFound("Agent session was not found")
-                if str(session["status"]) not in {"active", "idle"}:
-                    raise AgentStoreInvalidState("Agent session is not active")
                 existing = connection.execute(
                     "SELECT * FROM run WHERE session_id = ? AND idempotency_key = ?",
                     (session_id, idempotency_key),
@@ -584,15 +1117,67 @@ class AgentStore:
                         raise AgentStoreConflict(
                             "Idempotency key was already used with a different request"
                         )
-                    if existing["context_pack_id"] is not None:
-                        self._require_run_project_kb_binding(connection, existing)
-                    message_row = self._message_row_for_run(connection, str(existing["id"]), "user")
+                    message_row = (None if existing["origin_kind"] == "command_completion" else
+                                   self._message_row_for_run(connection, str(existing["id"]), "user", first=True))
                     connection.commit()
                     return (
                         self._run_from_row(existing),
-                        self._message_from_row(message_row),
+                        self._message_from_row(message_row) if message_row is not None else None,
                         True,
                     )
+
+                if connection.execute(
+                    "SELECT 1 FROM session_admission_withdrawal WHERE session_id = ? AND idempotency_key = ?",
+                    (session_id, idempotency_key),
+                ).fetchone() is not None:
+                    raise AgentAdmissionWithdrawn("这条尚未受理的发送已取回，可以编辑后重新发送")
+
+                if str(session["status"]) not in {"active", "idle"}:
+                    raise AgentStoreInvalidState("Agent session is not active")
+                from zhimeng_runtime.command_completion import CommandCompletionStore
+                completion_store = CommandCompletionStore(self.database)
+                completion_events = []
+                if completion_event_ids:
+                    eligible = {item["event_id"]: item for item in completion_store.pending(session_id, connection=connection)}
+                    if any(event_id not in eligible for event_id in completion_event_ids):
+                        raise AgentStoreConflict("后台命令结果已处理或已经停止接续")
+                    queue = connection.execute("SELECT state_json FROM session_queue WHERE session_id=?", (session_id,)).fetchone()
+                    if queue and json.loads(queue["state_json"]).get("items"):
+                        raise AgentStoreConflict("用户排队消息先处理")
+                    completion_events = [eligible[event_id] for event_id in completion_event_ids]
+                images = claim_images(connection, session_id, image_ids)
+                continuation_handoff = None
+                goal_to_bind = goal
+                review_context = None
+                if review_source_run_id is not None:
+                    from zhimeng_runtime.task_review import build_review_record
+                    source = self._require_run_row(connection, review_source_run_id)
+                    if source['session_id'] != session_id or source['project_binding_id'] != session['project_binding_id']:
+                        raise AgentStoreConflict('复核任务必须属于当前对话和文件夹')
+                    if source['status'] not in {'succeeded', 'failed', 'cancelled', 'interrupted'}:
+                        raise AgentStoreConflict('原任务还在执行，请结束后再复核')
+                    if context_pack_id or continuation_source_run_id or completion_event_ids or writer_mode != 'repair_only':
+                        raise AgentStoreConflict('独立复核使用普通只读任务，不能同时接续或执行专用流程')
+                    review_context = build_review_record(connection, source)
+                if continuation_source_run_id is not None:
+                    from zhimeng_runtime.agent_continuation import build_handoff, inspect_continuation
+                    source = self._require_run_row(connection, continuation_source_run_id)
+                    if source["session_id"] != session_id:
+                        raise AgentStoreConflict("接续任务必须属于同一对话")
+                    if workflow_plan_builder is not None:
+                        raise AgentStoreConflict("受管流程不能使用普通任务接续")
+                    continuation_state = inspect_continuation(connection, source)
+                    if not continuation_state.can_continue:
+                        raise AgentStoreConflict(continuation_state.reason)
+                    continuation_handoff = build_handoff(connection, source)
+                    source_goal = GoalStore.for_run(connection, continuation_source_run_id)
+                    if goal_to_bind is None and source_goal and source_goal.status == "paused":
+                        goal_to_bind = GoalAdmission(action="resume", goal_id=source_goal.goal_id,
+                                                     expected_revision=source_goal.revision)
+                    from zhimeng_runtime.task_review import review_record
+                    review_context = review_record(connection, source['id'])
+                    if review_context is not None:
+                        writer_mode = 'repair_only'
 
                 session_executor_json = str(session["executor_json"])
                 session_capabilities_json = str(session["capabilities_json"])
@@ -643,20 +1228,35 @@ class AgentStore:
                         "Agent session already has a non-terminal Run"
                     )
 
-                project_id = str(session["project_binding_id"])
-                project = connection.execute(
-                    "SELECT * FROM project_binding WHERE id = ?",
-                    (project_id,),
-                ).fetchone()
-                if project is None:
-                    raise AgentStoreConflict("Session project binding no longer exists")
-                if (
-                    int(project["revision"]) != expected_project_revision
-                    or str(project["fingerprint"]) != expected_project_fingerprint
-                ):
-                    raise AgentStoreConflict(
-                        "Project revision changed; refresh the project before sending this turn"
-                    )
+                session_project_id = session["project_binding_id"]
+                if session_project_id is None:
+                    # 「随便聊」Run：会话没有项目绑定，跳过项目身份校验，
+                    # Run 行的三列项目身份落 NULL。
+                    project_id = None
+                else:
+                    project_id = str(session_project_id)
+                    project = connection.execute(
+                        "SELECT * FROM project_binding WHERE id = ?",
+                        (project_id,),
+                    ).fetchone()
+                    if project is None:
+                        raise AgentStoreConflict(
+                            "Session project binding no longer exists"
+                        )
+                    if (
+                        expected_project_revision is None
+                        or expected_project_fingerprint is None
+                    ):
+                        raise AgentStoreInvalidState(
+                            "Project-bound Run requires expected project revision and fingerprint"
+                        )
+                    if (
+                        int(project["revision"]) != expected_project_revision
+                        or str(project["fingerprint"]) != expected_project_fingerprint
+                    ):
+                        raise AgentStoreConflict(
+                            "Project revision changed; refresh the project before sending this turn"
+                        )
 
                 if context_pack_id is not None:
                     context_pack = connection.execute(
@@ -670,7 +1270,7 @@ class AgentStore:
                             "Context Pack hash does not match the reviewed Pack",
                             code="context_pack_hash_mismatch",
                         )
-                    self._require_project_kb_binding(context_pack)
+                    # 资料包可以不绑知识库快照（普通对话自 2026-09-25 起都不绑）。
                     if (
                         str(context_pack["session_id"]) != session_id
                         or str(context_pack["project_binding_id"]) != project_id
@@ -799,8 +1399,24 @@ class AgentStore:
                     ),
                 )
                 run = connection.execute("SELECT * FROM run WHERE id = ?", (run_id,)).fetchone()
+                if goal_to_bind:
+                    GoalStore.bind(connection, session_id, run_id, message, goal_to_bind)
+                connection.execute("UPDATE run SET origin_kind=?,stop_generation=? WHERE id=?",
+                    ("command_completion" if completion_event_ids else "user",
+                     completion_store.current_generation(session_id, connection=connection), run_id))
+                run = connection.execute("SELECT * FROM run WHERE id = ?", (run_id,)).fetchone()
                 if run is None:  # pragma: no cover - insert invariant.
                     raise RuntimeError("run transaction produced no row")
+                # 第一轮对话顺手把占位标题换成「按内容起的标题」：
+                # 作者回看历史时靠的是标题，不是时间戳。作者手动改过的
+                # 名字（或已经像样的标题）绝不覆盖。
+                if not completion_event_ids and ordinal == 1 and _title_is_placeholder(str(session["title"])):
+                    derived = _derive_session_title(message)
+                    if derived:
+                        connection.execute(
+                            "UPDATE execution_session SET title = ? WHERE id = ?",
+                            (derived, session_id),
+                        )
                 if workflow_plan_builder is not None:
                     plan = workflow_plan_builder(self._run_from_row(run))
                     self._create_workflow_plan_in_connection(
@@ -825,11 +1441,16 @@ class AgentStore:
                             if context_pack["knowledge_fingerprint"] is not None
                             else None
                         ),
-                        "project_kb_state_id": str(
-                            context_pack["project_kb_state_id"]
+                        # 普通对话的资料包不绑知识库快照：记 null，不是字符串 "None"。
+                        "project_kb_state_id": (
+                            str(context_pack["project_kb_state_id"])
+                            if context_pack["project_kb_state_id"] is not None
+                            else None
                         ),
-                        "project_kb_manifest_hash": str(
-                            context_pack["project_kb_manifest_hash"]
+                        "project_kb_manifest_hash": (
+                            str(context_pack["project_kb_manifest_hash"])
+                            if context_pack["project_kb_manifest_hash"] is not None
+                            else None
                         ),
                     }
                     connection.execute(
@@ -868,53 +1489,56 @@ class AgentStore:
                     )
                     causation_id = context_activity.root.activity_id
                     sequence += 1
-                    writer_intent = {
-                        "schema": "zhimeng.writer-intent.v1",
-                        "mode": writer_mode,
-                        "active_chapter_id": active_chapter_id,
-                    }
-                    writer_intent_hash = canonical_json_hash(writer_intent)
-                    writer_intent_id = _new_id("artifact")
-                    connection.execute(
-                        """
-                        INSERT INTO artifact(
-                            id, run_id, artifact_type, relative_path,
-                            content_hash, metadata_json, created_at
-                        ) VALUES (?, ?, 'writer_intent', NULL, ?, ?, ?)
-                        """,
-                        (
-                            writer_intent_id,
-                            run_id,
-                            writer_intent_hash,
-                            _json(writer_intent),
-                            created_at.isoformat(),
-                        ),
-                    )
-                    intent_activity = self._insert_activity(
-                        connection,
-                        run,
-                        sequence=sequence,
-                        kind=ActivityKind.ARTIFACT,
-                        payload=ArtifactPayload(
-                            artifact_id=writer_intent_id,
-                            artifact_type="writer_intent",
-                            name="Writer intent",
-                            uri=f"runtime://agent/runs/{run_id}/writer-intent",
-                            media_type="application/json",
-                            content_hash=writer_intent_hash,
-                            size_bytes=len(_json(writer_intent).encode("utf-8")),
-                        ).model_dump(mode="json"),
-                        causation_id=causation_id,
-                        created_at=created_at,
-                    )
-                    causation_id = intent_activity.root.activity_id
-                    sequence += 1
+                # 挡位每一轮都记（不绑书的也记）：工具目录和执行命令前的检查都按它来。
+                writer_intent = {
+                    "schema": "zhimeng.writer-intent.v1",
+                    "mode": writer_mode,
+                    "active_chapter_id": active_chapter_id,
+                    **({"manual_file_ids": sorted(set(manual_file_ids or []))} if context_pack is None else {}),
+                    **({"open_file_path": open_file_path} if open_file_path else {}),
+                }
+                writer_intent_hash = canonical_json_hash(writer_intent)
+                writer_intent_id = _new_id("artifact")
+                connection.execute(
+                    """
+                    INSERT INTO artifact(
+                        id, run_id, artifact_type, relative_path,
+                        content_hash, metadata_json, created_at
+                    ) VALUES (?, ?, 'writer_intent', NULL, ?, ?, ?)
+                    """,
+                    (
+                        writer_intent_id,
+                        run_id,
+                        writer_intent_hash,
+                        _json(writer_intent),
+                        created_at.isoformat(),
+                    ),
+                )
+                intent_activity = self._insert_activity(
+                    connection,
+                    run,
+                    sequence=sequence,
+                    kind=ActivityKind.ARTIFACT,
+                    payload=ArtifactPayload(
+                        artifact_id=writer_intent_id,
+                        artifact_type="writer_intent",
+                        name="Writer intent",
+                        uri=f"runtime://agent/runs/{run_id}/writer-intent",
+                        media_type="application/json",
+                        content_hash=writer_intent_hash,
+                        size_bytes=len(_json(writer_intent).encode("utf-8")),
+                    ).model_dump(mode="json"),
+                    causation_id=causation_id,
+                    created_at=created_at,
+                )
+                causation_id = intent_activity.root.activity_id
+                sequence += 1
                 message_id = _new_id("message")
                 user_activity = self._insert_activity(
                     connection,
                     run,
                     sequence=sequence,
-                    kind=ActivityKind.MESSAGE,
+                    kind=ActivityKind.MESSAGE if not completion_event_ids else ActivityKind.RUN_STATE,
                     payload=MessagePayload(
                         role="user",
                         content=message,
@@ -925,12 +1549,15 @@ class AgentStore:
                         format="plain",
                         finish_reason=None,
                         usage=None,
+                    ).model_dump(mode="json") if not completion_event_ids else RunStatePayload(
+                        status=RunStatus.QUEUED, previous_status=None, detail="后台命令结果触发接续",
                     ).model_dump(mode="json"),
                     causation_id=causation_id,
                     created_at=created_at,
                 )
-                message_ordinal = int(session["last_message_ordinal"]) + 1
-                connection.execute(
+                message_ordinal = int(session["last_message_ordinal"]) + (0 if completion_event_ids else 1)
+                if not completion_event_ids:
+                    connection.execute(
                     """
                     INSERT INTO session_message(
                         activity_id, session_id, run_id, message_id, ordinal,
@@ -959,6 +1586,8 @@ class AgentStore:
                     causation_id=user_activity.root.activity_id,
                     created_at=created_at,
                 )
+                if images:
+                    connection.execute("UPDATE session_message SET images_json=? WHERE message_id=?", (_json(images), message_id))
                 connection.execute(
                     "UPDATE run SET last_activity_sequence = ? WHERE id = ?",
                     (sequence + 1, run_id),
@@ -984,12 +1613,43 @@ class AgentStore:
                     ),
                 )
                 run = connection.execute("SELECT * FROM run WHERE id = ?", (run_id,)).fetchone()
-                message_row = self._message_row_for_run(connection, run_id, "user")
+                message_row = None if completion_event_ids else self._message_row_for_run(connection, run_id, "user")
+                if completion_event_ids:
+                    messages = self.command_completion_messages(completion_events)
+                    self._save_run_transcript_in_connection(connection, run_id, messages)
+                    completion_store.mark_delivered(completion_event_ids, run_id, connection=connection)
+                if continuation_handoff is not None:
+                    self._insert_provider_recovery_event(
+                        connection, run_id, event_type="run_continuation",
+                        payload=continuation_handoff, created_at=created_at,
+                    )
+                if review_context is not None:
+                    self._insert_provider_recovery_event(
+                        connection, run_id, event_type='task_review', payload=review_context, created_at=created_at,
+                    )
                 connection.commit()
             except Exception:
                 connection.rollback()
                 raise
-        return self._run_from_row(run), self._message_from_row(message_row), False
+        return self._run_from_row(run), self._message_from_row(message_row) if message_row is not None else None, False
+
+    def get_run_continuation(self, run_id: str) -> AgentRunContinuationResponse:
+        from zhimeng_runtime.agent_continuation import inspect_continuation
+        with self.database.connection() as connection:
+            run = self._require_run_row(connection, run_id)
+            return inspect_continuation(connection, run)
+
+    def continuation_provider_message(self, run_id: str) -> dict[str, str] | None:
+        from zhimeng_runtime.agent_continuation import continuation_record, current_changes, provider_message
+        with self.database.connection() as connection:
+            self._require_run_row(connection, run_id)
+            record = continuation_record(connection, run_id)
+            if record is None:
+                return None
+            # The persisted handoff is retained. Refresh only mutable change status:
+            # an author may have rolled back a file after the child was queued.
+            record["file_changes"] = current_changes(connection, record.get("source_run_ids", []))
+            return provider_message(record)
 
     def get_writer_mode(
         self,
@@ -1023,6 +1683,150 @@ class AgentStore:
             raise AgentStoreInvalidState("Stored Writer intent failed integrity validation")
         return payload["mode"]
 
+    def _writer_intent_payload(self, run_id: str) -> dict[str, Any] | None:
+        with self.database.connection() as connection:
+            row = connection.execute(
+                """
+                SELECT metadata_json FROM artifact
+                WHERE run_id = ? AND artifact_type = 'writer_intent'
+                ORDER BY id LIMIT 1
+                """,
+                (run_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        try:
+            payload = json.loads(str(row["metadata_json"]))
+        except (TypeError, ValueError):
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    def get_writer_focus(self, run_id: str) -> tuple[str | None, tuple[str, ...]]:
+        """这一轮用户在编辑器里开着的章（chapter_id）和亲手附上的文件（file_id）；没记就是空的。"""
+
+        payload = self._writer_intent_payload(run_id)
+        if payload is None:
+            return None, ()
+        chapter = payload.get("active_chapter_id")
+        files = payload.get("manual_file_ids")
+        return (
+            chapter if isinstance(chapter, str) and chapter else None,
+            tuple(item for item in files if isinstance(item, str)) if isinstance(files, list) else (),
+        )
+
+    def get_open_file_path(self, run_id: str) -> str | None:
+        """这一轮用户在右栏开着的文件（打开的文件夹里的相对路径）；没开就是 None。"""
+
+        payload = self._writer_intent_payload(run_id)
+        path = payload.get("open_file_path") if payload is not None else None
+        return path if isinstance(path, str) and path else None
+
+    def session_first_run(self, session_id: str) -> tuple[str, datetime] | None:
+        """这场对话的第一轮（编号和开始时间）：对话开头那段环境信息的日期、挡位取它的，一场对话里不变。"""
+
+        with self.database.connection() as connection:
+            row = connection.execute(
+                "SELECT id, created_at FROM run WHERE session_id = ? ORDER BY ordinal LIMIT 1",
+                (session_id,),
+            ).fetchone()
+        return None if row is None else (str(row["id"]), _parse_time(row["created_at"]))
+
+    def session_opening_context(self, session_id: str) -> dict[str, Any] | None:
+        """这场对话开头那份用户记忆和说明文件（第一次记下的那份），还没记过返回 None。
+
+        记在 artifact 表里（类型 opening_context，挂在当时那一轮上）：别处读 artifact 都按类型过滤，不会被误读。
+        """
+
+        with self.database.connection() as connection:
+            row = connection.execute(
+                """
+                SELECT a.metadata_json FROM artifact AS a
+                JOIN run AS r ON r.id = a.run_id
+                WHERE r.session_id = ? AND a.artifact_type = 'opening_context'
+                ORDER BY r.ordinal, a.created_at, a.id
+                LIMIT 1
+                """,
+                (session_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        try:
+            value = json.loads(str(row["metadata_json"]))
+        except ValueError:
+            return None
+        return value if isinstance(value, dict) else None
+
+    def record_opening_context(self, run_id: str, payload: dict[str, Any]) -> None:
+        body = _json(payload)
+        with self.database.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO artifact(
+                        id, run_id, artifact_type, relative_path,
+                        content_hash, metadata_json, created_at
+                    ) VALUES (?, ?, 'opening_context', NULL, ?, ?, ?)
+                    """,
+                    (
+                        f"artifact_opening_{uuid4().hex}",
+                        run_id,
+                        hashlib.sha256(body.encode("utf-8")).hexdigest(),
+                        body,
+                        _now().isoformat(),
+                    ),
+                )
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+
+    def find_run_by_idempotency_key(self, session_id: str, key: str):
+        with self.database.connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM run WHERE session_id = ? AND idempotency_key = ?",
+                (session_id, key),
+            ).fetchone()
+            if row is None:
+                if connection.execute(
+                    "SELECT 1 FROM session_admission_withdrawal WHERE session_id = ? AND idempotency_key = ?",
+                    (session_id, key),
+                ).fetchone() is not None:
+                    raise AgentAdmissionWithdrawn("这条尚未受理的发送已取回，可以编辑后重新发送")
+                return None
+            message = None if row["origin_kind"] == "command_completion" else self._message_row_for_run(connection, str(row["id"]), "user", first=True)
+            return self._run_from_row(row), self._message_from_row(message) if message is not None else None
+
+    def withdraw_run_admission(
+        self, session_id: str, key: str,
+    ) -> tuple[Run, AgentMessageResponse] | None:
+        """Either preserve the admitted run or retire this key before creation."""
+        with self.database.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                if connection.execute(
+                    "SELECT id FROM execution_session WHERE id = ?", (session_id,),
+                ).fetchone() is None:
+                    raise AgentStoreNotFound("Agent session was not found")
+                row = connection.execute(
+                    "SELECT * FROM run WHERE session_id = ? AND idempotency_key = ?",
+                    (session_id, key),
+                ).fetchone()
+                if row is not None:
+                    message = self._message_row_for_run(connection, str(row["id"]), "user", first=True)
+                    result = self._run_from_row(row), self._message_from_row(message)
+                    connection.commit()
+                    return result
+                connection.execute(
+                    "INSERT INTO session_admission_withdrawal(session_id, idempotency_key, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
+                    (session_id, key, _now().isoformat()),
+                )
+                connection.commit()
+                return None
+            except Exception:
+                connection.rollback()
+                raise
+
     def get_run(self, run_id: str) -> Run:
         with self.database.connection() as connection:
             row = connection.execute("SELECT * FROM run WHERE id = ?", (run_id,)).fetchone()
@@ -1041,7 +1845,7 @@ class AgentStore:
             rows = connection.execute(
                 """
                 SELECT * FROM run
-                WHERE session_id = ?
+                WHERE session_id = ? AND run_type != 'conversation_fork'
                 ORDER BY ordinal DESC
                 LIMIT ?
                 """,
@@ -1236,11 +2040,53 @@ class AgentStore:
                     created_at=_now(),
                 )
                 stored = self._require_tool_call_row(connection, tool_call_id)
+                if isinstance(output, dict) and output.get("schema") == "zhimeng.tool-result.command-session.v1" and output.get("status") in {"exited", "cancelled", "interrupted"}:
+                    from zhimeng_runtime.command_completion import CommandCompletionStore
+                    CommandCompletionStore(self.database).mark_observed(output, run_id, connection=connection)
+                elif isinstance(output, dict) and output.get("schema") == "zhimeng.tool-result.command-session-list.v1":
+                    from zhimeng_runtime.command_completion import CommandCompletionStore
+                    for command in output.get("sessions", []):
+                        if isinstance(command, dict) and command.get("status") in {"exited", "cancelled", "interrupted"}:
+                            CommandCompletionStore(self.database).mark_observed(command, run_id, connection=connection)
                 connection.commit()
             except Exception:
                 connection.rollback()
                 raise
         return self._tool_call_from_row(stored), False
+
+    def observe_cancelled_mcp_call(
+        self, run_id: str, *, tool_call_id: str, output: dict[str, Any], duration_ms: int,
+    ) -> StoredToolCall:
+        """Attach a local observation after cancellation already closed the call.
+
+        The outcome stays cancelled: neither a scan nor a lost MCP response
+        establishes remote success. A new result event lets open clients refresh.
+        """
+        if output.get("source_mcp") is not True or output.get("cancelled") is not True:
+            raise AgentStoreInvalidState("MCP cancellation observation needs its source metadata")
+        payload = ToolResultPayload(tool_call_id=tool_call_id, status="cancelled", output=output,
+                                    error=None, duration_ms=duration_ms)
+        result_hash = self._tool_result_hash(payload, None)
+        with self.database.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                run = self._require_run_row(connection, run_id)
+                call = self._require_tool_call_row(connection, tool_call_id)
+                if str(call["run_id"]) != run_id or not str(call["tool_name"]).startswith("mcp__"):
+                    raise AgentStoreConflict("Cancellation observation belongs to another tool or Run")
+                if str(call["status"]) != "cancelled":
+                    raise AgentStoreConflict("Only cancelled MCP calls can receive cancellation observations")
+                if str(call["result_hash"] or "") != result_hash:
+                    self._finish_tool_call_in_transaction(
+                        connection, run, call, result_payload=payload, result_hash=result_hash,
+                        change_proposal=None, created_at=_now(),
+                    )
+                stored = self._require_tool_call_row(connection, tool_call_id)
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+        return self._tool_call_from_row(stored)
 
     def get_tool_call(self, tool_call_id: str) -> StoredToolCall:
         with self.database.connection() as connection:
@@ -4343,25 +5189,57 @@ class AgentStore:
         )
 
     def list_activities(self, run_id: str, *, after_sequence: int = 0) -> list[ActivityItem]:
+        return self.read_activity_page(run_id, after_sequence=after_sequence).activities
+
+    def read_activity_page(
+        self, run_id: str, *, after_sequence: int = 0,
+        limit: int | None = None, through_sequence: int | None = None,
+    ) -> AgentActivityListResponse:
+        """Bound HTTP reads to one activity prefix; keep unpaged callers compatible.
+
+        The first page chooses a durable upper bound. Later pages reuse it even
+        while the run grows. Its SSE cursor points to the same activity prefix,
+        never to the current (possibly newer) event tail.
+        """
         with self.database.connection() as connection:
-            run = connection.execute("SELECT id FROM run WHERE id = ?", (run_id,)).fetchone()
+            connection.execute("BEGIN")
+            run = connection.execute("SELECT last_activity_sequence FROM run WHERE id = ?", (run_id,)).fetchone()
             if run is None:
                 raise AgentStoreNotFound("Agent run was not found")
+            upper = int(run['last_activity_sequence'])
+            if through_sequence is not None:
+                upper = min(upper, through_sequence)
             rows = connection.execute(
                 """
-                SELECT payload_json FROM activity
-                WHERE run_id = ? AND sequence > ?
+                SELECT sequence, payload_json FROM activity
+                WHERE run_id = ? AND sequence > ? AND sequence <= ?
                 ORDER BY sequence ASC
+                LIMIT ?
                 """,
-                (run_id, after_sequence),
+                (run_id, after_sequence, upper, limit + 1 if limit is not None else -1),
             ).fetchall()
-        return [ActivityItem.model_validate_json(str(row["payload_json"])) for row in rows]
+            event_cursor = connection.execute(
+                """SELECT COALESCE(MAX(re.sequence), 0) FROM run_event AS re
+                   JOIN activity AS a ON a.id = re.activity_id
+                   WHERE re.run_id = ? AND a.sequence <= ?""", (run_id, upper),
+            ).fetchone()[0]
+        more = limit is not None and len(rows) > limit
+        if more:
+            rows = rows[:limit]
+        return AgentActivityListResponse(
+            run_id=run_id,
+            activities=[ActivityItem.model_validate_json(str(row['payload_json'])) for row in rows],
+            last_sequence=upper,
+            next_after_sequence=int(rows[-1]['sequence']) if more else None,
+            last_event_sequence=int(event_cursor),
+        )
 
     def list_run_events(
         self,
         run_id: str,
         *,
         after_sequence: int = 0,
+        limit: int | None = None,
     ) -> list[StoredRunEvent]:
         with self.database.connection() as connection:
             run = connection.execute("SELECT id FROM run WHERE id = ?", (run_id,)).fetchone()
@@ -4374,8 +5252,9 @@ class AgentStore:
                 JOIN activity AS a ON a.id = re.activity_id
                 WHERE re.run_id = ? AND re.sequence > ? AND re.event_type = 'activity'
                 ORDER BY re.sequence ASC
+                LIMIT ?
                 """,
-                (run_id, after_sequence),
+                (run_id, after_sequence, limit if limit is not None else -1),
             ).fetchall()
         return [
             StoredRunEvent(
@@ -4385,13 +5264,47 @@ class AgentStore:
             for row in rows
         ]
 
+    def append_run_event(
+        self,
+        run_id: str,
+        event_type: str,
+        payload: dict[str, object],
+    ) -> None:
+        """Append a non-activity event (model turn, fold, stop) to the Run log.
+
+        与 activity 事件共用 run_event 的 ``UNIQUE(run_id, sequence)``，
+        sequence 分配必须在 BEGIN IMMEDIATE 事务内，避免并发写撞号。
+        ``list_run_events`` 只捞 ``event_type = 'activity'``，这些生命周期
+        事件不会混进 SSE 活动流。
+        """
+        with self.database.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                self._require_run_row(connection, run_id)
+                self._insert_provider_recovery_event(
+                    connection,
+                    run_id,
+                    event_type=event_type,
+                    payload=payload,
+                    created_at=_now(),
+                )
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+
     def list_messages(
         self,
         session_id: str,
         *,
         after_ordinal: int = 0,
         limit: int = 200,
+        before_ordinal: int | None = None,
+        latest: bool = False,
     ) -> list[AgentMessageResponse]:
+        """按顺序返回消息。``latest`` 为真时取这段范围里最新的 ``limit`` 条（仍按先后排）：
+        界面打开长对话要看的是最后那些，不是最早的那些。"""
+        upper = before_ordinal if before_ordinal is not None else 2**62
         with self.database.connection() as connection:
             session = connection.execute(
                 "SELECT id FROM execution_session WHERE id = ?",
@@ -4399,26 +5312,448 @@ class AgentStore:
             ).fetchone()
             if session is None:
                 raise AgentStoreNotFound("Agent session was not found")
+            rows = connection.execute(
+                f"""
+                SELECT sm.*, a.payload_json
+                FROM session_message AS sm
+                JOIN activity AS a ON a.id = sm.activity_id
+                WHERE sm.session_id = ? AND sm.ordinal > ? AND sm.ordinal < ?
+                ORDER BY sm.ordinal {"DESC" if latest else "ASC"}
+                LIMIT ?
+                """,
+                (session_id, after_ordinal, upper, limit),
+            ).fetchall()
+        if latest:
+            rows = list(reversed(rows))
+        return [self._message_from_row(row) for row in rows]
+
+    def has_messages_between(self, session_id: str, *, after_ordinal: int, before_ordinal: int) -> bool:
+        with self.database.connection() as connection:
+            row = connection.execute(
+                "SELECT 1 FROM session_message WHERE session_id = ? AND ordinal > ? AND ordinal < ? LIMIT 1",
+                (session_id, after_ordinal, before_ordinal),
+            ).fetchone()
+        return row is not None
+
+    def run_process_summaries(
+        self, session_id: str, run_ids: list[str],
+    ) -> dict[str, AgentRunProcessSummary]:
+        """Aggregate one message page without loading tool arguments/results.
+
+        One query covers all distinct runs. JSON metadata is inspected only for
+        reasoning and artifacts; large tool input/output bodies stay in SQLite.
+        """
+        selected = list(dict.fromkeys(run_ids))
+        if not selected:
+            return {}
+        placeholders = ",".join("?" for _ in selected)
+        with self.database.connection() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT r.id AS run_id,
+                    SUM(CASE WHEN a.kind = 'tool_call' THEN 1 ELSE 0 END) AS tool_count,
+                    MAX(CASE
+                        WHEN a.kind IN ('tool_call', 'command', 'skill_call', 'change_proposal', 'error') THEN 1
+                        WHEN a.kind = 'artifact' THEN
+                            COALESCE(json_extract(a.payload_json, '$.payload.artifact_type'), '')
+                                NOT IN ('context_pack', 'writer_intent', 'context_injection_receipt')
+                        WHEN a.kind = 'reasoning' THEN
+                            COALESCE(json_extract(a.payload_json, '$.payload.source'), 'model') != 'runtime'
+                            AND NOT (
+                                COALESCE(json_extract(a.payload_json, '$.payload.summary'), '') LIKE '本次%'
+                                AND instr(COALESCE(json_extract(a.payload_json, '$.payload.content'), ''), '这描述的是发送参数') > 0
+                            )
+                            AND length(trim(CASE
+                                WHEN json_extract(a.payload_json, '$.payload.phase') = 'delta'
+                                    THEN COALESCE(json_extract(a.payload_json, '$.payload.delta'), json_extract(a.payload_json, '$.payload.content'), '')
+                                ELSE COALESCE(json_extract(a.payload_json, '$.payload.content'), json_extract(a.payload_json, '$.payload.summary'), '')
+                            END)) > 0
+                        ELSE 0
+                    END) AS has_process
+                FROM run AS r
+                LEFT JOIN activity AS a ON a.run_id = r.id
+                    AND a.kind IN ('tool_call', 'command', 'skill_call', 'change_proposal', 'error', 'artifact', 'reasoning')
+                WHERE r.session_id = ? AND r.id IN ({placeholders})
+                GROUP BY r.id
+                """,
+                (session_id, *selected),
+            ).fetchall()
+        return {
+            str(row["run_id"]): AgentRunProcessSummary(
+                has_process=bool(row["has_process"]), tool_count=int(row["tool_count"]),
+            )
+            for row in rows
+        }
+
+    def pending_steering_inputs(self, run_id: str):
+        """读取当前运行待吸收的用户输入；局部导入避免存储模块相互依赖。"""
+        from zhimeng_runtime.agent_steering import AgentSteeringStore
+        return AgentSteeringStore(self).pending(run_id)
+
+    @staticmethod
+    def command_completion_messages(events: list[dict]) -> list[dict[str, object]]:
+        """Runtime facts have a source; they never become session user messages."""
+        messages = []
+        for event in events:
+            payload = dict(event["payload"])
+            for name in ("stdout", "stderr"):
+                path = payload.get(name + "_file")
+                if path:
+                    try:
+                        with Path(path).open("rb") as stream:
+                            size = stream.seek(0, 2)
+                            stream.seek(max(0, size - 8000))
+                            payload[name + "_tail"] = stream.read().decode("utf-8", errors="replace")
+                    except OSError:
+                        payload[name + "_tail"] = "日志目前不可读，可稍后按完整日志路径重试。"
+            messages.append({"role": "system", "content": "后台命令的真实完成结果，继续结合此前用户的任务处理：\n" + _json({
+                "source": "command_completion", "event_id": event["event_id"],
+                "command_session_id": event["command_session_id"], "owner_run_id": event["owner_run_id"],
+                "status": event["status"], "exit_code": event["exit_code"], "result": payload,
+            })})
+        return messages
+
+    def completion_start_messages(self, run_id: str) -> list[dict[str, object]]:
+        with self.database.connection() as connection:
+            row = connection.execute("SELECT messages_json FROM run_transcript WHERE run_id=?", (run_id,)).fetchone()
+        return json.loads(row["messages_json"]) if row else []
+
+    def pending_command_completions(self, run_id: str) -> list[dict]:
+        """Optional event-source seam, parallel to pending_steering_inputs."""
+        from zhimeng_runtime.command_completion import CommandCompletionStore
+        run = self.get_run(run_id)
+        return CommandCompletionStore(self.database).pending(run.session_id)
+
+    def consume_command_completions(self, run_id: str, transcript: list[dict[str, object]], pin: tuple[int, str] | None = None,
+                                    event_ids: list[str] | None = None) -> list[dict[str, object]]:
+        from zhimeng_runtime.command_completion import CommandCompletionStore
+        completions = CommandCompletionStore(self.database)
+        with self.database.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                run = self._require_run_row(connection, run_id)
+                if run["status"] not in {"starting", "running"}:
+                    connection.commit()
+                    return []
+                events = completions.pending(str(run["session_id"]), connection=connection)
+                if event_ids is not None:
+                    selected = set(event_ids)
+                    events = [item for item in events if item["event_id"] in selected]
+                if not events:
+                    connection.commit()
+                    return []
+                messages = self.command_completion_messages(events)
+                GoalStore.invalidate_outcome(connection, run_id)
+                self._save_run_transcript_in_connection(connection, run_id, [*transcript, *messages])
+                completions.mark_delivered([item["event_id"] for item in events], run_id, connection=connection)
+                if pin is not None:
+                    metadata = {"event_ids": [item["event_id"] for item in events], "result_revision": pin[0], "result_fingerprint": pin[1]}
+                    connection.execute("INSERT INTO artifact(id,run_id,artifact_type,relative_path,content_hash,metadata_json,created_at) VALUES(?,?,'command_completion_observation',NULL,?,?,?)",
+                        (_new_id("artifact"), run_id, hashlib.sha256(_json(metadata).encode()).hexdigest(), _json(metadata), _now().isoformat()))
+                connection.commit()
+                return messages
+            except Exception:
+                connection.rollback()
+                raise
+
+    def message_run_origins(self, run_ids: list[str]) -> dict[str, str]:
+        if not run_ids:
+            return {}
+        with self.database.connection() as connection:
+            rows = connection.execute("SELECT id,origin_kind FROM run WHERE id IN (" + ",".join("?" for _ in run_ids) + ")", run_ids).fetchall()
+        return {str(row["id"]): str(row["origin_kind"]) for row in rows}
+
+    def message_review_sources(self, run_ids: list[str]):
+        from zhimeng_runtime.task_review import review_sources
+        with self.database.connection() as connection:
+            return review_sources(connection, run_ids)
+
+    def review_provider_messages(self, run_id: str, *, max_characters: int):
+        from zhimeng_runtime.task_review import review_messages
+        with self.database.connection() as connection:
+            return review_messages(connection, self._require_run_row(connection, run_id), max_characters=max_characters)
+
+    def review_source_file_ids(self, run_id: str) -> tuple[str, ...]:
+        from zhimeng_runtime.task_review import review_record
+        with self.database.connection() as connection:
+            record = review_record(connection, run_id)
+        return tuple(dict.fromkeys(
+            file_id for source_id in (record or {}).get('source_run_ids', [])
+            for file_id in self.get_writer_focus(source_id)[1]
+        ))
+
+    def save_run_transcript(self, run_id: str, messages: list[dict[str, object]]) -> None:
+        """保存本轮模型往来，包括执行工具前的请求检查点。
+
+        下一轮拼历史时原样放回（``provider_history``）。同一轮再存一次就换掉（续跑同一轮时）。
+        """
+        with self.database.connection() as connection:
+            self._save_run_transcript_in_connection(connection, run_id, messages)
+
+    def get_run_goal(self, run_id: str):
+        with self.database.connection() as connection:
+            return GoalStore.for_run(connection, run_id)
+
+    def commit_run_compaction(self, run_id: str, messages: list[dict[str, object]], stats: dict) -> None:
+        """The compacted transcript and its success receipt become visible together."""
+        with self.database.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                row = self._require_run_row(connection, run_id)
+                if row["status"] != RunStatus.RUNNING.value:
+                    raise AgentStoreConflict("任务已停止，不再替换上下文。")
+                self._save_run_transcript_in_connection(connection, run_id, messages)
+                self._insert_provider_recovery_event(connection, run_id, event_type="run_context_compaction",
+                                                     payload=stats, created_at=_now())
+                connection.commit()
+            except BaseException:
+                connection.rollback()
+                raise
+
+    def _recover_run_transcript_in_connection(self, connection: sqlite3.Connection, run_id: str) -> None:
+        from zhimeng_runtime.agent_transcript import recovered_tool_exchange, repair_tool_pairs
+        from zhimeng_runtime.workflow_runner import workflow_runtime_tool_call_id
+
+        saved = connection.execute(
+            "SELECT messages_json, through_message_ordinal FROM run_transcript WHERE run_id = ?", (run_id,),
+        ).fetchone()
+        call_rows = connection.execute(
+            "SELECT tc.*, a.sequence FROM tool_call tc JOIN activity a ON a.id = tc.call_activity_id "
+            "WHERE tc.run_id = ? ORDER BY a.sequence", (run_id,),
+        ).fetchall()
+        if not call_rows and saved is None:
+            return
+        calls = [self._tool_call_from_row(row) for row in call_rows]
+        messages = json.loads(saved["messages_json"]) if saved is not None else []
+        covered = saved["through_message_ordinal"] if saved is not None else 0
+        repaired = repair_tool_pairs(run_id, messages, calls)
+        represented = {
+            workflow_runtime_tool_call_id(run_id, call["id"])
+            for message in messages for call in message.get("tool_calls", [])
+        } | {call["id"] for message in messages for call in message.get("tool_calls", [])}
+        # Older checkpoints may precede the last batch. Merge only missing durable
+        # receipts and later visible messages, ordered by their recorded activities.
+        tail = [(int(row["sequence"]), recovered_tool_exchange(call))
+                for row, call in zip(call_rows, calls) if call.tool_call_id not in represented]
+        visible = connection.execute(
+            "SELECT sm.*, a.payload_json, a.sequence FROM session_message sm "
+            "JOIN activity a ON a.id = sm.activity_id WHERE sm.run_id = ? ORDER BY sm.ordinal", (run_id,),
+        ).fetchall()
+        for index, row in enumerate(visible):
+            if index == 0 and row["role"] == "user":
+                continue  # provider_history prepends the original request.
+            if covered is None or int(row["ordinal"]) <= covered:
+                continue
+            message = self._message_from_row(row)
+            tail.append((int(row["sequence"]), [provider_image_message(message.role, message.content, message.images)]))
+        for _, exchange in sorted(tail, key=lambda item: item[0]):
+            repaired.extend(exchange)
+        if repaired:
+            self._save_run_transcript_in_connection(connection, run_id, repaired)
+
+    def _save_run_transcript_in_connection(self, connection, run_id: str, messages: list[dict[str, object]]) -> None:
+        payload = json.dumps(messages, ensure_ascii=False, separators=(",", ":"))
+        estimated = sum(_provider_message_tokens(message) for message in messages)
+        row = self._require_run_row(connection, run_id)
+        through_ordinal = connection.execute(
+            "SELECT COALESCE(MAX(ordinal), 0) FROM session_message WHERE run_id = ?", (run_id,),
+        ).fetchone()[0]
+        connection.execute(
+                """
+                INSERT INTO run_transcript (run_id, session_id, messages_json, estimated_tokens, through_message_ordinal, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(run_id) DO UPDATE SET
+                    messages_json = excluded.messages_json,
+                    estimated_tokens = excluded.estimated_tokens,
+                    through_message_ordinal = excluded.through_message_ordinal,
+                    created_at = excluded.created_at
+                """,
+                (run_id, str(row["session_id"]), payload, estimated, through_ordinal, datetime.now(UTC).isoformat()),
+        )
+
+    def transcript_token_estimates(self, session_id: str) -> dict[str, int]:
+        """这场对话里存过往来的各轮：run_id → 那一段估算的 token（整理对话时按它算历史有多长）。"""
+        with self.database.connection() as connection:
+            rows = connection.execute(
+                "SELECT run_id, estimated_tokens FROM run_transcript WHERE session_id = ?",
+                (session_id,),
+            ).fetchall()
+        return {str(row["run_id"]): int(row["estimated_tokens"]) for row in rows}
+
+    @staticmethod
+    def _run_transcripts(connection: sqlite3.Connection, session_id: str) -> dict[str, list[dict[str, object]]]:
+        rows = connection.execute(
+            "SELECT run_id, messages_json FROM run_transcript WHERE session_id = ?",
+            (session_id,),
+        ).fetchall()
+        transcripts: dict[str, list[dict[str, object]]] = {}
+        for row in rows:
+            try:
+                messages = json.loads(str(row["messages_json"]))
+            except ValueError:
+                continue
+            if isinstance(messages, list) and messages and all(
+                isinstance(message, dict) and message.get("role") in {"system", "user", "assistant", "tool"}
+                for message in messages
+            ):
+                transcripts[str(row["run_id"])] = messages
+        return transcripts
+
+    def provider_history(
+        self,
+        session_id: str,
+        *,
+        max_messages: int | None = None,
+        max_characters: int = 120_000,
+        max_tokens: int | None = None,
+    ) -> list[dict[str, object]]:
+        """拼这一轮要发给模型的对话历史。
+
+        已经折叠进摘要的那一段不再逐条重发，改为在最前面放一段摘要；摘要之后
+        的消息原样保留。没有摘要时（绝大多数会话）行为与从前逐字节一致。
+
+        9-27 起默认不按条数截：以前只取最近 64 条，聊满 32 个来回还没到压缩线时窗口每轮往后滑一格，
+        整段历史每轮都换开头、提示缓存全不命中（Reasonix 档案 7.1）。压缩线以下只追加；
+        ``max_characters`` / ``max_tokens`` 由调用方按窗口档位给，只防一次贴进来的超长内容。
+
+        9-28 起存过往来的那几轮（``save_run_transcript``）照原样放回：作者的话 + 那一轮发给模型的整段
+        （工具调用、结果、补话、回答），一轮当一整块取舍，调用和结果不拆开（ZCode 档案 12.2）。没存过的照旧只带文字。
+        """
+        return self.provider_history_parts(
+            session_id, max_messages=max_messages, max_characters=max_characters, max_tokens=max_tokens
+        )[0]
+
+    def provider_history_parts(
+        self,
+        session_id: str,
+        *,
+        max_messages: int | None = None,
+        max_characters: int = 120_000,
+        max_tokens: int | None = None,
+    ) -> tuple[list[dict[str, object]], str | None]:
+        """同 ``provider_history``，另外给出最后一条消息是哪一轮的（新的一轮存往来时，从这一轮作者的话后面开始切）。"""
+        with self.database.connection() as connection:
+            session = connection.execute(
+                "SELECT id FROM execution_session WHERE id = ?",
+                (session_id,),
+            ).fetchone()
+            if session is None:
+                raise AgentStoreNotFound("Agent session was not found")
+            checkpoint_row = connection.execute(
+                """
+                SELECT *
+                FROM session_checkpoint
+                WHERE session_id = ?
+                ORDER BY through_ordinal DESC
+                LIMIT 1
+                """,
+                (session_id,),
+            ).fetchone()
+            folded_through = (
+                0 if checkpoint_row is None else int(checkpoint_row["through_ordinal"])
+            )
+            has_folded_images = connection.execute(
+                "SELECT 1 FROM session_message WHERE session_id=? AND ordinal<=? AND images_json!='[]' LIMIT 1",
+                (session_id, folded_through),
+            ).fetchone() is not None if folded_through else False
             rows = connection.execute(
                 """
                 SELECT sm.*, a.payload_json
                 FROM session_message AS sm
                 JOIN activity AS a ON a.id = sm.activity_id
                 WHERE sm.session_id = ? AND sm.ordinal > ?
-                ORDER BY sm.ordinal ASC
+                ORDER BY sm.ordinal DESC
                 LIMIT ?
                 """,
-                (session_id, after_ordinal, limit),
+                (session_id, folded_through, PROVIDER_HISTORY_ROW_LIMIT),
             ).fetchall()
-        return [self._message_from_row(row) for row in rows]
+            transcripts = self._run_transcripts(connection, session_id)
+            history_runs = connection.execute("SELECT id,ordinal,origin_kind,status FROM run WHERE session_id=?", (session_id,)).fetchall()
+            run_ordinals = {str(row["id"]): int(row["ordinal"]) for row in history_runs}
+            orphan_completion_ids = {str(row["id"]) for row in history_runs if row["origin_kind"] == "command_completion" and row["status"] in {"failed", "interrupted", "cancelled"}} - {str(row["run_id"]) for row in rows}
+            transcript_coverage = {str(row['run_id']): row['through_message_ordinal'] for row in connection.execute(
+                "SELECT run_id, through_message_ordinal FROM run_transcript WHERE session_id = ?", (session_id,),
+            ).fetchall()}
+        messages = [self._message_from_row(row) for row in reversed(rows)]
+        last_run_id = messages[-1].run_id if messages else None
+        # 取舍的单位：存过往来的一轮是一整块（这一轮作者的话 + 那一段），别的照旧一条一块。
+        blocks: list[list[dict[str, object]]] = []
+        block_run_ids: list[str] = []
+        index = 0
+        while index < len(messages):
+            message = messages[index]
+            transcript = transcripts.get(message.run_id)
+            if transcript is None:
+                if message.role in {"user", "assistant"}:
+                    blocks.append([provider_image_message(message.role, message.content, message.images)])
+                    block_run_ids.append(message.run_id)
+                index += 1
+                continue
+            block: list[dict[str, object]] = []
+            later: list[dict[str, object]] = []
+            covered_through = transcript_coverage.get(message.run_id)
+            while index < len(messages) and messages[index].run_id == message.run_id:
+                # 中途插入的用户消息已经在 transcript 的实际位置；这里只补初始输入。
+                if messages[index].role == "user" and not block:
+                    block.append(provider_image_message("user", messages[index].content, messages[index].images))
+                elif covered_through is not None and messages[index].ordinal > covered_through and messages[index].role in {'user', 'assistant'}:
+                    later.append(provider_image_message(messages[index].role, messages[index].content, messages[index].images))
+                index += 1
+            blocks.append([*block, *transcript, *later])
+            block_run_ids.append(message.run_id)
+        # An internal run may fail/interruption before its first answer. Its
+        # already-claimed source facts still belong in the next turn's history.
+        for orphan in orphan_completion_ids:
+            if orphan in transcripts and transcript_coverage.get(orphan, 0) == 0:
+                blocks.append(transcripts[orphan])
+                block_run_ids.append(orphan)
+        blocks = [block for _, block in sorted(zip(block_run_ids, blocks), key=lambda pair: run_ordinals[pair[0]])]
+        selected: list[list[dict[str, object]]] = []
+        size = 0
+        message_count = 0
+        for block in reversed(blocks):
+            block_size = sum(
+                _provider_message_tokens(item) if max_tokens is not None else _provider_message_characters(item)
+                for item in block
+            )
+            limit = max_tokens if max_tokens is not None else max_characters
+            if selected and (
+                (max_messages is not None and message_count + len(block) > max_messages)
+                or size + block_size > limit
+            ):
+                break
+            selected.append(block)
+            size += block_size
+            message_count += len(block)
+        history = [item for block in reversed(selected) for item in block]
+        if checkpoint_row is None:
+            return history, last_run_id
+        # 摘要放在最前面：它替代的正是这段历史之前的内容，顺序上也对得上，
+        # 而且稳定的前缀对 provider 的 prompt cache 更友好。
+        summary = {
+            "role": "system",
+            "content": render_checkpoint_block(
+                through_ordinal=folded_through,
+                content=str(checkpoint_row["content"]),
+            ),
+        }
+        if has_folded_images:
+            summary["content"] += "\n较早的附图仍保存在历史消息中，本次上下文使用压缩后的文字摘要。"
+        return [summary, *history], last_run_id
 
-    def provider_history(
+    # ------------------------------------------------------------------
+    # 会话摘要（Session Checkpoint）的存取。
+    #
+    # 触发与注入分别在 agent_service / context 那边；这里只负责「写一份」
+    # 与「读最新的一份」。一份摘要落库之后内容不再变化，同一 session 的
+    # through_ordinal 唯一，重复折叠同一段历史会被数据库直接挡住。
+    # ------------------------------------------------------------------
+
+    def latest_session_checkpoint(
         self,
         session_id: str,
-        *,
-        max_messages: int = 40,
-        max_characters: int = 120_000,
-    ) -> list[dict[str, str]]:
+    ) -> SessionCheckpointRecord | None:
+        """取这个会话最新的一份摘要；从没折叠过则返回 None。"""
         with self.database.connection() as connection:
             session = connection.execute(
                 "SELECT id FROM execution_session WHERE id = ?",
@@ -4426,30 +5761,175 @@ class AgentStore:
             ).fetchone()
             if session is None:
                 raise AgentStoreNotFound("Agent session was not found")
-            rows = connection.execute(
+            row = connection.execute(
+                """
+                SELECT *
+                FROM session_checkpoint
+                WHERE session_id = ?
+                ORDER BY through_ordinal DESC
+                LIMIT 1
+                """,
+                (session_id,),
+            ).fetchone()
+        return None if row is None else self._session_checkpoint_from_row(row)
+
+    def compaction_source_records(
+        self,
+        session_id: str,
+        *,
+        through_ordinal: int,
+    ) -> tuple[list[StoredToolCall], list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+        """整理到第 ``through_ordinal`` 条消息为止时，程序要附在摘要后面的原始记录（``compaction_facts`` 拼）。
+
+        返回 (这些消息所属各轮的工具调用, 修改记录（带现在的状态和 changes）, 打开的文件夹以外的写入, 作者说过的每一句)，
+        都按时间排。修改记录以表里现在的状态为准：作者在界面上点的保存 / 撤回不经过工具，只改这里。
+        """
+        runs = "SELECT DISTINCT run_id FROM session_message WHERE session_id = ? AND ordinal <= ?"
+        params = (session_id, through_ordinal)
+        with self.database.connection() as connection:
+            call_rows = connection.execute(
+                f"SELECT * FROM tool_call WHERE run_id IN ({runs}) ORDER BY started_at, id",
+                params,
+            ).fetchall()
+            change_set_rows = connection.execute(
+                f"""
+                SELECT status, payload_json FROM change_set
+                WHERE json_extract(payload_json, '$.source_run_id') IN ({runs})
+                ORDER BY created_at, id
+                """,
+                params,
+            ).fetchall()
+            file_change_rows = connection.execute(
+                f"""
+                SELECT operation, path, target_path, undone_at FROM file_change
+                WHERE run_id IN ({runs})
+                ORDER BY created_at, seq
+                """,
+                params,
+            ).fetchall()
+            author_rows = connection.execute(
                 """
                 SELECT sm.*, a.payload_json
                 FROM session_message AS sm
                 JOIN activity AS a ON a.id = sm.activity_id
-                WHERE sm.session_id = ?
-                ORDER BY sm.ordinal DESC
-                LIMIT 500
+                WHERE sm.session_id = ? AND sm.ordinal <= ? AND sm.role = 'user'
+                ORDER BY sm.ordinal
+                """,
+                params,
+            ).fetchall()
+        change_sets: list[dict[str, Any]] = []
+        for row in change_set_rows:
+            try:
+                payload = json.loads(row["payload_json"])
+            except (TypeError, ValueError):
+                continue
+            change_sets.append(
+                {
+                    "status": row["status"],
+                    "title": payload.get("title"),
+                    "changes": payload.get("changes") or [],
+                }
+            )
+        return (
+            [self._tool_call_from_row(row) for row in call_rows],
+            change_sets,
+            [dict(row) for row in file_change_rows],
+            [self._message_from_row(row).content for row in author_rows],
+        )
+
+    def append_session_checkpoint(
+        self,
+        session_id: str,
+        *,
+        run_id: str | None,
+        through_ordinal: int,
+        source_message_count: int,
+        content: str,
+        reported_model: str | None = None,
+        expected_previous_through_ordinal: int | None = None,
+    ) -> SessionCheckpointRecord:
+        """落一份摘要。
+
+        ``through_ordinal`` 必须比已有的最新一份更靠后——摘要只会往前推进，
+        不会回头覆盖已经折叠过的区间。
+        """
+        normalized = content.strip()
+        if not normalized:
+            raise ValueError("session checkpoint content must not be blank")
+        if through_ordinal < 2 or source_message_count < 2:
+            raise ValueError("a checkpoint must fold at least two messages")
+        created_at = _now()
+        record_id = _new_id("checkpoint")
+        with self.database.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            session = connection.execute(
+                "SELECT id FROM execution_session WHERE id = ?",
+                (session_id,),
+            ).fetchone()
+            if session is None:
+                raise AgentStoreNotFound("Agent session was not found")
+            previous = connection.execute(
+                """
+                SELECT through_ordinal
+                FROM session_checkpoint
+                WHERE session_id = ?
+                ORDER BY through_ordinal DESC
+                LIMIT 1
                 """,
                 (session_id,),
-            ).fetchall()
-        messages = [self._message_from_row(row) for row in reversed(rows)]
-        selected: list[AgentMessageResponse] = []
-        character_count = 0
-        for message in reversed(messages):
-            if message.role not in {"user", "assistant"}:
-                continue
-            next_count = character_count + len(message.content)
-            if selected and (len(selected) >= max_messages or next_count > max_characters):
-                break
-            selected.append(message)
-            character_count = next_count
-        selected.reverse()
-        return [{"role": item.role, "content": item.content} for item in selected]
+            ).fetchone()
+            if expected_previous_through_ordinal is not None and expected_previous_through_ordinal != (0 if previous is None else int(previous["through_ordinal"])):
+                raise AgentStoreConflict("对话摘要已更新，请重新整理")
+            if previous is not None and through_ordinal <= int(
+                previous["through_ordinal"]
+            ):
+                raise AgentStoreConflict(
+                    "A session checkpoint already covers this history range"
+                )
+            connection.execute(
+                """
+                INSERT INTO session_checkpoint(
+                    id, session_id, run_id, through_ordinal,
+                    source_message_count, content, content_hash,
+                    reported_model, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record_id,
+                    session_id,
+                    run_id,
+                    through_ordinal,
+                    source_message_count,
+                    normalized,
+                    checkpoint_content_hash(normalized),
+                    reported_model,
+                    created_at.isoformat(),
+                ),
+            )
+            row = connection.execute(
+                "SELECT * FROM session_checkpoint WHERE id = ?",
+                (record_id,),
+            ).fetchone()
+            connection.commit()
+        return self._session_checkpoint_from_row(row)
+
+    @staticmethod
+    def _session_checkpoint_from_row(row: sqlite3.Row) -> SessionCheckpointRecord:
+        run_id = row["run_id"]
+        return SessionCheckpointRecord(
+            checkpoint_id=str(row["id"]),
+            session_id=str(row["session_id"]),
+            run_id=None if run_id is None else str(run_id),
+            through_ordinal=int(row["through_ordinal"]),
+            source_message_count=int(row["source_message_count"]),
+            content=str(row["content"]),
+            content_hash=str(row["content_hash"]),
+            reported_model=(
+                None if row["reported_model"] is None else str(row["reported_model"])
+            ),
+            created_at=_parse_time(row["created_at"]),
+        )
 
     def completed_history(
         self,
@@ -4457,10 +5937,12 @@ class AgentStore:
         *,
         max_runs: int = 20,
         max_characters: int = 120_000,
+        max_tokens: int = 120_000,
+        after_ordinal: int | None = None,
     ) -> tuple[int, list[CompletedHistoryMessage]]:
         """Return only complete successful turns for a future Context Pack."""
 
-        if max_runs < 1 or max_characters < 1:
+        if max_runs < 1 or max_characters < 1 or max_tokens < 1:
             raise ValueError("history limits must be positive")
         with self.database.connection() as connection:
             session = connection.execute(
@@ -4469,25 +5951,40 @@ class AgentStore:
             ).fetchone()
             if session is None:
                 raise AgentStoreNotFound("Agent session was not found")
+            cp_row = connection.execute(
+                """
+                SELECT through_ordinal
+                FROM session_checkpoint
+                WHERE session_id = ?
+                ORDER BY through_ordinal DESC
+                LIMIT 1
+                """,
+                (session_id,),
+            ).fetchone()
+            folded_through = (0 if cp_row is None else int(cp_row["through_ordinal"])) if after_ordinal is None else after_ordinal
             rows = connection.execute(
                 """
                 WITH completed_runs AS (
-                    SELECT id, ordinal
+                    SELECT id, ordinal, origin_kind
                     FROM run
-                    WHERE session_id = ? AND status = 'succeeded'
+                    WHERE session_id = ? AND (status = 'succeeded' OR (run_type = 'conversation_fork'
+                        AND (SELECT COUNT(*) FROM session_message sm WHERE sm.run_id = run.id
+                             AND sm.role IN ('user', 'assistant')) = 2)
+                        OR (run_type = 'conversation_fork' AND origin_kind='command_completion'))
                     ORDER BY ordinal DESC
                     LIMIT ?
                 )
-                SELECT sm.*, a.payload_json, cr.ordinal AS run_ordinal
+                SELECT sm.*, a.payload_json, cr.ordinal AS run_ordinal, cr.origin_kind AS run_origin_kind
                 FROM completed_runs AS cr
                 JOIN session_message AS sm ON sm.run_id = cr.id
                 JOIN activity AS a ON a.id = sm.activity_id
-                WHERE sm.role IN ('user', 'assistant')
+                WHERE sm.role IN ('user', 'assistant') AND sm.ordinal > ?
                 ORDER BY cr.ordinal DESC, sm.ordinal ASC
                 """,
-                (session_id, max_runs),
+                (session_id, max_runs, folded_through),
             ).fetchall()
 
+        completion_message_ordinals = {int(row["ordinal"]) for row in rows if row["run_origin_kind"] == "command_completion"}
         turns: list[list[CompletedHistoryMessage]] = []
         current_run_ordinal: int | None = None
         current_turn: list[CompletedHistoryMessage] = []
@@ -4510,16 +6007,38 @@ class AgentStore:
 
         selected_newest_first: list[list[CompletedHistoryMessage]] = []
         character_count = 0
-        for turn in turns:
-            if [message.role for message in turn] != ["user", "assistant"]:
+        token_count = 0
+        for index, turn in enumerate(turns):
+            roles = [message.role for message in turn]
+            if (
+                folded_through > 0
+                and index == len(turns) - 1
+                and roles
+                and all(role == "assistant" for role in roles)
+                and turn[0].ordinal not in completion_message_ordinals
+            ):
+                # 以前整理记忆会从一轮中间切开（截断续写的一轮有好几条回答）：这一轮的提问
+                # 已经进了摘要，剩下的续写段接不上前文，跳过它，比整条对话再也建不了资料包强。
+                continue
+            # 同一轮可能有运行中补充的用户输入，保持真实顺序。
+            if (len(roles) < 2 or roles[0] != "user" or roles[-1] != "assistant") and not (
+                roles and roles[-1] == "assistant" and turn[0].ordinal in completion_message_ordinals
+            ):
                 raise AgentStoreInvalidState(
-                    "A succeeded Run must have one complete user/assistant message pair"
+                    "A succeeded Run must start with user input and end with an assistant message"
                 )
             next_count = character_count + sum(len(message.content) for message in turn)
-            if next_count > max_characters:
+            next_token_count = token_count + sum(
+                4
+                + conservative_token_estimate(message.role)
+                + conservative_token_estimate(message.content)
+                for message in turn
+            )
+            if next_count > max_characters or next_token_count > max_tokens:
                 break
             selected_newest_first.append(turn)
             character_count = next_count
+            token_count = next_token_count
 
         selected = [
             message
@@ -4566,7 +6085,6 @@ class AgentStore:
                         "Stored Context Pack failed integrity validation",
                         code="context_injection_integrity_failed",
                     ) from exc
-                self._require_project_kb_binding(row)
 
                 duplicated_values = {
                     "context_pack_id": str(row["id"]),
@@ -5038,8 +6556,8 @@ class AgentStore:
             connection.execute("BEGIN IMMEDIATE")
             try:
                 run = self._require_run_row(connection, run_id)
-                if RunStatus(str(run["status"])) is not RunStatus.RUNNING:
-                    raise AgentStoreInvalidState("Assistant deltas require a running Run")
+                if RunStatus(str(run["status"])) not in {RunStatus.RUNNING, RunStatus.CANCELLING}:
+                    raise AgentStoreInvalidState("Assistant deltas require a running or cancelling Run")
                 now = _now()
                 sequence = int(run["last_activity_sequence"]) + 1
                 item = self._insert_activity(
@@ -5071,6 +6589,157 @@ class AgentStore:
                 raise
         return item
 
+    def append_reasoning(
+        self,
+        run_id: str,
+        *,
+        summary: str,
+        content: str | None,
+        block_id: str | None = None,
+        phase: str = "completed",
+        delta: str | None = None,
+        source: str = "model",
+        visibility: str = "full",
+    ) -> ActivityItem:
+        """Persist public reasoning deltas and terminal snapshots in the event log."""
+
+        with self.database.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                run = self._require_run_row(connection, run_id)
+                if RunStatus(str(run["status"])) not in {RunStatus.RUNNING, RunStatus.CANCELLING}:
+                    raise AgentStoreInvalidState("Reasoning requires a running Run")
+                now = _now()
+                sequence = int(run["last_activity_sequence"]) + 1
+                item = self._insert_activity(
+                    connection,
+                    run,
+                    sequence=sequence,
+                    kind=ActivityKind.REASONING,
+                    payload=ReasoningPayload(
+                        summary=summary,
+                        content=content,
+                        visibility=visibility,
+                        block_id=block_id,
+                        phase=phase,
+                        delta=delta,
+                        source=source,
+                    ).model_dump(mode="json"),
+                    causation_id=self._last_activity_id(connection, run_id),
+                    created_at=now,
+                )
+                connection.execute(
+                    "UPDATE run SET last_activity_sequence = ?, updated_at = ? WHERE id = ?",
+                    (sequence, now.isoformat(), run_id),
+                )
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+        return item
+
+    def finalize_assistant_message(
+        self,
+        run_id: str,
+        *,
+        message_id: str,
+        content: str,
+        finish_reason: str = "length",
+        goal_transcript: list[dict[str, object]] | None = None,
+    ) -> AgentMessageResponse:
+        """把一条已流式输出到一半的助手消息就地落成完整消息（Run 继续跑）。
+
+        用于「输出被 token 上限截断后接着续写」：截断的前半段先成为一条
+        真实消息（断线重连、历史回放都看得到），续写段是新的一条消息。
+        """
+        if not content.strip():
+            raise AgentStoreInvalidState("A finalized message requires non-blank content")
+        with self.database.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                run = self._require_run_row(connection, run_id)
+                if RunStatus(str(run["status"])) is not RunStatus.RUNNING:
+                    raise AgentStoreInvalidState(
+                        "Assistant message finalization requires a running Run"
+                    )
+                now = _now()
+                sequence = int(run["last_activity_sequence"]) + 1
+                completed = self._insert_activity(
+                    connection,
+                    run,
+                    sequence=sequence,
+                    kind=ActivityKind.MESSAGE,
+                    payload=MessagePayload(
+                        role="assistant",
+                        content=content,
+                        name=None,
+                        message_id=message_id,
+                        phase="completed",
+                        delta=None,
+                        format="markdown",
+                        finish_reason=finish_reason,
+                        usage=None,
+                    ).model_dump(mode="json"),
+                    causation_id=self._last_activity_id(connection, run_id),
+                    created_at=now,
+                )
+                session = connection.execute(
+                    "SELECT * FROM execution_session WHERE id = ?",
+                    (str(run["session_id"]),),
+                ).fetchone()
+                if session is None:  # pragma: no cover - foreign key invariant.
+                    raise RuntimeError("Run session disappeared")
+                message_ordinal = int(session["last_message_ordinal"]) + 1
+                connection.execute(
+                    """
+                    INSERT INTO session_message(
+                        activity_id, session_id, run_id, message_id, ordinal,
+                        role, format, created_at
+                    ) VALUES (?, ?, ?, ?, ?, 'assistant', 'markdown', ?)
+                    """,
+                    (
+                        completed.root.activity_id,
+                        str(run["session_id"]),
+                        run_id,
+                        message_id,
+                        message_ordinal,
+                        now.isoformat(),
+                    ),
+                )
+                connection.execute(
+                    """
+                    UPDATE run
+                    SET last_activity_sequence = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (sequence, now.isoformat(), run_id),
+                )
+                connection.execute(
+                    """
+                    UPDATE execution_session
+                    SET last_message_ordinal = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (message_ordinal, now.isoformat(), str(run["session_id"])),
+                )
+                message_row = connection.execute(
+                    """
+                    SELECT sm.*, a.payload_json
+                    FROM session_message AS sm
+                    JOIN activity AS a ON a.id = sm.activity_id
+                    WHERE sm.activity_id = ?
+                    """,
+                    (completed.root.activity_id,),
+                ).fetchone()
+                if goal_transcript is not None:
+                    GoalStore.stage(connection, run_id)
+                    self._save_run_transcript_in_connection(connection, run_id, goal_transcript)
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+        return self._message_from_row(message_row)
+
     def complete_run(
         self,
         run_id: str,
@@ -5080,6 +6749,8 @@ class AgentStore:
         finish_reason: str,
         usage: MessageUsage | None,
         current_project_kb_verifier: CurrentProjectKbVerifier | None = None,
+        allow_truncated_finish: bool = False,
+        transcript: list[dict[str, object]] | None = None,
     ) -> tuple[Run, AgentMessageResponse]:
         with self.database.connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -5098,7 +6769,10 @@ class AgentStore:
                     content=content,
                     finish_reason=finish_reason,
                     usage=usage,
+                    allow_truncated_finish=allow_truncated_finish,
                 )
+                if transcript is not None:
+                    self._save_run_transcript_in_connection(connection, run_id, transcript)
                 connection.commit()
             except Exception:
                 connection.rollback()
@@ -5227,6 +6901,7 @@ class AgentStore:
                     finish_reason="stop",
                     usage=usage,
                 )
+                self._recover_run_transcript_in_connection(connection, run_id)
                 connection.commit()
             except Exception:
                 connection.rollback()
@@ -5370,10 +7045,15 @@ class AgentStore:
         finish_reason: str,
         usage: MessageUsage | None,
         allow_recovery: bool = False,
+        allow_truncated_finish: bool = False,
     ) -> tuple[sqlite3.Row, sqlite3.Row]:
         if not content.strip():
             raise AgentStoreInvalidState("A successful Run requires non-blank output")
-        if finish_reason in {"length", "tool_calls", "function_call"}:
+        if finish_reason in {"length", "tool_calls", "function_call"} and not (
+            allow_truncated_finish and finish_reason == "length"
+        ):
+            # length 只在一种情况下放行：收尾轮的输出也被 token 上限掐断，
+            # 与其把已生成的正文盖进失败卡，不如如实按截断收场（事件里有记录）。
             raise AgentStoreInvalidState(
                 f"Run cannot succeed with finish reason {finish_reason!r}"
             )
@@ -5384,6 +7064,14 @@ class AgentStore:
             and current in {RunStatus.INTERRUPTED, RunStatus.FAILED, RunStatus.PAUSED}
         ):
             raise AgentStoreInvalidState("Only a running Run can complete")
+        if connection.execute(
+            "SELECT 1 FROM session_steering WHERE run_id = ? AND status = 'pending' LIMIT 1", (run_id,),
+        ).fetchone():
+            raise AgentSteeringPending("这轮刚收到补充消息，接着处理后再收尾。")
+        from zhimeng_runtime.command_completion import CommandCompletionStore
+        if CommandCompletionStore(self.database).pending(str(run["session_id"]), connection=connection):
+            raise AgentSteeringPending("后台命令已完成，接着处理结果后再收尾。")
+        GoalStore.finish(connection, run_id)
         managed_workflow = connection.execute(
             """
             SELECT * FROM checkpoint
@@ -5392,55 +7080,48 @@ class AgentStore:
             """,
             (run_id, WORKFLOW_PLAN_CHECKPOINT_TYPE),
         ).fetchone()
-        candidate_required = False
         if managed_workflow is not None:
-            plan = self._workflow_plan_from_row(managed_workflow)
-            candidate_required = (
-                plan.steps[-1].skill_id == CREATION_HANDOFF_SKILL_ID
-            )
-        if candidate_required:
+            # 交了候选就按原合同全量校验绑定；没交候选视为纯对话收尾，
+            # 同样合法——不再强制每次创作工作流都以信封结束。
             candidate_row = connection.execute(
                 "SELECT * FROM agent_candidate_output WHERE run_id = ?",
                 (run_id,),
             ).fetchone()
-            if candidate_row is None:
-                raise AgentStoreInvalidState(
-                    "A Creation handoff Workflow Run requires exactly one candidate output"
+            if candidate_row is not None:
+                candidate = self._agent_candidate_output_from_row(candidate_row)
+                self._validate_agent_candidate_output_binding(
+                    connection,
+                    run,
+                    candidate,
                 )
-            candidate = self._agent_candidate_output_from_row(candidate_row)
-            self._validate_agent_candidate_output_binding(
-                connection,
-                run,
-                candidate,
-            )
-            if not isinstance(candidate, AgentCandidateOutput):
-                raise AgentStoreInvalidState(
-                    "A current Creation Writer Run requires a v3 candidate output"
-                )
-            writer_task_rows = connection.execute(
-                """
-                SELECT * FROM artifact
-                WHERE run_id = ? AND artifact_type = 'writer_task'
-                """,
-                (run_id,),
-            ).fetchall()
-            if len(writer_task_rows) != 1:
-                raise AgentStoreInvalidState(
-                    "A Writer Run requires exactly one Writer task"
-                )
-            self._writer_task_from_artifact(writer_task_rows[0])
-            writer_result_rows = connection.execute(
-                """
-                SELECT * FROM artifact
-                WHERE run_id = ? AND artifact_type = 'writer_candidate_result'
-                """,
-                (run_id,),
-            ).fetchall()
-            if len(writer_result_rows) != 1:
-                raise AgentStoreInvalidState(
-                    "A Writer Run requires exactly one Writer candidate result"
-                )
-            self._writer_candidate_result_from_artifact(writer_result_rows[0])
+                if not isinstance(candidate, AgentCandidateOutput):
+                    raise AgentStoreInvalidState(
+                        "A current Creation Writer Run requires a v3 candidate output"
+                    )
+                writer_task_rows = connection.execute(
+                    """
+                    SELECT * FROM artifact
+                    WHERE run_id = ? AND artifact_type = 'writer_task'
+                    """,
+                    (run_id,),
+                ).fetchall()
+                if len(writer_task_rows) != 1:
+                    raise AgentStoreInvalidState(
+                        "A Writer Run requires exactly one Writer task"
+                    )
+                self._writer_task_from_artifact(writer_task_rows[0])
+                writer_result_rows = connection.execute(
+                    """
+                    SELECT * FROM artifact
+                    WHERE run_id = ? AND artifact_type = 'writer_candidate_result'
+                    """,
+                    (run_id,),
+                ).fetchall()
+                if len(writer_result_rows) != 1:
+                    raise AgentStoreInvalidState(
+                        "A Writer Run requires exactly one Writer candidate result"
+                    )
+                self._writer_candidate_result_from_artifact(writer_result_rows[0])
         open_tool_call = connection.execute(
             """
             SELECT id FROM tool_call
@@ -5540,6 +7221,7 @@ class AgentStore:
         code: str,
         message: str,
         retryable: bool,
+        details: dict | None = None,
     ) -> Run:
         return self._finish_without_message(
             run_id,
@@ -5551,6 +7233,7 @@ class AgentStore:
                     message=message,
                     request_id=run_id,
                     retryable=retryable,
+                    details=details,
                 )
             ),
         )
@@ -5570,6 +7253,9 @@ class AgentStore:
                         f"Run cannot transition from {current.value} to cancelling"
                     )
                 now = _now()
+                from zhimeng_runtime.command_completion import CommandCompletionStore
+                CommandCompletionStore(self.database).bump_stop_generation(str(run["session_id"]), connection=connection)
+                GoalStore.interrupt(connection, run_id, "用户暂停了执行。", source="user")
                 run = self._close_open_tool_calls(
                     connection,
                     run,
@@ -5769,6 +7455,12 @@ class AgentStore:
                 payload=change_proposal.model_dump(mode="json", by_alias=True),
                 causation_id=last_activity_id,
                 created_at=created_at,
+                revision_override=(
+                    (change_proposal.base_revision, change_proposal.base_fingerprint)
+                    if run["project_revision"] is not None
+                    and change_proposal.base_revision != int(run["project_revision"])
+                    else None
+                ),
             )
             last_activity_id = proposal_activity.root.activity_id
 
@@ -5814,13 +7506,28 @@ class AgentStore:
         rows = connection.execute(
             """
             SELECT * FROM tool_call
-            WHERE run_id = ? AND status IN ('pending', 'running')
+            WHERE run_id = ? AND (
+                status IN ('pending', 'running')
+                OR (status IN ('failed', 'cancelled')
+                    AND tool_name IN ('write_file', 'edit_file', 'project_write_file', 'project_edit_file'))
+            )
             ORDER BY started_at, id
             """,
             (str(run["id"]),),
         ).fetchall()
         for tool_call in rows:
             tool_call_id = str(tool_call["id"])
+            known_write = self._known_direct_write(connection, tool_call)
+            if known_write is not None:
+                self._finish_tool_call_in_transaction(
+                    connection, run, tool_call, result_payload=known_write,
+                    result_hash=self._tool_result_hash(known_write, None),
+                    change_proposal=None, created_at=created_at,
+                )
+                run = self._require_run_row(connection, str(run["id"]))
+                continue
+            if str(tool_call["status"]) not in {"pending", "running"}:
+                continue
             known_proposal = self._known_change_proposal(connection, tool_call)
             if known_proposal is not None:
                 result_payload, change_proposal = known_proposal
@@ -5842,7 +7549,12 @@ class AgentStore:
                 result_payload = ToolResultPayload(
                     tool_call_id=tool_call_id,
                     status="cancelled",
-                    output={"reason": detail},
+                    output=(
+                        {"reason": detail, "outcome": "unknown", "may_have_side_effects": True,
+                         "retryable": False}
+                        if str(tool_call["tool_name"]) == "computer_run_command"
+                        else {"reason": detail}
+                    ),
                     error=None,
                     duration_ms=None,
                 )
@@ -5850,6 +7562,10 @@ class AgentStore:
                 retryable = target_status is RunStatus.INTERRUPTED or bool(
                     run_error and run_error.error.retryable
                 )
+                if str(tool_call["tool_name"]) == "computer_run_command":
+                    # A process may have changed external state before its result
+                    # was saved. Never advertise an unobserved command as retryable.
+                    retryable = False
                 code = (
                     "tool_execution_interrupted"
                     if target_status is RunStatus.INTERRUPTED
@@ -5882,6 +7598,176 @@ class AgentStore:
             )
             run = self._require_run_row(connection, str(run["id"]))
         return run
+
+    @staticmethod
+    def _known_direct_write(
+        connection: sqlite3.Connection,
+        tool_call: sqlite3.Row,
+    ) -> ToolResultPayload | None:
+        """Recover a committed file effect when only its ToolResult was lost."""
+        # 9-26 起叫 write_file / edit_file；旧对话里是 project_write_file / project_edit_file。
+        if str(tool_call["tool_name"]) not in {"write_file", "edit_file", "project_write_file", "project_edit_file"}:
+            return None
+        try:
+            previous = json.loads(tool_call["output_json"] or "null")
+            arguments = json.loads(tool_call["input_json"])
+        except (TypeError, ValueError):
+            return None
+        if isinstance(previous, dict) and previous.get("incomplete") is True:
+            return None
+        from zhimeng_runtime.change_set_service import ChangeSetService
+
+        change_set_id = ChangeSetService._agent_change_set_id(
+            str(tool_call["run_id"]), str(tool_call["id"])
+        )
+        row = connection.execute(
+            "SELECT payload_json FROM change_set WHERE id = ?", (change_set_id,)
+        ).fetchone()
+        if row is None:
+            return AgentStore._known_journal_write(connection, tool_call, arguments)
+        try:
+            record = ChangeSetResponse.model_validate_json(str(row["payload_json"]))
+        except ValueError:
+            return None
+        if (record.source_run_id != str(tool_call["run_id"])
+                or record.source_tool_call_id != str(tool_call["id"])
+                or record.source_request_hash != str(tool_call["request_hash"])
+                or record.writeback is None
+                or record.status.value not in {"applied", "rolled_back"}):
+            return None
+        manifest = record.rollback if record.status.value == "rolled_back" else record.writeback
+        if manifest is None:
+            return None
+        requested = arguments.get("files") if isinstance(arguments, dict) else None
+        if isinstance(requested, list):
+            return AgentStore._known_batch_write(connection, tool_call, record, requested)
+        if len(record.changes) != 1:
+            return None
+        change = record.changes[0]
+        output = {
+            "schema": "zhimeng.tool-result.project-write-file.v1",
+            "change_set_id": record.change_set_id,
+            "status": record.status.value,
+            "operation": "created" if change.operation.value == "create" else "updated",
+            "relative_path": change.relative_path,
+            "applied": record.status.value == "applied",
+            "result_revision": manifest.result_revision,
+            "result_fingerprint": manifest.result_fingerprint,
+            "recovered": True,
+            "message": ("文件已保存，已从修改记录恢复执行结果。" if record.status.value == "applied"
+                        else "这次文件修改曾保存，随后已撤回。"),
+        }
+        return ToolResultPayload(
+            tool_call_id=str(tool_call["id"]), status="succeeded", output=output,
+            error=None, duration_ms=None,
+        )
+
+    @staticmethod
+    def _known_journal_write(connection, tool_call, arguments) -> ToolResultPayload | None:
+        """A no-project single-file write has a journal receipt, not a ChangeSet."""
+        if not isinstance(arguments, dict) or isinstance(arguments.get("files"), list):
+            return None
+        path = arguments.get("path")
+        if not isinstance(path, str):
+            return None
+        rows = connection.execute(
+            "SELECT * FROM file_change WHERE run_id = ? AND tool_call_id = ? ORDER BY seq",
+            (str(tool_call["run_id"]), str(tool_call["id"])),
+        ).fetchall()
+        if len(rows) != 1 or rows[0]["apply_phase"] != "applied":
+            return None
+        row = rows[0]
+        if os.path.normcase(os.path.abspath(path)) != os.path.normcase(os.path.abspath(row["path"])):
+            return None
+        applied = row["undone_at"] is None
+        output = {
+            "schema": "zhimeng.tool-result.file-change.v1", "change_id": row["change_id"],
+            "path": row["path"], "operation": "created" if row["operation"] == "create" else "updated",
+            "files": [{"path": row["path"], "operation": row["operation"]}],
+            "applied": applied, "status": "applied" if applied else "rolled_back", "recovered": True,
+            "message": "已从修改记录恢复此前保存的结果；文件当前内容可重新读取核对。",
+        }
+        return ToolResultPayload(tool_call_id=str(tool_call["id"]), status="succeeded",
+                                 output=output, error=None, duration_ms=None)
+
+    @staticmethod
+    def _known_batch_write(
+        connection: sqlite3.Connection,
+        tool_call: sqlite3.Row,
+        record: ChangeSetResponse,
+        requested: list[Any],
+    ) -> ToolResultPayload | None:
+        """Recover each committed destination; an absent receipt is not success."""
+        manifest = record.rollback if record.status.value == "rolled_back" else record.writeback
+        if manifest is None:
+            return None
+        binding = connection.execute(
+            "SELECT root_path FROM project_binding WHERE id = ?", (record.project_id,),
+        ).fetchone()
+        if binding is None:
+            return None
+        root = Path(binding["root_path"])
+        def path_key(path: Path) -> str:
+            return os.path.normpath(str(path)).replace("\\", "/").casefold()
+
+        files = [{"relative_path": item.relative_path,
+                  "operation": "created" if item.operation.value == "create" else "updated"}
+                 for item in record.changes]
+        confirmed = {path_key(root / item.relative_path) for item in record.changes}
+        output: dict[str, Any] = {
+            "schema": "zhimeng.tool-result.project-write-file.v1",
+            "change_set_id": record.change_set_id,
+            "status": record.status.value, "operation": "written", "files": files,
+            "applied": record.status.value == "applied",
+            "result_revision": manifest.result_revision,
+            "result_fingerprint": manifest.result_fingerprint, "recovered": True,
+        }
+        from zhimeng_runtime.file_journal import FileChangeJournal
+        journal_rows = connection.execute(
+            "SELECT * FROM file_change WHERE run_id = ? AND tool_call_id = ? ORDER BY seq",
+            (str(tool_call["run_id"]), str(tool_call["id"])),
+        ).fetchall()
+        if journal_rows:
+            change = FileChangeJournal._change_from_rows(journal_rows)
+            complete = change.apply_phase == "applied"
+            output["outside_open_folder"] = {
+                "change_id": change.change_id,
+                "applied": complete and change.undone_at is None,
+                "status": "rolled_back" if change.undone_at is not None else "applied" if complete else "unconfirmed",
+                "files": [{"path": entry.path, "operation": entry.operation,
+                           **({"status": "rolled_back"} if entry.undone_at is not None else {})}
+                          for entry in change.entries],
+            }
+            if complete:
+                confirmed.update(path_key(Path(entry.path)) for entry in change.entries)
+        unconfirmed = []
+        for item in requested:
+            raw = item.get("path", item.get("relative_path")) if isinstance(item, dict) else None
+            if not isinstance(raw, str):
+                return None
+            path = Path(raw)
+            absolute = path if path.is_absolute() else root / path
+            if path_key(absolute) not in confirmed:
+                unconfirmed.append(raw)
+        output["incomplete"] = bool(unconfirmed)
+        output["unconfirmed_paths"] = unconfirmed
+        output["message"] = (
+            f"已恢复 {len(confirmed)} 个文件的保存记录；另外 {len(unconfirmed)} 个文件未确认，请重新读取核对。"
+            if unconfirmed else "本批文件的保存记录已恢复；后续撤回状态以各条修改记录为准。"
+        )
+        status = "succeeded"
+        error = None
+        if unconfirmed:
+            status = "cancelled" if tool_call["status"] == "cancelled" else "failed"
+            if status == "failed":
+                error = ErrorEnvelope(error=ErrorDetail(
+                    code="agent_tool_batch_incomplete", message=output["message"],
+                    request_id=str(tool_call["id"]), retryable=False,
+                ))
+        return ToolResultPayload(
+            tool_call_id=str(tool_call["id"]), status=status, output=output,
+            error=error, duration_ms=None,
+        )
 
     @staticmethod
     def _known_change_proposal(
@@ -5950,6 +7836,43 @@ class AgentStore:
         )
         return result_payload, proposal
 
+    def _close_open_reasoning_blocks(
+        self, connection: sqlite3.Connection, run: sqlite3.Row, *, created_at: datetime,
+    ) -> sqlite3.Row:
+        """Close durable partial blocks when recovering a process that stopped mid-stream."""
+        pending: dict[str, tuple[dict, list[str]]] = {}
+        for row in connection.execute(
+            "SELECT payload_json FROM activity WHERE run_id = ? AND kind = 'reasoning' ORDER BY sequence",
+            (str(run["id"]),),
+        ).fetchall():
+            payload = json.loads(str(row["payload_json"]))["payload"]
+            block_id = payload.get("block_id")
+            if not block_id:
+                continue
+            if payload.get("phase") == "delta":
+                pending.setdefault(block_id, (payload, []))[1].append(payload.get("delta") or "")
+            else:
+                pending.pop(block_id, None)
+        sequence = int(run["last_activity_sequence"])
+        for block_id, (payload, parts) in pending.items():
+            sequence += 1
+            self._insert_activity(
+                connection, run, sequence=sequence, kind=ActivityKind.REASONING,
+                payload=ReasoningPayload(
+                    summary=payload["summary"], content="".join(parts),
+                    visibility=payload["visibility"], block_id=block_id,
+                    phase="interrupted", source=payload.get("source", "model"),
+                ).model_dump(mode="json"),
+                causation_id=self._last_activity_id(connection, str(run["id"])),
+                created_at=created_at,
+            )
+        if pending:
+            connection.execute(
+                "UPDATE run SET last_activity_sequence = ? WHERE id = ?", (sequence, str(run["id"])),
+            )
+            return self._require_run_row(connection, str(run["id"]))
+        return run
+
     def _finish_without_message(
         self,
         run_id: str,
@@ -5975,6 +7898,7 @@ class AgentStore:
                         f"Run cannot transition from {current.value} to {status.value}"
                     )
                 now = _now()
+                run = self._close_open_reasoning_blocks(connection, run, created_at=now)
                 run = self._close_open_tool_calls(
                     connection,
                     run,
@@ -5983,6 +7907,8 @@ class AgentStore:
                     run_error=error,
                     created_at=now,
                 )
+                self._recover_run_transcript_in_connection(connection, run_id)
+                GoalStore.interrupt(connection, run_id, detail)
                 provider_boundary_exists = connection.execute(
                     """
                     SELECT 1 FROM checkpoint
@@ -6594,13 +8520,19 @@ class AgentStore:
                         payload = json.loads(str(row["payload_json"]))
                     except (TypeError, ValueError, json.JSONDecodeError):
                         payload = None
+                    # 存储 payload 带 ai_smell（作者审阅要看），信封哈希剔除它；
+                    # 比对必须走信封口径，否则带写法提示的候选必然失配。
                     valid = (
                         payload is not None
-                        and canonical_json_hash(payload) == reference.reference_hash
+                        and change_set_reference_hash_from_payload(payload)
+                        == reference.reference_hash
                     )
             if not valid:
                 raise AgentCandidateOutputConflict(
-                    "Agent candidate reference is not same-Run persisted evidence",
+                    "Agent candidate reference is not same-Run persisted evidence: "
+                    f"kind={reference.reference_kind} "
+                    f"reference_id={reference.reference_id} "
+                    f"expected_hash={reference.reference_hash}",
                     code="agent_candidate_output_reference_invalid",
                 )
 
@@ -7831,14 +9763,16 @@ class AgentStore:
         connection: sqlite3.Connection,
         run_id: str,
         role: str,
+        *,
+        first: bool = False,
     ) -> sqlite3.Row:
         row = connection.execute(
-            """
+            f"""
             SELECT sm.*, a.payload_json
             FROM session_message AS sm
             JOIN activity AS a ON a.id = sm.activity_id
             WHERE sm.run_id = ? AND sm.role = ?
-            ORDER BY sm.ordinal DESC LIMIT 1
+            ORDER BY sm.ordinal {'ASC' if first else 'DESC'} LIMIT 1
             """,
             (run_id, role),
         ).fetchone()
@@ -7856,13 +9790,24 @@ class AgentStore:
         payload: dict[str, Any],
         causation_id: str | None,
         created_at: datetime,
+        revision_override: tuple[int, str] | None = None,
     ) -> ActivityItem:
         activity_id = _new_id("activity")
-        project_revision = ProjectRevision(
-            project_id=str(run["project_binding_id"]),
-            revision=int(run["project_revision"]),
-            fingerprint=str(run["project_fingerprint"]),
-            observed_at=_parse_time(run["created_at"]),
+        # revision_override：这场对话自己直接写过文件、版本往前走了以后提的「先看修改」，按提案的基准记
+        # （9-27 真机：先 edit_file 再提案，校验「提案基准 = 对话开头的版本」对不上，整轮报「程序出错了」）。
+        revision, fingerprint = revision_override or (run["project_revision"], run["project_fingerprint"])
+        # 无项目 Run（随便聊）三列均为空，活动不带项目身份。
+        project_revision = (
+            ProjectRevision(
+                project_id=str(run["project_binding_id"]),
+                revision=int(revision),
+                fingerprint=str(fingerprint),
+                observed_at=_parse_time(run["created_at"]),
+            )
+            if run["project_binding_id"] is not None
+            and run["project_revision"] is not None
+            and run["project_fingerprint"] is not None
+            else None
         )
         item = ActivityItem.model_validate(
             {
@@ -7895,8 +9840,8 @@ class AgentStore:
                 sequence,
                 kind.value,
                 _json(rendered),
-                int(run["project_revision"]),
-                str(run["project_fingerprint"]),
+                revision,
+                fingerprint,
                 str(run["correlation_id"]),
                 causation_id,
                 created_at.isoformat(),
@@ -7925,16 +9870,27 @@ class AgentStore:
 
     @staticmethod
     def _session_from_row(row: sqlite3.Row) -> AgentSessionResponse:
-        fingerprint = str(row["latest_project_fingerprint"])
+        binding_id = row["project_binding_id"]
+        revision_value = row["latest_project_revision"]
+        fingerprint_value = row["latest_project_fingerprint"]
+        project_revision = (
+            ProjectRevision(
+                project_id=str(binding_id),
+                revision=int(revision_value),
+                fingerprint=str(fingerprint_value),
+                observed_at=_parse_time(row["updated_at"]),
+            )
+            if binding_id is not None
+            and revision_value is not None
+            and fingerprint_value is not None
+            else None
+        )
         return AgentSessionResponse(
             session_id=str(row["id"]),
-            project_revision=ProjectRevision(
-                project_id=str(row["project_binding_id"]),
-                revision=int(row["latest_project_revision"]),
-                fingerprint=fingerprint,
-                observed_at=_parse_time(row["updated_at"]),
-            ),
+            project_id=str(binding_id) if binding_id is not None else None,
+            project_revision=project_revision,
             title=str(row["title"]),
+            pinned=bool(row["pinned"]),
             status=SessionStatus(str(row["status"])),
             revision=int(row["revision"]),
             executor=ExecutorIdentity.model_validate_json(str(row["executor_json"])),
@@ -7963,6 +9919,8 @@ class AgentStore:
             ordinal=int(row["ordinal"]),
             status=status,
             objective=str(row["objective"]),
+            origin_kind=str(row["origin_kind"]),
+            stop_generation=int(row["stop_generation"]),
             created_at=_parse_time(row["created_at"]),
             updated_at=_parse_time(row["updated_at"]),
             started_at=_parse_time(row["started_at"]) if row["started_at"] else None,
@@ -7973,11 +9931,18 @@ class AgentStore:
             capabilities=CapabilityProfile.model_validate_json(
                 str(row["capabilities_json"])
             ),
-            project_revision=ProjectRevision(
-                project_id=str(row["project_binding_id"]),
-                revision=int(row["project_revision"]),
-                fingerprint=str(row["project_fingerprint"]),
-                observed_at=_parse_time(row["created_at"]),
+            # 无项目 Run（随便聊）三列均为空；绑定项目的 Run 照旧携带快照。
+            project_revision=(
+                ProjectRevision(
+                    project_id=str(row["project_binding_id"]),
+                    revision=int(row["project_revision"]),
+                    fingerprint=str(row["project_fingerprint"]),
+                    observed_at=_parse_time(row["created_at"]),
+                )
+                if row["project_binding_id"] is not None
+                and row["project_revision"] is not None
+                and row["project_fingerprint"] is not None
+                else None
             ),
             correlation_id=str(row["correlation_id"]),
             causation_id=str(row["causation_id"]) if row["causation_id"] else None,
@@ -8053,6 +10018,7 @@ class AgentStore:
         if payload.phase != "completed" or payload.content is None:
             raise RuntimeError("session_message points to an incomplete message")
         return AgentMessageResponse(
+            images=json.loads(row["images_json"]) if "images_json" in row.keys() else [],
             message_id=str(row["message_id"]),
             session_id=str(row["session_id"]),
             run_id=str(row["run_id"]),
@@ -8061,4 +10027,9 @@ class AgentStore:
             format=str(row["format"]),
             content=payload.content,
             created_at=_parse_time(row["created_at"]),
+            usage=(
+                payload.usage.model_dump(mode="json")
+                if payload.usage is not None
+                else None
+            ),
         )

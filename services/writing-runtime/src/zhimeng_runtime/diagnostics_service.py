@@ -15,6 +15,7 @@ from zhimeng_runtime.diagnostics_models import (
     DiagnosticsPackageResponse,
     diagnostics_package_receipt_hash,
 )
+from zhimeng_runtime.fs_atomic import replace_with_retry
 
 
 def _now() -> datetime:
@@ -38,7 +39,7 @@ def _atomic_write_bytes(path: Path, content: bytes) -> None:
             handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, path)
+        replace_with_retry(temporary, path)
     finally:
         if temporary.exists():
             temporary.unlink(missing_ok=True)
@@ -130,6 +131,13 @@ class DiagnosticsService:
                 "integrity_check": integrity,
                 "foreign_key_violations": foreign_key_violations,
                 "table_counts": table_counts,
+                # 长期写作会稳定增长（context_pack / run_event / activity 只增不减）；
+                # 把体积放进诊断包，清理策略才有数据可依。
+                "file_size_bytes": (
+                    self.store.path.stat().st_size
+                    if self.store.path.exists()
+                    else 0
+                ),
             },
             "config_redacted": {
                 "trusted_project_root_count": len(self.settings.trusted_project_roots),

@@ -1,0 +1,84 @@
+{
+  "$id": "https://zhimeng.local/contracts/agent-run-continuation.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "can_continue": {
+      "title": "Can Continue",
+      "type": "boolean"
+    },
+    "completed_tool_count": {
+      "minimum": 0,
+      "title": "Completed Tool Count",
+      "type": "integer"
+    },
+    "continued_by_run_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Continued By Run Id"
+    },
+    "objective": {
+      "title": "Objective",
+      "type": "string"
+    },
+    "reason": {
+      "title": "Reason",
+      "type": "string"
+    },
+    "reason_code": {
+      "title": "Reason Code",
+      "type": "string"
+    },
+    "run_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "schema": {
+      "const": "zhimeng.agent-run-continuation.v1",
+      "default": "zhimeng.agent-run-continuation.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "stop_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Stop Reason"
+    },
+    "uncertain_tool_count": {
+      "minimum": 0,
+      "title": "Uncertain Tool Count",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "run_id",
+    "can_continue",
+    "reason_code",
+    "reason",
+    "stop_reason",
+    "objective",
+    "continued_by_run_id",
+    "completed_tool_count",
+    "uncertain_tool_count"
+  ],
+  "title": "AgentRunContinuationResponse",
+  "type": "object"
+}

@@ -25,6 +25,8 @@ from zhimeng_runtime.change_set_models import (
     ChangeSetStatus,
     HunkDecision,
     change_set_payload_hash,
+    change_set_persisted_payload,
+    change_set_reference_hash_from_payload,
 )
 from zhimeng_runtime.context_compiler import compile_context_pack
 from zhimeng_runtime.context_models import (
@@ -513,7 +515,9 @@ def _change_set(
                 before_sha256=bound_target.content_hash,
                 proposed_after_sha256=_sha("chapter-after"),
                 preserve_utf8_bom=False,
-                post_draft_gate_scope="prose_body",
+                post_draft_gate_scope=(
+                    "prose_body" if bound_target.content_role == "prose_body" else "none"
+                ),
                 hunks=[
                     ChangeHunk(
                         hunk_id="hunk-" + "e" * 32,
@@ -647,7 +651,7 @@ def test_writer_task_rejects_tamper_invalid_targets_and_cross_input_binding() ->
             content_hash=_sha("outside-prose"),
         )
 
-    with pytest.raises(ValueError, match="active chapter and prose targets"):
+    with pytest.raises(ValueError, match="prose targets or selected project files"):
         _task(fixture, targets=())
 
     mismatched_route = fixture.route.model_copy(
@@ -664,6 +668,84 @@ def test_writer_task_rejects_tamper_invalid_targets_and_cross_input_binding() ->
             mode="author_review_change_proposal",
             target_files=(_target(),),
             created_at=NOW + timedelta(minutes=2),
+        )
+
+
+def test_writer_target_accepts_selected_project_files_without_mixing_prose_scope() -> None:
+    target = WriterTargetFile(
+        file_id="file-" + "a" * 32,
+        relative_path="03_人物设定/主角档案.md",
+        content_hash=_sha("character-before"),
+        content_role="project_file",
+    )
+    assert target.content_role == "project_file"
+
+    structured_target = WriterTargetFile(
+        file_id="file-" + "b" * 32,
+        relative_path="02_世界观设定/规则.yaml",
+        content_hash=_sha("rules-before"),
+        content_role="project_file",
+    )
+    assert structured_target.relative_path.endswith(".yaml")
+    with pytest.raises(ValidationError, match="prose_body"):
+        WriterTargetFile(
+            file_id="file-" + "c" * 32,
+            relative_path="05_正文内容/第一卷/CH001_正文.md",
+            content_hash=_sha("wrong-role"),
+            content_role="project_file",
+        )
+
+    fixture = _fixture()
+    second_target = target.model_copy(
+        update={
+            "file_id": "file-" + "d" * 32,
+            "relative_path": "03_人物设定/配角档案.md",
+            "content_hash": _sha("supporting-before"),
+        }
+    )
+    task = _task(fixture, targets=(target, second_target))
+    change_set = _change_set(task, target=target)
+    candidate = _candidate(fixture, task, kind="change_proposal", change_set=change_set)
+    result = build_writer_candidate_result(
+        task,
+        candidate,
+        change_set=change_set,
+        created_at=NOW + timedelta(minutes=4),
+    )
+    assert result.target_files == (target, second_target)
+
+
+def test_project_file_writer_target_does_not_require_an_open_chapter() -> None:
+    fixture = _fixture()
+    target = WriterTargetFile(
+        file_id="file-" + "c" * 32,
+        relative_path="03_人物设定/主角档案.md",
+        content_hash=_sha("character-without-open-chapter"),
+        content_role="project_file",
+    )
+    task = _task(fixture, targets=(target,))
+    without_chapter = task.model_copy(
+        update={"active_chapter_id": None, "task_hash": "0" * 64}
+    )
+    without_chapter = without_chapter.model_copy(
+        update={"task_hash": writer_task_hash(without_chapter)}
+    )
+
+    validated = WriterTask.model_validate(
+        without_chapter.model_dump(mode="python", by_alias=True)
+    )
+    assert validated.active_chapter_id is None
+    assert validated.target_files == (target,)
+
+    prose_without_chapter = _task(fixture).model_copy(
+        update={"active_chapter_id": None, "task_hash": "0" * 64}
+    )
+    prose_without_chapter = prose_without_chapter.model_copy(
+        update={"task_hash": writer_task_hash(prose_without_chapter)}
+    )
+    with pytest.raises(ValidationError, match="prose targets require an active chapter"):
+        WriterTask.model_validate(
+            prose_without_chapter.model_dump(mode="python", by_alias=True)
         )
 
 
@@ -717,6 +799,46 @@ def test_writer_candidate_result_binds_one_same_run_changeset_and_exact_targets(
     assert result.writer_task_hash == task.task_hash
     assert result.writes_project_truth is False
     assert writer_candidate_result_hash(result) == result.result_hash
+
+
+def test_change_set_payload_hash_ignores_ai_smell_evidence() -> None:
+    """写法提示证据不进哈希：否则旧候选输出里的引用哈希会全部失配。"""
+    fixture = _fixture()
+    change_set = _change_set(_task(fixture))
+    scored = change_set.model_copy(
+        update={"ai_smell": {"score": 40.0, "level": "medium", "purpose": "draft"}}
+    )
+    assert change_set_payload_hash(scored) == change_set_payload_hash(change_set)
+    # 存储 payload 仍要带上证据，round-trip 不能丢。
+    from zhimeng_runtime.change_set_models import change_set_persisted_payload
+
+    assert change_set_persisted_payload(scored)["ai_smell"] == {
+        "score": 40.0,
+        "level": "medium",
+        "purpose": "draft",
+    }
+
+
+def test_change_set_reference_hash_from_persisted_payload_matches_envelope() -> None:
+    """agent_store 校验侧必须走信封口径：存储 payload 带 ai_smell 也能对上引用哈希。
+
+    回归钉子：此前校验侧对存库 payload 直接 canonical_json_hash，带写法提示
+    证据的候选提交必然 agent_candidate_output_reference_invalid。
+    """
+    fixture = _fixture()
+    change_set = _change_set(_task(fixture))
+    scored = change_set.model_copy(
+        update={"ai_smell": {"score": 40.0, "level": "medium", "purpose": "draft"}}
+    )
+    stored_payload = change_set_persisted_payload(scored)
+    assert "ai_smell" in stored_payload
+    assert change_set_reference_hash_from_payload(stored_payload) == (
+        change_set_payload_hash(scored)
+    )
+    # 没有写法提示的旧记录同样成立。
+    assert change_set_reference_hash_from_payload(
+        change_set_persisted_payload(change_set)
+    ) == change_set_payload_hash(change_set)
 
 
 def test_writer_candidate_rejects_missing_duplicate_cross_run_and_stale_target_bindings() -> None:

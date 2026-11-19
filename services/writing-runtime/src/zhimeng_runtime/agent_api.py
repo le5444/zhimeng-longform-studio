@@ -4,29 +4,45 @@ import asyncio
 import json
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Annotated, NoReturn
+from typing import Annotated, Literal, NoReturn
 
-from fastapi import APIRouter, Header, Query, Request, status
+from fastapi import APIRouter, Header, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 
 from zhimeng_runtime.agent_candidate_models import AgentCandidateOutputRecord
 from zhimeng_runtime.agent_provider import AgentProviderError
+from zhimeng_runtime.agent_images import create_agent_image_router
+from zhimeng_runtime.command_api import create_command_router
+from zhimeng_runtime.command_background_api import create_command_background_router
+from zhimeng_runtime.memory_changes_api import create_memory_changes_router
+from zhimeng_runtime.session_source_api import create_session_source_router
+from zhimeng_runtime.session_plan_api import create_session_plan_router
+from zhimeng_runtime.session_goal import GoalStore, SessionGoalResponse, GoalEndRequest
+from zhimeng_runtime.run_artifacts_api import create_run_artifacts_router
+from zhimeng_runtime.run_usage import read_run_usage
+from zhimeng_runtime.agent_queue import AgentQueueService, QueueInput, QueueUpdate, QueueState, QueueDispatchResponse, QueueSteerRequest, QueueSteerResponse, QueueInputError
 from zhimeng_runtime.agent_models import (
     AgentActivityListResponse,
     AgentMessageListResponse,
     AgentRunCancelResponse,
+    AgentRunContinuationResponse,
     AgentRunCreateRequest,
     AgentRunCreateResponse,
+    AgentRunAdmissionWithdrawResponse,
     AgentRunEvent,
     AgentRunListResponse,
     AgentRunResumeRequest,
     AgentRunResumeResponse,
     AgentRunResponse,
     AgentSessionCreateRequest,
+    AgentSessionForkRequest,
     AgentSessionListResponse,
     AgentSessionResponse,
+    AgentSessionRebindRequest,
+    AgentSessionUpdateRequest,
     AgentStatusResponse,
     AgentWorkflowStateResponse,
+    SessionCheckpointRecord,
 )
 from zhimeng_runtime.agent_service import AgentService, AgentUnavailableError
 from zhimeng_runtime.agent_store import (
@@ -35,6 +51,7 @@ from zhimeng_runtime.agent_store import (
     AgentContextPackNotFound,
     AgentContextPackSourceUnavailable,
     AgentStoreConflict,
+    AgentAdmissionWithdrawn,
     AgentStoreError,
     AgentStoreInvalidState,
     AgentStoreNotFound,
@@ -55,8 +72,21 @@ def create_agent_router(
     service: AgentService,
     *,
     heartbeat_seconds: float,
+    queue_service: AgentQueueService | None = None,
 ) -> APIRouter:
     router = APIRouter(tags=["agent"])
+    router.include_router(create_agent_image_router(lambda: service.store.database))
+    router.include_router(create_command_router(service))
+    router.include_router(create_command_background_router(service))
+    router.include_router(create_memory_changes_router(service))
+    # The production AgentService always owns a store, but small API fixtures
+    # may implement only workflow operations. Session source recall needs the
+    # database at router construction time, so mount it only when that
+    # dependency is present instead of breaking unrelated endpoints.
+    if getattr(service, "store", None) is not None:
+        router.include_router(create_session_source_router(service))
+    router.include_router(create_session_plan_router(service))
+    router.include_router(create_run_artifacts_router(service))
 
     def raise_agent_error(exc: Exception) -> NoReturn:
         if isinstance(exc, AgentUnavailableError):
@@ -90,6 +120,10 @@ def create_agent_router(
             status_code = status.HTTP_409_CONFLICT
             code = getattr(exc, "code", "agent_conflict")
             retryable = getattr(exc, "retryable", True)
+        elif isinstance(exc, QueueInputError):
+            status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+            code = "agent_queue_input_invalid"
+            retryable = False
         elif isinstance(exc, AgentStoreInvalidState):
             status_code = status.HTTP_409_CONFLICT
             code = "agent_state_invalid"
@@ -119,6 +153,44 @@ def create_agent_router(
         except AgentStoreError as exc:
             raise_agent_error(exc)
 
+    queue_service = queue_service or AgentQueueService(service)
+
+    @router.get("/api/v1/agent/sessions/{session_id}/queue", response_model=QueueState)
+    async def read_queue(session_id: str) -> QueueState:
+        return await call_store(queue_service.store.read, session_id)
+
+    @router.post("/api/v1/agent/sessions/{session_id}/queue", response_model=QueueState)
+    async def enqueue_message(session_id: str, request: QueueInput) -> QueueState:
+        async with queue_service.lock_for(session_id):
+            return await call_store(queue_service.store.enqueue, session_id, request)
+
+    @router.patch("/api/v1/agent/sessions/{session_id}/queue", response_model=QueueState)
+    async def update_queue(session_id: str, request: QueueUpdate) -> QueueState:
+        async with queue_service.lock_for(session_id):
+            return await call_store(queue_service.store.update, session_id, request)
+
+    @router.post("/api/v1/agent/sessions/{session_id}/queue/{item_id}/dispatch", response_model=QueueDispatchResponse)
+    async def dispatch_queue(session_id: str, item_id: str) -> QueueDispatchResponse:
+        try:
+            return await queue_service.dispatch(session_id, item_id)
+        except (AgentUnavailableError, AgentProviderError, AgentStoreError) as exc:
+            raise_agent_error(exc)
+
+    @router.post("/api/v1/agent/sessions/{session_id}/queue/{item_id}/steer", response_model=QueueSteerResponse)
+    async def steer_queue(session_id: str, item_id: str, request: QueueSteerRequest) -> QueueSteerResponse:
+        async with queue_service.lock_for(session_id):
+            if request.input is not None:
+                if request.input.item_id != item_id:
+                    raise_agent_error(QueueInputError("插入消息编号与请求路径不一致"))
+                await call_store(queue_service.store.enqueue, session_id, request.input)
+            try:
+                queue = await asyncio.to_thread(queue_service.store.steer, session_id, item_id, request.expected_run_id)
+            except AgentStoreError as exc:
+                await asyncio.to_thread(queue_service.store.steering_failed, session_id, item_id)
+                raise_agent_error(exc)
+        await service.broker.publish(request.expected_run_id)
+        return QueueSteerResponse(queue=queue)
+
     @router.get("/api/v1/agent/status", response_model=AgentStatusResponse)
     async def agent_status() -> AgentStatusResponse:
         return service.status()
@@ -145,12 +217,126 @@ def create_agent_router(
         sessions = await call_store(service.store.list_sessions, project_id)
         return AgentSessionListResponse(sessions=sessions)
 
+    @router.post(
+        "/api/v1/agent/sessions",
+        response_model=AgentSessionResponse,
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def create_unbound_session(
+        request: AgentSessionCreateRequest,
+    ) -> AgentSessionResponse:
+        """「随便聊」：不绑定小说项目的 Agent 会话，与项目会话同一个核心。"""
+        try:
+            return await service.create_session(project_id=None, title=request.title)
+        except (AgentUnavailableError, AgentStoreError) as exc:
+            raise_agent_error(exc)
+
+    @router.get(
+        "/api/v1/agent/sessions",
+        response_model=AgentSessionListResponse,
+    )
+    async def list_unbound_sessions(
+        scope: Annotated[Literal["unbound", "all"], Query()] = "unbound",
+    ) -> AgentSessionListResponse:
+        """默认只列不绑书的纯对话；scope=all 连各部小说下的对话一起列，供界面左栏分组渲染。"""
+        if scope == "all":
+            sessions = await call_store(service.store.list_all_sessions)
+        else:
+            sessions = await call_store(service.store.list_unbound_sessions)
+        return AgentSessionListResponse(sessions=sessions)
+
+    @router.put(
+        "/api/v1/agent/sessions/{session_id}/book",
+        response_model=AgentSessionResponse,
+    )
+    async def rebind_session_book(
+        session_id: str,
+        request: AgentSessionRebindRequest,
+    ) -> AgentSessionResponse:
+        """把这条对话改挂到另一部小说下；project_id 传 null 就解绑成纯对话。"""
+        return await call_store(
+            service.store.rebind_session,
+            session_id,
+            project_id=request.project_id,
+        )
+
     @router.get(
         "/api/v1/agent/sessions/{session_id}",
         response_model=AgentSessionResponse,
     )
     async def get_session(session_id: str) -> AgentSessionResponse:
         return await call_store(service.store.get_session, session_id)
+
+    @router.patch(
+        "/api/v1/agent/sessions/{session_id}",
+        response_model=AgentSessionResponse,
+    )
+    async def update_session(
+        session_id: str,
+        request: AgentSessionUpdateRequest,
+    ) -> AgentSessionResponse:
+        try:
+            return await service.update_session(
+                session_id,
+                title=request.title,
+                pinned=request.pinned,
+                rebind_provider=request.rebind_provider,
+                provider_id=request.provider_id,
+                model=request.model,
+                reasoning_effort=request.reasoning_effort,
+            )
+        except (AgentUnavailableError, AgentStoreError) as exc:
+            raise_agent_error(exc)
+
+    @router.delete(
+        "/api/v1/agent/sessions/{session_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+    )
+    async def delete_session(session_id: str) -> None:
+        await call_store(service.store.close_session, session_id)
+
+    @router.post(
+        "/api/v1/agent/sessions/{session_id}/fork",
+        response_model=AgentSessionResponse,
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def fork_session(
+        session_id: str,
+        request: AgentSessionForkRequest,
+    ) -> AgentSessionResponse:
+        try:
+            return await service.fork_session(
+                source_session_id=session_id,
+                up_to_message_id=request.up_to_message_id,
+                title=request.title,
+            )
+        except (AgentUnavailableError, AgentStoreError) as exc:
+            raise_agent_error(exc)
+
+    @router.post(
+        "/api/v1/agent/sessions/{session_id}/compact",
+        response_model=SessionCheckpointRecord,
+        status_code=status.HTTP_200_OK,
+    )
+    async def compact_session(
+        session_id: str,
+    ) -> SessionCheckpointRecord:
+        try:
+            return await service.compact_session(session_id)
+        except (AgentUnavailableError, AgentProviderError, AgentStoreError) as exc:
+            raise_agent_error(exc)
+
+    @router.get(
+        "/api/v1/agent/sessions/{session_id}/checkpoint",
+        response_model=SessionCheckpointRecord | None,
+    )
+    async def get_latest_checkpoint(
+        session_id: str,
+    ) -> SessionCheckpointRecord | None:
+        try:
+            return await call_store(service.store.latest_session_checkpoint, session_id)
+        except (AgentUnavailableError, AgentStoreError) as exc:
+            raise_agent_error(exc)
 
     @router.get(
         "/api/v1/agent/sessions/{session_id}/messages",
@@ -160,6 +346,8 @@ def create_agent_router(
         session_id: str,
         after_ordinal: Annotated[int, Query(ge=0)] = 0,
         limit: Annotated[int, Query(ge=1, le=500)] = 200,
+        before_ordinal: Annotated[int | None, Query(ge=1)] = None,
+        latest: bool = False,
     ) -> AgentMessageListResponse:
         session = await call_store(service.store.get_session, session_id)
         messages = await call_store(
@@ -167,11 +355,31 @@ def create_agent_router(
             session_id,
             after_ordinal=after_ordinal,
             limit=limit,
+            before_ordinal=before_ordinal,
+            latest=latest,
         )
+        has_earlier = bool(messages) and await call_store(
+            service.store.has_messages_between,
+            session_id,
+            after_ordinal=after_ordinal,
+            before_ordinal=messages[0].ordinal,
+        )
+        summarize = getattr(service.store, "run_process_summaries", None)
+        summaries = await call_store(
+            summarize, session_id, [message.run_id for message in messages],
+        ) if callable(summarize) else {}
+        usage = await call_store(
+            read_run_usage, service.store.database, session_id, [message.run_id for message in messages],
+        ) if getattr(service.store, "database", None) is not None else {}
+        messages = [message.model_copy(update={"run_usage": usage.get(message.run_id)}) for message in messages]
         return AgentMessageListResponse(
             session_id=session_id,
             messages=messages,
             last_ordinal=session.last_message_ordinal,
+            has_earlier=has_earlier,
+            run_process_summaries=summaries,
+            run_origins=await call_store(service.store.message_run_origins, [message.run_id for message in messages]),
+            review_sources=await call_store(service.store.message_review_sources, [message.run_id for message in messages]),
         )
 
     @router.get(
@@ -184,6 +392,79 @@ def create_agent_router(
     ) -> AgentRunListResponse:
         runs = await call_store(service.store.list_runs, session_id, limit=limit)
         return AgentRunListResponse(session_id=session_id, runs=runs)
+
+    @router.get(
+        "/api/v1/agent/sessions/{session_id}/runs/admission",
+        response_model=AgentRunCreateResponse,
+    )
+    async def get_run_admission(
+        session_id: str,
+        response: Response,
+        idempotency_key: Annotated[
+            str,
+            Header(
+                alias="Idempotency-Key",
+                min_length=8,
+                max_length=128,
+                pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            ),
+        ],
+    ) -> AgentRunCreateResponse:
+        # A missing receipt describes this read, not a promise that an in-flight
+        # POST cannot commit later. Retries keep the original key and payload.
+        await call_store(service.store.get_session, session_id)
+        try:
+            admitted = await asyncio.to_thread(
+                service.store.find_run_by_idempotency_key, session_id, idempotency_key,
+            )
+        except AgentAdmissionWithdrawn as exc:
+            raise ApiError(
+                str(exc), status_code=status.HTTP_410_GONE, code=exc.code,
+                headers={"Cache-Control": "no-store", "Vary": "Idempotency-Key"},
+                retryable=False,
+            ) from exc
+        except AgentStoreError as exc:
+            raise_agent_error(exc)
+        if admitted is None:
+            raise ApiError(
+                "这条消息暂未查到受理记录",
+                status_code=status.HTTP_404_NOT_FOUND,
+                code="agent_admission_not_found",
+                headers={"Cache-Control": "no-store", "Vary": "Idempotency-Key"},
+                retryable=False,
+            )
+        run, user_message = admitted
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Vary"] = "Idempotency-Key"
+        return AgentRunCreateResponse(
+            run=run, user_message=user_message, replayed=True,
+        )
+
+    @router.post(
+        "/api/v1/agent/sessions/{session_id}/runs/admission/withdraw",
+        response_model=AgentRunAdmissionWithdrawResponse,
+    )
+    async def withdraw_run_admission(
+        session_id: str,
+        response: Response,
+        idempotency_key: Annotated[
+            str,
+            Header(
+                alias="Idempotency-Key", min_length=8, max_length=128,
+                pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            ),
+        ],
+    ) -> AgentRunAdmissionWithdrawResponse:
+        admitted = await call_store(service.store.withdraw_run_admission, session_id, idempotency_key)
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Vary"] = "Idempotency-Key"
+        if admitted is None:
+            return AgentRunAdmissionWithdrawResponse(state="withdrawn")
+        run, user_message = admitted
+        return AgentRunAdmissionWithdrawResponse(
+            state="accepted",
+            accepted=AgentRunCreateResponse(run=run, user_message=user_message, replayed=True),
+        )
 
     @router.post(
         "/api/v1/agent/sessions/{session_id}/runs",
@@ -210,10 +491,17 @@ def create_agent_router(
                 expected_project_revision=request.expected_project_revision,
                 expected_project_fingerprint=request.expected_project_fingerprint,
                 active_chapter_id=request.active_chapter_id,
+                open_file_path=request.open_file_path,
                 writer_mode=request.writer_mode,
                 idempotency_key=idempotency_key,
                 context_pack_id=request.context_pack_id,
                 expected_context_pack_hash=request.expected_context_pack_hash,
+                continuation_source_run_id=request.continuation_source_run_id,
+                review_source_run_id=request.review_source_run_id,
+                manual_file_ids=request.manual_file_ids,
+                manual_skill_names=request.manual_skill_names,
+                image_ids=request.image_ids,
+                **({"goal": request.goal} if request.goal else {}),
             )
         except (AgentUnavailableError, AgentProviderError, AgentStoreError) as exc:
             raise_agent_error(exc)
@@ -223,6 +511,14 @@ def create_agent_router(
             replayed=result.replayed,
         )
 
+    @router.get("/api/v1/agent/sessions/{session_id}/goal", response_model=SessionGoalResponse)
+    async def read_goal(session_id: str):
+        return await call_store(GoalStore(service.store.database).read, session_id)
+
+    @router.post("/api/v1/agent/sessions/{session_id}/goal/end", response_model=SessionGoalResponse)
+    async def end_goal(session_id: str, request: GoalEndRequest):
+        return await call_store(GoalStore(service.store.database).end, session_id, request)
+
     @router.get(
         "/api/v1/agent/runs/{run_id}",
         response_model=AgentRunResponse,
@@ -230,6 +526,13 @@ def create_agent_router(
     async def get_run(run_id: str) -> AgentRunResponse:
         run = await call_store(service.store.get_run, run_id)
         return AgentRunResponse(run=run)
+
+    @router.get(
+        "/api/v1/agent/runs/{run_id}/continuation",
+        response_model=AgentRunContinuationResponse,
+    )
+    async def get_run_continuation(run_id: str) -> AgentRunContinuationResponse:
+        return await call_store(service.store.get_run_continuation, run_id)
 
     @router.get(
         "/api/v1/agent/runs/{run_id}/workflow",
@@ -329,17 +632,15 @@ def create_agent_router(
     async def list_activities(
         run_id: str,
         after_sequence: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int | None, Query(ge=1, le=1000)] = None,
+        through_sequence: Annotated[int | None, Query(ge=0)] = None,
     ) -> AgentActivityListResponse:
-        run = await call_store(service.store.get_run, run_id)
-        activities = await call_store(
-            service.store.list_activities,
+        return await call_store(
+            service.store.read_activity_page,
             run_id,
             after_sequence=after_sequence,
-        )
-        return AgentActivityListResponse(
-            run_id=run_id,
-            activities=activities,
-            last_sequence=run.last_activity_sequence,
+            limit=limit,
+            through_sequence=through_sequence,
         )
 
     @router.post(
@@ -420,13 +721,21 @@ async def _iter_run_events(
     heartbeat_seconds: float,
 ) -> AsyncIterator[str]:
     cursor = after_sequence
+    page_size = 250
     while not await request.is_disconnected():
         generation = service.broker.snapshot(run_id)
+        # 先读 Run，再查事件：看到终态后，后一次查询就能读到同事务提交的尾部活动。
+        # 两套序号不同（run_event 还含内部事件），不能拿 SSE 游标和活动序号比较。
+        run = await asyncio.to_thread(service.store.get_run, run_id)
         events = await asyncio.to_thread(
             service.store.list_run_events,
             run_id,
             after_sequence=cursor,
+            limit=page_size,
         )
+        if await request.is_disconnected():
+            return
+        frames: list[str] = []
         for stored in events:
             cursor = stored.sequence
             event = AgentRunEvent(
@@ -440,9 +749,11 @@ async def _iter_run_events(
                     )
                 },
             )
-            yield _encode_sse(event)
-        run = await asyncio.to_thread(service.store.get_run, run_id)
-        if run.status in TERMINAL_RUN_STATUSES:
+            frames.append(_encode_sse(event))
+        if frames:
+            # 每帧仍有独立事件编号；一页共用一次网络写入，避免大量小包回放。
+            yield "".join(frames)
+        if run.status in TERMINAL_RUN_STATUSES and not events:
             done = AgentRunEvent(
                 event_id=f"{run_id}:{cursor}",
                 event_type="done",
@@ -451,12 +762,15 @@ async def _iter_run_events(
             )
             yield _encode_sse(done)
             return
+        if len(events) == page_size or run.status in TERMINAL_RUN_STATUSES:
+            # 先排空已保存的分页，再等新事件；运行中也不能每页等一次心跳。
+            continue
         changed = await service.broker.wait_for_change(
             run_id,
             generation,
             timeout=heartbeat_seconds,
         )
-        if not changed:
+        if not changed and not events:
             yield ": heartbeat\n\n"
 
 

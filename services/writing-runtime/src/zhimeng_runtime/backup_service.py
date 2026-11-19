@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import shutil
 import sqlite3
 import tempfile
-from datetime import UTC, datetime
+import threading
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from zhimeng_runtime.backup_models import (
@@ -24,6 +27,7 @@ from zhimeng_runtime.backup_models import (
 )
 from zhimeng_runtime.config import RuntimeSettings
 from zhimeng_runtime.database import SCHEMA_VERSION, SqliteStore
+from zhimeng_runtime.fs_atomic import replace_with_retry
 
 
 class BackupError(RuntimeError):
@@ -40,6 +44,9 @@ class BackupConflictError(BackupError):
 
 class BackupStateError(BackupError):
     pass
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _now() -> datetime:
@@ -73,7 +80,7 @@ def _atomic_write_json(path: Path, payload: dict[str, object]) -> None:
             handle.write(encoded)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, path)
+        replace_with_retry(temporary, path)
     finally:
         if temporary.exists():
             temporary.unlink(missing_ok=True)
@@ -93,7 +100,11 @@ def _probe_sqlite(path: Path) -> tuple[str, int, int]:
 
 
 class BackupService:
-    """Consistent Runtime SQLite backup/restore without project files or secrets."""
+    """Full SQLite recovery copy; conversation and tool text is not redacted.
+
+    Project directories and the external credential vault are not packaged.
+    This does not imply that database text contains no copied files or secrets.
+    """
 
     def __init__(
         self,
@@ -190,7 +201,7 @@ class BackupService:
         database_sha256 = _sha256_file(target_db)
         size_bytes = target_db.stat().st_size
         provisional_manifest = RuntimeBackupManifest.model_construct(
-            schema_id="zhimeng.runtime-backup-manifest.v1",
+            schema_id="zhimeng.runtime-backup-manifest.v2",
             backup_id=backup_id,
             created_at=created_at,
             product_version=self.product_version,
@@ -202,32 +213,18 @@ class BackupService:
             database_size_bytes=size_bytes,
             integrity_check=integrity,  # type: ignore[arg-type]
             foreign_key_violations=fk_violations,
-            includes_secrets=False,
-            includes_novel_body=False,
+            includes_secrets=None,
+            includes_novel_body=None,
+            content_scope="runtime_database_unredacted",
             includes_project_files=False,
             formal_draft_allowed=False,
-            policy_version="local-v1-runtime-backup-1",
+            policy_version="local-v1-runtime-backup-2",
             manifest_hash="0" * 64,
         )
-        manifest = RuntimeBackupManifest(
-            backup_id=backup_id,
-            created_at=created_at,
-            product_version=self.product_version,
-            environment=self.settings.environment,
-            database_schema_version=schema_version,
-            journal_mode=journal_mode,
-            database_relative_path=database_name,
-            database_sha256=database_sha256,
-            database_size_bytes=size_bytes,
-            integrity_check=integrity,  # type: ignore[arg-type]
-            foreign_key_violations=fk_violations,
-            includes_secrets=False,
-            includes_novel_body=False,
-            includes_project_files=False,
-            formal_draft_allowed=False,
-            policy_version="local-v1-runtime-backup-1",
-            manifest_hash=runtime_backup_manifest_hash(provisional_manifest),
-        )
+        manifest = RuntimeBackupManifest.model_validate({
+            **provisional_manifest.model_dump(),
+            "manifest_hash": runtime_backup_manifest_hash(provisional_manifest),
+        })
         _atomic_write_json(
             package_dir / "manifest.json",
             manifest.model_dump(mode="json", by_alias=True),
@@ -248,24 +245,17 @@ class BackupService:
             created_at=created_at,
             receipt_hash="0" * 64,
         )
-        receipt = RuntimeBackupReceipt(
-            receipt_id=receipt_id,
-            backup_id=backup_id,
-            outcome="created",
-            backup_relative_path=f"backups/{backup_id}",
-            manifest=manifest,
-            formal_draft_allowed=False,
-            writes_project_truth=False,
-            created_at=created_at,
-            receipt_hash=runtime_backup_receipt_hash(provisional_receipt),
-        )
+        receipt = RuntimeBackupReceipt.model_validate({
+            **provisional_receipt.model_dump(),
+            "receipt_hash": runtime_backup_receipt_hash(provisional_receipt),
+        })
         _atomic_write_json(
             package_dir / "backup-receipt.json",
             receipt.model_dump(mode="json", by_alias=True),
         )
         return RuntimeBackupResponse(receipt=receipt)
 
-    def restore_backup(self, request: RuntimeRestoreRequest) -> RuntimeRestoreResponse:
+    def validate_restore(self, request: RuntimeRestoreRequest) -> tuple[Path, RuntimeBackupManifest]:
         package_dir = self.backup_root / request.backup_id
         manifest_path = package_dir / "manifest.json"
         if not manifest_path.is_file():
@@ -292,6 +282,11 @@ class BackupService:
             raise BackupStateError(
                 f"backup schema {schema_version} is newer than runtime schema {SCHEMA_VERSION}"
             )
+        return source_db, manifest
+
+    def restore_backup(self, request: RuntimeRestoreRequest) -> RuntimeRestoreResponse:
+        source_db, manifest = self.validate_restore(request)
+        package_dir = source_db.parent
 
         # Safety snapshot of current DB before replace.
         pre_restore: RuntimeBackupResponse | None = None
@@ -309,7 +304,7 @@ class BackupService:
             companion = Path(str(live) + suffix)
             if companion.exists():
                 companion.unlink()
-        os.replace(temporary, live)
+        replace_with_retry(temporary, live)
         for suffix in ("-wal", "-shm"):
             companion = Path(str(live) + suffix)
             if companion.exists():
@@ -346,31 +341,111 @@ class BackupService:
             created_at=created_at,
             receipt_hash="0" * 64,
         )
-        receipt = RuntimeRestoreReceipt(
-            receipt_id=receipt_id,
-            backup_id=request.backup_id,
-            outcome="restored",
-            restored_database_schema_version=restored_schema,
-            restored_database_sha256=restored_sha,
-            integrity_check=restored_integrity,  # type: ignore[arg-type]
-            foreign_key_violations=restored_fk,
-            pre_restore_backup_id=(
-                None if pre_restore is None else pre_restore.receipt.backup_id
-            ),
-            formal_draft_allowed=False,
-            writes_project_truth=False,
-            includes_project_files=False,
-            created_at=created_at,
-            receipt_hash=runtime_restore_receipt_hash(provisional),
-        )
+        receipt = RuntimeRestoreReceipt.model_validate({
+            **provisional.model_dump(),
+            "receipt_hash": runtime_restore_receipt_hash(provisional),
+        })
         _atomic_write_json(
             package_dir / "restore-receipt.json",
             receipt.model_dump(mode="json", by_alias=True),
         )
         return RuntimeRestoreResponse(receipt=receipt)
 
+    def prune_backups(self, keep: int) -> list[str]:
+        """只留最新 `keep` 份自动/手动备份，其余按包删掉。
+
+        库有近百 MB，不设上限的自动备份会把作者的硬盘吃穿（本机 C 盘已用 94%）。
+        只删这份清单里核对过的 `runtime-backup-<32hex>` 目录：作者自己丢进
+        backups 文件夹的旧副本、迁移时的 `pre-v9-*`、manifest 读不懂的目录一律不动。
+        """
+
+        if keep < 1:
+            raise ValueError("keep must be at least 1")
+        summaries = sorted(
+            self.list_backups().backups,
+            key=lambda item: item.created_at,
+            reverse=True,
+        )
+        root = self.backup_root.resolve(strict=False)
+        removed: list[str] = []
+        for stale in summaries[keep:]:
+            package_dir = (root / stale.backup_id).resolve(strict=False)
+            if package_dir.parent != root or not package_dir.is_dir():
+                continue
+            shutil.rmtree(package_dir, ignore_errors=True)
+            removed.append(stale.backup_id)
+        return removed
+
+
+class AutoBackupWorker:
+    """到点自己存一份记录本，不用作者想起来才点。
+
+    丢库 = 丢全部对话、修改记录和「撤回」凭据（稿子本身是 .md 文件，不在这儿）。
+    线程只在后台做「到期就备、备完删旧的」，失败只写日志：这份软件没有弹窗权。
+    """
+
+    def __init__(
+        self,
+        service: BackupService,
+        *,
+        interval_hours: float = 24.0,
+        keep: int = 3,
+        check_seconds: float = 600.0,
+        first_delay_seconds: float = 60.0,
+        clock: Callable[[], datetime] = _now,
+    ) -> None:
+        self.service = service
+        self.interval = timedelta(hours=interval_hours)
+        self.keep = keep
+        self.check_seconds = check_seconds
+        self.first_delay_seconds = first_delay_seconds
+        self._clock = clock
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(
+            target=self._run,
+            name="zhimeng-auto-backup",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def stop(self, timeout: float | None = 2.0) -> None:
+        self._stop.set()
+        thread = self._thread
+        if thread is not None and thread.is_alive():
+            # 一份 100MB 的副本可能正写到一半；等一下，等不到就让它随进程退出。
+            thread.join(timeout=timeout)
+
+    def run_once(self) -> str | None:
+        """到期就备一份并收掉旧的；没到期什么都不做。返回这次的备份编号。"""
+
+        existing = self.service.list_backups().backups
+        newest = max((item.created_at for item in existing), default=None)
+        if newest is not None and self._clock() - newest < self.interval:
+            return None
+        response = self.service.create_backup()
+        self.service.prune_backups(self.keep)
+        return response.receipt.backup_id
+
+    def _run(self) -> None:
+        # 开机先等一分钟再动手：这时可能在跑迁移、恢复中断的任务，抢着复制库不划算。
+        if self._stop.wait(self.first_delay_seconds):
+            return
+        while not self._stop.is_set():
+            try:
+                self.run_once()
+            except Exception as exc:  # 后台线程不能把写作台带崩
+                _LOGGER.warning("自动备份没成功：%s", exc)
+            self._stop.wait(self.check_seconds)
+
 
 __all__ = [
+    "AutoBackupWorker",
     "BackupConflictError",
     "BackupError",
     "BackupNotFoundError",

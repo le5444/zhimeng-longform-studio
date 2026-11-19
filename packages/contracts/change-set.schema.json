@@ -116,13 +116,38 @@
         "relative_path": {
           "maxLength": 1024,
           "minLength": 1,
-          "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+\\.(?:json|jsonl|md|txt|yaml|yml)$",
+          "pattern": "^\\.*[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/\\.*[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)*$",
           "title": "Relative Path",
           "type": "string",
           "x-zhimeng-invariants": [
             "path segments cannot use Windows device names",
-            "path segments are at most 255 characters"
+            "path segments are at most 255 characters",
+            "paths are relative and cannot contain dot traversal segments",
+            "file names may be dotfiles, extensionless, or use any extension",
+            "file contents are checked as text when read or written"
           ]
+        },
+        "target_relative_path": {
+          "anyOf": [
+            {
+              "maxLength": 1024,
+              "minLength": 1,
+              "pattern": "^\\.*[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/\\.*[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)*$",
+              "type": "string",
+              "x-zhimeng-invariants": [
+                "path segments cannot use Windows device names",
+                "path segments are at most 255 characters",
+                "paths are relative and cannot contain dot traversal segments",
+                "file names may be dotfiles, extensionless, or use any extension",
+                "file contents are checked as text when read or written"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Relative Path"
         },
         "rationale": {
           "maxLength": 4000,
@@ -276,7 +301,8 @@
       "enum": [
         "create",
         "update",
-        "delete"
+        "delete",
+        "move"
       ],
       "title": "ChangeOperation",
       "type": "string"
@@ -284,6 +310,7 @@
     "ChangeSetOrigin": {
       "enum": [
         "manual",
+        "model",
         "agent",
         "skill_workflow"
       ],
@@ -1178,13 +1205,38 @@
         "relative_path": {
           "maxLength": 1024,
           "minLength": 1,
-          "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+\\.(?:json|jsonl|md|txt|yaml|yml)$",
+          "pattern": "^\\.*[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/\\.*[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)*$",
           "title": "Relative Path",
           "type": "string",
           "x-zhimeng-invariants": [
             "path segments cannot use Windows device names",
-            "path segments are at most 255 characters"
+            "path segments are at most 255 characters",
+            "paths are relative and cannot contain dot traversal segments",
+            "file names may be dotfiles, extensionless, or use any extension",
+            "file contents are checked as text when read or written"
           ]
+        },
+        "target_relative_path": {
+          "anyOf": [
+            {
+              "maxLength": 1024,
+              "minLength": 1,
+              "pattern": "^\\.*[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/\\.*[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)*$",
+              "type": "string",
+              "x-zhimeng-invariants": [
+                "path segments cannot use Windows device names",
+                "path segments are at most 255 characters",
+                "paths are relative and cannot contain dot traversal segments",
+                "file names may be dotfiles, extensionless, or use any extension",
+                "file contents are checked as text when read or written"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Relative Path"
         },
         "before_sha256": {
           "anyOf": [
@@ -1330,11 +1382,12 @@
           "items": {
             "maxLength": 1024,
             "minLength": 1,
-            "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+$",
+            "pattern": "^[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)*$",
             "type": "string",
             "x-zhimeng-invariants": [
               "path segments cannot use Windows device names",
-              "path segments are at most 255 characters"
+              "path segments are at most 255 characters",
+              "folders inside the book are the author's own layout"
             ]
           },
           "title": "Created Directories",
@@ -1523,6 +1576,19 @@
       "default": false,
       "title": "Gate Required",
       "type": "boolean"
+    },
+    "ai_smell": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ai Smell"
     },
     "status": {
       "$ref": "#/$defs/ChangeSetStatus"

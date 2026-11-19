@@ -1,0 +1,271 @@
+{
+  "$defs": {
+    "FileChangeItem": {
+      "properties": {
+        "operation": {
+          "enum": [
+            "create",
+            "update",
+            "delete",
+            "move",
+            "mkdir"
+          ],
+          "title": "Operation",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "target_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target Path"
+        },
+        "undone_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Undone At"
+        }
+      },
+      "required": [
+        "sequence",
+        "operation",
+        "path",
+        "target_path",
+        "undone_at"
+      ],
+      "title": "FileChangeItem",
+      "type": "object"
+    },
+    "FileChangePreview": {
+      "properties": {
+        "after_characters": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "After Characters"
+        },
+        "after_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "After Text"
+        },
+        "before_characters": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Before Characters"
+        },
+        "before_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Before Text"
+        },
+        "masked_secrets": {
+          "default": 0,
+          "title": "Masked Secrets",
+          "type": "integer"
+        },
+        "operation": {
+          "enum": [
+            "create",
+            "update",
+            "delete",
+            "move",
+            "mkdir"
+          ],
+          "title": "Operation",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "preview_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Preview Note"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "target_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target Path"
+        },
+        "undone_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Undone At"
+        }
+      },
+      "required": [
+        "sequence",
+        "operation",
+        "path",
+        "target_path",
+        "undone_at"
+      ],
+      "title": "FileChangePreview",
+      "type": "object"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/session-file-change-detail.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "change_id": {
+      "title": "Change Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/FileChangeItem"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "previews": {
+      "items": {
+        "$ref": "#/$defs/FileChangePreview"
+      },
+      "title": "Previews",
+      "type": "array"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "applied",
+        "failed",
+        "unverified",
+        "partially_undone",
+        "undone"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "undo_available": {
+      "title": "Undo Available",
+      "type": "boolean"
+    },
+    "undo_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Undo Reason"
+    },
+    "undone_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Undone At"
+    }
+  },
+  "required": [
+    "change_id",
+    "session_id",
+    "run_id",
+    "title",
+    "created_at",
+    "undone_at",
+    "status",
+    "files",
+    "previews",
+    "undo_available",
+    "undo_reason"
+  ],
+  "title": "SessionFileChangeDetail",
+  "type": "object"
+}

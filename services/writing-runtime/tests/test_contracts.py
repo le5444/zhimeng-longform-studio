@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator
+from pydantic import ValidationError
 
 from zhimeng_runtime.agent_candidate_models import (
     AgentCandidateOutput,
@@ -21,6 +22,11 @@ from zhimeng_runtime.change_set_models import (
     ChangeSetListResponse,
     ChangeSetResponse,
     ChangeSetRollbackRequest,
+    CreateFileChangeInput,
+    MoveFileChangeInput,
+    CandidateFileChange,
+    WritebackFileResult,
+    RelativeProjectPath,
     WritebackManifest,
 )
 from zhimeng_runtime.context_compiler import compile_context_pack
@@ -592,13 +598,12 @@ def test_context_pack_contract_is_strict_and_preserves_public_boundaries() -> No
     Draft202012Validator.check_schema(pack_schema)
 
     assert create_schema["additionalProperties"] is False
+    # 知识库快照绑定可选（2026-09-25）：普通对话的资料包不带它。
     assert set(create_schema["required"]) == {
         "objective",
         "profile",
         "expected_project_revision",
         "expected_project_fingerprint",
-        "project_kb_state_id",
-        "project_kb_manifest_hash",
     }
     selector = create_schema["$defs"]["FormalKnowledgeSelector"]
     assert selector["additionalProperties"] is False
@@ -701,10 +706,14 @@ def test_context_pack_contract_is_strict_and_preserves_public_boundaries() -> No
 
     create_validator = Draft202012Validator(create_schema)
     request_payload = request.model_dump(mode="json", by_alias=True)
-    for required_binding in ("project_kb_state_id", "project_kb_manifest_hash"):
-        missing_binding = dict(request_payload)
-        missing_binding.pop(required_binding)
-        assert list(create_validator.iter_errors(missing_binding))
+    # 知识库快照绑定整对可省（2026-09-25）；只给一半由模型拒绝
+    # （test_chat_pack_without_kb_20260925.py 走 API 验过）。
+    without_binding = dict(request_payload)
+    without_binding.pop("project_kb_state_id")
+    without_binding.pop("project_kb_manifest_hash")
+    assert list(create_validator.iter_errors(without_binding)) == []
+    with pytest.raises(ValueError):
+        ContextCreateRequest.model_validate({**without_binding, "project_kb_state_id": request.project_kb_state_id})
 
     legacy_request = ContextCreateRequest.model_construct(
         objective=request.objective,
@@ -826,7 +835,6 @@ def test_public_change_set_create_schema_rejects_unsafe_or_mismatched_operations
 
     for unsafe_path in (
         "08_素材库/bad?.md",
-        "08_素材库/bad. .md",
         "08_素材库/control\x01.md",
     ):
         unsafe = {
@@ -855,3 +863,90 @@ def test_public_change_set_create_schema_rejects_unsafe_or_mismatched_operations
     }
     with pytest.raises(ValueError, match="Windows device names"):
         ChangeSetCreateRequest.model_validate(reserved_device)
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "08_素材库/灵感.md",
+        "设定/新功法.md",
+        "99_番外/彩蛋.md",
+        "README.md",
+        "人物/主角/柳青烟.json",
+        "src/app.py",
+        "web/main.js",
+        "settings.ini",
+        "data/sales.csv",
+        "Dockerfile",
+        ".env",
+        ".config/settings.custom-extension",
+        ".git/config",
+        "images/not-a-binary.exe",
+    ],
+)
+def test_change_set_paths_accept_the_authors_own_folder_layout(
+    relative_path: str,
+) -> None:
+    """01_~09_ 是新建书的默认夹子，不是准入条件：作者怎么摆，Agent 就能写到哪。"""
+
+    change = CreateFileChangeInput(
+        operation="create",
+        relative_path=relative_path,
+        after_content="正文",
+        rationale="作者自己的文件夹摆法。",
+    )
+    assert change.relative_path == relative_path
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "reason"),
+    [
+        ("../outside.md", "不能越出书根"),
+        ("设定/../README.md", "不能带 dot 段"),
+        ("/etc/config", "必须相对路径"),
+        ("C:/config.py", "必须相对路径"),
+        ("folder//file.py", "不能带空段"),
+        ("folder/./file.py", "不能带 dot 段"),
+        ("folder/file.py.", "不能尾点"),
+        ("folder/file.py ", "不能尾空格"),
+        ("NUL", "Windows 保留名"),
+        ("config/con .py", "Windows 保留名别名"),
+        ("AUX/config.py", "Windows 保留目录名"),
+        ("08_素材库/CON.md", "Windows 保留名"),
+        ("设定/坏?.md", "不可移植字符"),
+    ],
+)
+def test_change_set_paths_still_reject_unsafe_targets(
+    relative_path: str,
+    reason: str,
+) -> None:
+    payload = {
+        "operation": "create",
+        "relative_path": relative_path,
+        "after_content": "正文",
+        "rationale": reason,
+    }
+    with pytest.raises(ValidationError):
+        CreateFileChangeInput.model_validate(payload)
+
+
+def test_workspace_path_changes_reach_candidate_move_and_writeback_schemas() -> None:
+    from pydantic import TypeAdapter
+    from zhimeng_runtime.change_set_models import RelativeWorkspacePath
+
+    for path in (".env", "src/app.py", "config/settings.ini", "Dockerfile", "data/table.csv"):
+        assert TypeAdapter(RelativeWorkspacePath).validate_python(path) == path
+        assert MoveFileChangeInput(operation="move", file_id="file-" + "a" * 32, target_relative_path=path, rationale="重命名文件").target_relative_path == path
+        for model in (CandidateFileChange, WritebackFileResult):
+            fields = model.model_json_schema()["properties"]
+            Draft202012Validator(fields["relative_path"]).validate(path)
+            Draft202012Validator(fields["target_relative_path"]).validate(path)
+        public = _schema("change-set-create.schema.json")
+        payload = {"base_revision": 1, "base_fingerprint": "a" * 64, "title": "普通文件", "summary": "保存普通文本", "changes": [{"operation": "create", "relative_path": path, "after_content": "text", "rationale": "保存文件"}]}
+        Draft202012Validator(public).validate(payload)
+
+    # Only the live workspace path changes; legacy chapter-specific models keep
+    # their existing type until that retired chain is separately removed.
+    for path in ("app.py", ".env", "Dockerfile"):
+        with pytest.raises(ValidationError):
+            TypeAdapter(RelativeProjectPath).validate_python(path)

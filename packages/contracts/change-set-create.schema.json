@@ -3,6 +3,7 @@
     "ChangeSetOrigin": {
       "enum": [
         "manual",
+        "model",
         "agent",
         "skill_workflow"
       ],
@@ -26,12 +27,15 @@
         "relative_path": {
           "maxLength": 1024,
           "minLength": 1,
-          "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+\\.(?:json|jsonl|md|txt|yaml|yml)$",
+          "pattern": "^\\.*[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/\\.*[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)*$",
           "title": "Relative Path",
           "type": "string",
           "x-zhimeng-invariants": [
             "path segments cannot use Windows device names",
-            "path segments are at most 255 characters"
+            "path segments are at most 255 characters",
+            "paths are relative and cannot contain dot traversal segments",
+            "file names may be dotfiles, extensionless, or use any extension",
+            "file contents are checked as text when read or written"
           ]
         },
         "after_content": {
@@ -75,6 +79,49 @@
         "file_id"
       ],
       "title": "DeleteFileChangeInput",
+      "type": "object"
+    },
+    "MoveFileChangeInput": {
+      "additionalProperties": false,
+      "properties": {
+        "rationale": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "operation": {
+          "const": "move",
+          "title": "Operation",
+          "type": "string"
+        },
+        "file_id": {
+          "pattern": "^file-[0-9a-f]{32}$",
+          "title": "File Id",
+          "type": "string"
+        },
+        "target_relative_path": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^\\.*[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/\\.*[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)*$",
+          "title": "Target Relative Path",
+          "type": "string",
+          "x-zhimeng-invariants": [
+            "path segments cannot use Windows device names",
+            "path segments are at most 255 characters",
+            "paths are relative and cannot contain dot traversal segments",
+            "file names may be dotfiles, extensionless, or use any extension",
+            "file contents are checked as text when read or written"
+          ]
+        }
+      },
+      "required": [
+        "rationale",
+        "operation",
+        "file_id",
+        "target_relative_path"
+      ],
+      "title": "MoveFileChangeInput",
       "type": "object"
     },
     "UpdateFileChangeInput": {
@@ -225,12 +272,26 @@
       "title": "Gate Required",
       "type": "boolean"
     },
+    "ai_smell": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ai Smell"
+    },
     "changes": {
       "items": {
         "discriminator": {
           "mapping": {
             "create": "#/$defs/CreateFileChangeInput",
             "delete": "#/$defs/DeleteFileChangeInput",
+            "move": "#/$defs/MoveFileChangeInput",
             "update": "#/$defs/UpdateFileChangeInput"
           },
           "propertyName": "operation"
@@ -244,6 +305,9 @@
           },
           {
             "$ref": "#/$defs/DeleteFileChangeInput"
+          },
+          {
+            "$ref": "#/$defs/MoveFileChangeInput"
           }
         ]
       },

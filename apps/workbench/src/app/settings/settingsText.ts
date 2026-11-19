@@ -1,0 +1,32 @@
+/** Navigation and shared section labels. Domain-specific copy lives in settings.text.ts. */
+export const S = {
+  title: '设置',
+  close: '关上设置',
+  groups: { basic: '基础', agent: 'Agent 能力', other: '其他' },
+  nav: { models: '模型服务', appearance: '外观', behavior: '聊天偏好', memory: '记忆', skills: '技能库', about: '关于' },
+  search: '搜索设置',
+  noResults: '没有匹配的设置',
+  behavior: {
+    thinking: '自动展开正在进行的思考', groupTools: '合并连续的同类工具操作',
+  },
+  memory: {
+    title: '用户记忆', search: '搜索记忆', refresh: '刷新记忆', count: (n: number) => `${n} 条记忆`,
+    noMatch: '没有匹配的记忆', updated: '最近修改', history: '修改历史',
+    historyEmpty: '还没有历史版本', historyError: '记忆历史没有读出来。',
+    loadHistory: '查看历史版本', preview: '查看版本', restore: '恢复此版本', restored: '记忆已恢复。',
+    previous: '修改前版本', more: '更多版本', emptyVersion: '（空记忆）', chars: (n: number) => `${n} 字`,
+    stale: '记忆已有更新。你的草稿已保留，请重新核对最新内容。', reload: '载入最新内容',
+    discard: '放弃草稿', savedFile: '本机文件',
+  },
+  appearanceIntro: '这里改的是这台电脑上的显示和习惯，不动你的文件。',
+  themes: { system: '跟随系统', light: '亮色', dark: '暗色' } as Record<'system' | 'light' | 'dark', string>,
+  uiSize: '界面字号',
+  uiSizeHint: '整个界面的字一起变大或变小。',
+  uiSizes: { s: '小', m: '标准', l: '大', xl: '特大' } as Record<'s' | 'm' | 'l' | 'xl', string>,
+  projectInstructions: (name: string) => `「${name}」的说明`,
+  projectInstructionsIntro: '这些根目录文件可作为当前项目的说明。Agent 会按列出的顺序读取非空内容；项目记忆写入 AGENTS.md。',
+  projectInstructionsNone: '未找到项目说明文件。可在项目根目录创建 AGENTS.md 或 CLAUDE.md。',
+  connection: { checking: '正在连接…', online: '已连接', degraded: '响应慢，正在重试', offline: '没连上' } as Record<'checking' | 'online' | 'degraded' | 'offline', string>,
+  skillSwitch: (name: string) => `启用「${name}」`,
+  sourceSwitch: (label: string) => `读 ${label} 的技能`,
+} as const

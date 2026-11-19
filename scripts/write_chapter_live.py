@@ -40,14 +40,6 @@ STAMP = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
 
 # 章节正文所在的规范目录（四套 Skills 的 01-09 约定）
 PROSE_DIR = "05_正文内容"
-# 组装写作上下文时读取的项目真值文件
-TRUTH_GLOBS = (
-    "01_项目定位/*.md",
-    "02_世界观设定/*.md",
-    "03_人物设定/*.md",
-    "04_剧情大纲/*.md",
-    "06_写作规范/*.md",
-)
 
 
 # --------------------------------------------------------------------------
@@ -103,17 +95,11 @@ def wait_ready(url: str, timeout_s: float = 60.0) -> None:
 # 上下文组装：读项目真值
 # --------------------------------------------------------------------------
 def collect_truth(project: Path, limit_chars: int = 6000) -> str:
-    blocks: list[str] = []
-    for pattern in TRUTH_GLOBS:
-        for path in sorted(project.glob(pattern)):
-            try:
-                text = path.read_text(encoding="utf-8").strip()
-            except (OSError, UnicodeDecodeError):
-                continue
-            if text:
-                blocks.append(f"### {path.relative_to(project).as_posix()}\n{text}")
-    joined = "\n\n".join(blocks)
-    return joined[:limit_chars]
+    src = str(ROOT / "services" / "writing-runtime" / "src")
+    if src not in sys.path:
+        sys.path.insert(0, src)
+    from zhimeng_runtime.chapter_draft_service import _read_truth
+    return _read_truth(project, limit_chars=limit_chars)
 
 
 def find_chapters(project: Path) -> list[Path]:
@@ -153,8 +139,8 @@ def build_prompt(project: Path, target_words: int) -> tuple[str, str]:
     system = (
         "你是一位资深中文长篇小说写手。你只输出小说正文，"
         "不输出任何解释、标题编号说明、markdown 代码块或写作建议。"
-        "叙述克制具体，避免空洞抒情和 AI 腔（不要用『不禁』『仿佛』『似乎』堆砌，"
-        "不要每段都以人名开头，不要写总结性议论收尾）。"
+        "叙述克制具体，贴着本书已测到的写法偏斜，不要回到通用书面平均腔。"
+        "不要每段都以人名开头，不要写总结性议论收尾。"
     )
 
     parts = [

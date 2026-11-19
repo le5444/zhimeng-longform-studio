@@ -1,8 +1,11 @@
 {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/change-set-list.schema.json",
   "$defs": {
     "ChangeSetOrigin": {
       "enum": [
         "manual",
+        "model",
         "agent",
         "skill_workflow"
       ],
@@ -76,6 +79,15 @@
         "status": {
           "$ref": "#/$defs/ChangeSetStatus"
         },
+        "base_revision": {
+          "minimum": 0,
+          "title": "Base Revision",
+          "type": "integer"
+        },
+        "base_fingerprint": {
+          "title": "Base Fingerprint",
+          "type": "string"
+        },
         "review_revision": {
           "minimum": 0,
           "title": "Review Revision",
@@ -123,6 +135,8 @@
         "title",
         "origin",
         "status",
+        "base_revision",
+        "base_fingerprint",
         "review_revision",
         "file_count",
         "hunk_count",
@@ -156,7 +170,5 @@
     "change_sets"
   ],
   "title": "ChangeSetListResponse",
-  "type": "object",
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://zhimeng.local/contracts/change-set-list.schema.json"
+  "type": "object"
 }

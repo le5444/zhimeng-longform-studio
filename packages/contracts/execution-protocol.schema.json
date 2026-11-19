@@ -38,6 +38,9 @@
     "nullableTimestamp": {
       "anyOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]
     },
+    "nullableProjectRevision": {
+      "anyOf": [{"$ref": "#/$defs/projectRevision"}, {"type": "null"}]
+    },
     "executorIdentity": {
       "type": "object",
       "additionalProperties": false,
@@ -186,7 +189,11 @@
       "properties": {
         "input_tokens": {"type": "integer", "minimum": 0},
         "output_tokens": {"type": "integer", "minimum": 0},
-        "total_tokens": {"type": "integer", "minimum": 0}
+        "total_tokens": {"type": "integer", "minimum": 0},
+        "cached_input_tokens": {"anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}], "default": null},
+        "input_tokens_reported": {"type": "boolean", "default": true},
+        "output_tokens_reported": {"type": "boolean", "default": true},
+        "cached_input_tokens_complete": {"type": "boolean", "default": true}
       },
       "x-zhimeng-invariants": ["message_usage_total_covers_parts"]
     },
@@ -216,14 +223,87 @@
       }
     },
     "reasoningPayload": {
-      "type": "object",
       "additionalProperties": false,
-      "required": ["summary", "content", "visibility"],
       "properties": {
-        "summary": {"$ref": "#/$defs/nonEmptyString"},
-        "content": {"$ref": "#/$defs/nullableString"},
-        "visibility": {"enum": ["summary", "full", "redacted"]}
-      }
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Content"
+        },
+        "visibility": {
+          "enum": [
+            "summary",
+            "full",
+            "redacted"
+          ],
+          "title": "Visibility",
+          "type": "string"
+        },
+        "block_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Block Id"
+        },
+        "phase": {
+          "default": "completed",
+          "enum": [
+            "delta",
+            "completed",
+            "interrupted"
+          ],
+          "title": "Phase",
+          "type": "string"
+        },
+        "delta": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delta"
+        },
+        "source": {
+          "default": "model",
+          "enum": [
+            "model",
+            "runtime"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary",
+        "content",
+        "visibility"
+      ],
+      "title": "ReasoningPayload",
+      "type": "object"
     },
     "toolCallPayload": {
       "type": "object",
@@ -530,7 +610,7 @@
         "updated_at": {"$ref": "#/$defs/timestamp"},
         "executor": {"$ref": "#/$defs/executorIdentity"},
         "capabilities": {"$ref": "#/$defs/capabilityProfile"},
-        "project_revision": {"$ref": "#/$defs/projectRevision"},
+        "project_revision": {"$ref": "#/$defs/nullableProjectRevision"},
         "correlation_id": {"$ref": "#/$defs/stableId"}
       }
     },
@@ -577,13 +657,15 @@
           ]
         },
         "objective": {"$ref": "#/$defs/nonEmptyString"},
+        "origin_kind": {"type": "string", "enum": ["user", "command_completion"], "default": "user", "title": "Origin Kind"},
+        "stop_generation": {"type": "integer", "minimum": 0, "default": 0, "title": "Stop Generation"},
         "created_at": {"$ref": "#/$defs/timestamp"},
         "updated_at": {"$ref": "#/$defs/timestamp"},
         "started_at": {"$ref": "#/$defs/nullableTimestamp"},
         "completed_at": {"$ref": "#/$defs/nullableTimestamp"},
         "executor": {"$ref": "#/$defs/executorIdentity"},
         "capabilities": {"$ref": "#/$defs/capabilityProfile"},
-        "project_revision": {"$ref": "#/$defs/projectRevision"},
+        "project_revision": {"$ref": "#/$defs/nullableProjectRevision"},
         "correlation_id": {"$ref": "#/$defs/stableId"},
         "causation_id": {"$ref": "#/$defs/nullableStableId"},
         "last_activity_sequence": {"type": "integer", "minimum": 0},
@@ -645,7 +727,7 @@
         "run_id": {"$ref": "#/$defs/stableId"},
         "sequence": {"type": "integer", "minimum": 1},
         "created_at": {"$ref": "#/$defs/timestamp"},
-        "project_revision": {"$ref": "#/$defs/projectRevision"},
+        "project_revision": {"$ref": "#/$defs/nullableProjectRevision"},
         "correlation_id": {"$ref": "#/$defs/stableId"},
         "causation_id": {"$ref": "#/$defs/nullableStableId"},
         "kind": {

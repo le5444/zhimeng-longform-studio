@@ -1,0 +1,89 @@
+{
+  "additionalProperties": false,
+  "description": "一份已落库的会话摘要。\n\n落库后逐字节不再变化：注入时引用的就是这一份，所以同一次注入的重新校验\n结果稳定。``through_ordinal`` 是这份摘要覆盖到的最后一条消息序号，之后\n的消息仍原样留在历史窗口里。",
+  "properties": {
+    "schema": {
+      "const": "zhimeng.session-checkpoint.v1",
+      "default": "zhimeng.session-checkpoint.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "checkpoint_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Checkpoint Id",
+      "type": "string"
+    },
+    "session_id": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Session Id",
+      "type": "string"
+    },
+    "run_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Run Id"
+    },
+    "through_ordinal": {
+      "minimum": 2,
+      "title": "Through Ordinal",
+      "type": "integer"
+    },
+    "source_message_count": {
+      "minimum": 2,
+      "title": "Source Message Count",
+      "type": "integer"
+    },
+    "content": {
+      "minLength": 1,
+      "title": "Content",
+      "type": "string"
+    },
+    "content_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Content Hash",
+      "type": "string"
+    },
+    "reported_model": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Reported Model"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "checkpoint_id",
+    "session_id",
+    "run_id",
+    "through_ordinal",
+    "source_message_count",
+    "content",
+    "content_hash",
+    "reported_model",
+    "created_at"
+  ],
+  "title": "SessionCheckpointRecord",
+  "type": "object"
+}

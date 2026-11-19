@@ -18,6 +18,7 @@ from zhimeng_runtime.source_import_models import (
     LocalSourceImportCreateRequest,
     LocalSourceImportJob,
     LocalSourceInspectRequest,
+    LocalTextSourceUploadRequest,
     SourceImportCreateRequest,
     SourceImportJob,
     SourceImportListResponse,
@@ -34,9 +35,10 @@ from zhimeng_runtime.source_import_service import (
     SourceImportNotFoundError,
     SourceImportService,
     SourceImportStateError,
+    SourceImportUnavailableError,
 )
+from zhimeng_runtime.source_upload_service import SourceUploadError, SourceUploadService
 from zhimeng_runtime.source_import_receipt_models import (
-    SourceImportAttemptReceipt,
     SourceImportExecutionReceiptRecord,
     SourceImportLineageStatus,
     parse_source_import_execution_receipt,
@@ -50,6 +52,7 @@ def create_source_import_router(
     store: SqliteStore | None = None,
     service_error: str | None = None,
     distillation_prepare_service: SourceImportDistillationPrepareService | None = None,
+    source_upload_service: SourceUploadService | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1/source-imports", tags=["source-imports"])
 
@@ -74,6 +77,10 @@ def create_source_import_router(
             status_code = status.HTTP_409_CONFLICT
             code = "source_import_state_invalid"
             retryable = False
+        elif isinstance(exc, SourceImportUnavailableError):
+            status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+            code = "source_import_unavailable"
+            retryable = True
         elif isinstance(exc, SourceImportExecutionError):
             status_code = status.HTTP_502_BAD_GATEWAY
             code = "source_import_adapter_failed"
@@ -194,23 +201,6 @@ def create_source_import_router(
                 "Stored source import execution receipt is invalid"
             ) from exc
 
-    def read_attempt_receipts(
-        import_id: str,
-    ) -> list[SourceImportAttemptReceipt]:
-        read_job(import_id)
-        if service is not None:
-            return service.list_attempt_receipts(import_id)
-        if store is None:
-            require_service()
-        try:
-            return [
-                SourceImportAttemptReceipt.model_validate(payload)
-                for payload in store.list_source_import_attempt_receipts(import_id)
-            ]
-        except (RuntimeError, TypeError, ValueError) as exc:
-            raise SourceImportIntegrityError(
-                "Stored source import attempt receipts are invalid"
-            ) from exc
 
     @router.post("/tomato/search", response_model=TomatoSearchResponse)
     async def search_tomato(request: TomatoSearchRequest) -> TomatoSearchResponse:
@@ -236,6 +226,67 @@ def create_source_import_router(
         try:
             return await run_in_threadpool(active.inspect_local, request.source_path)
         except SourceImportError as exc:
+            raise_source_import_error(exc)
+
+    @router.post(
+        "/local/upload-text",
+        response_model=LocalSourceImportJob,
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    async def upload_local_text_source(
+        request: LocalTextSourceUploadRequest,
+    ) -> LocalSourceImportJob:
+        active = require_service()
+        if source_upload_service is None:
+            raise ApiError(
+                "Managed TXT source upload is unavailable",
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                code="source_upload_unavailable",
+                retryable=True,
+            )
+
+        uploaded_path = None
+        try:
+            uploaded_path = await run_in_threadpool(
+                source_upload_service.store_text,
+                file_name=request.file_name,
+                content=request.content,
+            )
+            candidate = await run_in_threadpool(
+                active.inspect_local,
+                str(uploaded_path),
+            )
+            created = await run_in_threadpool(
+                active.create,
+                LocalSourceImportCreateRequest(
+                    query=str(uploaded_path),
+                    candidate=candidate,
+                ),
+            )
+            if not isinstance(created, LocalSourceImportJob):
+                raise SourceImportIntegrityError(
+                    "Managed TXT upload created an unexpected source job"
+                )
+            return created
+        except SourceUploadError as exc:
+            raise ApiError(
+                str(exc),
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                code="source_upload_invalid",
+                retryable=False,
+            ) from exc
+        except OSError as exc:
+            if uploaded_path is not None:
+                await run_in_threadpool(source_upload_service.discard, uploaded_path)
+            raise ApiError(
+                "The uploaded TXT source could not be saved",
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                code="source_upload_unavailable",
+                retryable=True,
+            ) from exc
+        except SourceImportError as exc:
+            if uploaded_path is not None:
+                await run_in_threadpool(source_upload_service.discard, uploaded_path)
             raise_source_import_error(exc)
 
     @router.post(
@@ -283,17 +334,6 @@ def create_source_import_router(
         except SourceImportError as exc:
             raise_source_import_error(exc)
 
-    @router.get(
-        "/{import_id}/attempt-receipts",
-        response_model=list[SourceImportAttemptReceipt],
-    )
-    async def list_source_import_attempt_receipts(
-        import_id: str,
-    ) -> list[SourceImportAttemptReceipt]:
-        try:
-            return await run_in_threadpool(read_attempt_receipts, import_id)
-        except SourceImportError as exc:
-            raise_source_import_error(exc)
 
     @router.post("/{import_id}/distillation-invocation/prepare")
     async def prepare_source_import_distillation_invocation(
@@ -327,17 +367,6 @@ def create_source_import_router(
         active = require_service()
         try:
             return await run_in_threadpool(active.retry, import_id)
-        except SourceImportError as exc:
-            raise_source_import_error(exc)
-
-    @router.post(
-        "/{import_id}/network-recovery-evidence",
-        status_code=status.HTTP_201_CREATED,
-    )
-    async def build_network_recovery_evidence(import_id: str) -> dict:
-        active = require_service()
-        try:
-            return await run_in_threadpool(active.build_network_recovery_evidence, import_id)
         except SourceImportError as exc:
             raise_source_import_error(exc)
 

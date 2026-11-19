@@ -1,0 +1,73 @@
+{
+  "$id": "https://zhimeng.local/contracts/tool-run-command-arguments.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "columns": {
+      "default": 80,
+      "maximum": 32767,
+      "minimum": 1,
+      "title": "Columns",
+      "type": "integer"
+    },
+    "command": {
+      "maxLength": 4000,
+      "minLength": 1,
+      "title": "Command",
+      "type": "string"
+    },
+    "record_paths": {
+      "description": "Files or directories to observe before and after this command, relative to workdir or absolute. Copies existing regular files before launch and records creations, changes and deletions for version-checked undo. Include expected output paths, including missing files. Observation is limited to these paths; concurrent outside edits cannot be attributed to this command.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Record Paths",
+      "type": "array"
+    },
+    "rows": {
+      "default": 24,
+      "maximum": 32767,
+      "minimum": 1,
+      "title": "Rows",
+      "type": "integer"
+    },
+    "timeout_seconds": {
+      "default": 120,
+      "maximum": 1200,
+      "minimum": 1,
+      "title": "Timeout Seconds",
+      "type": "integer"
+    },
+    "tty": {
+      "default": false,
+      "description": "Start a real interactive terminal (Windows ConPTY), with merged ANSI output. Returns a persistent session even when yield_time_ms is omitted.",
+      "title": "Tty",
+      "type": "boolean"
+    },
+    "workdir": {
+      "default": "",
+      "maxLength": 1024,
+      "title": "Workdir",
+      "type": "string"
+    },
+    "yield_time_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Start a persistent command session and wait this many integer milliseconds; 1000 means one second.",
+      "title": "Yield Time Ms"
+    }
+  },
+  "required": [
+    "command"
+  ],
+  "title": "ComputerRunCommandArguments",
+  "type": "object"
+}

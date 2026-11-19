@@ -1,0 +1,5 @@
+.zm-terminal-detail { min-width: 0; }
+.zm-terminal-actions { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.zm-terminal { height: clamp(240px, 55vh, 600px); min-width: 0; padding: 8px; background: #14171c; border-radius: 6px; overflow: hidden; }
+.zm-terminal .xterm { height: 100%; }
+.zm-terminal-detail > details pre { white-space: pre-wrap; overflow-wrap: anywhere; }

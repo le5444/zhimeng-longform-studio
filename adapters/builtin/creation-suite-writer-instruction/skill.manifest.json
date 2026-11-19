@@ -4,7 +4,7 @@
   "display_name": "Creation Suite Writer Instruction",
   "description": "Provides a classified, immutable Creation writer instruction source for Runtime-owned materialization after the managed workflow.",
   "kind": "instruction_source",
-  "version": "2026.07.23-o2.2",
+  "version": "2026.07.23-o2.3",
   "source": {
     "type": "builtin_managed",
     "reference": "PROVENANCE.md",

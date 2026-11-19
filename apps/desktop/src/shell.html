@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+<title>织梦 · 共享浏览器验证</title><link rel="stylesheet" href="shell.css"></head>
+<body><header><strong>织梦</strong><span>共享浏览器</span><span class="stage">独立验证入口</span><button id="new">新页面</button></header>
+<nav id="tabs" aria-label="浏览器标签"></nav>
+<form id="address"><button type="button" id="back" aria-label="后退">←</button><button type="button" id="forward" aria-label="前进">→</button><button type="button" id="reload">刷新</button><input id="url" aria-label="网页地址" placeholder="输入网页地址"><button type="submit">打开</button><button type="button" id="control">我来操作</button><button type="button" id="close" aria-label="关闭当前页面">×</button></form>
+<div id="notice" role="status">用户与 Agent 操作同一个页面。接手后，Agent 的旧操作将失效。</div><div id="error" role="alert" hidden></div>
+<main id="page"><div class="empty"><h1>打开一个页面，一起完成任务</h1><p>浏览器在此持续运行。界面刷新会重新连接；退出后重开恢复网址，未提交的表单可能丢失。</p><p>这是宿主验证入口，尚未接入工作台对话。</p></div></main>
+<footer><details id="downloads"><summary>下载记录</summary><ul></ul></details></footer><script src="shell.mjs" type="module"></script></body></html>

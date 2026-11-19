@@ -1,0 +1,19 @@
+{
+  "properties": {
+    "run_ids": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 500,
+      "title": "Run Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "run_ids"
+  ],
+  "title": "MemoryChangesRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/memory-changes-request.schema.json"
+}

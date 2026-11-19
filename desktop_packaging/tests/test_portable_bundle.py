@@ -47,6 +47,22 @@ def _fixture_managed_skills(tmp_path: Path) -> Path:
     return root
 
 
+def _fixture_four_skills_runtime(tmp_path: Path) -> Path:
+    root = tmp_path / "four-skills-runtime-src"
+    for relative in (
+        "novel-distillation/scripts/distill_source_packet.py",
+        "novel-distillation/scripts/distill_kb.py",
+        "novel-kb-manager/scripts/kb_manager.py",
+        "novel-creation-suite/scripts/detect_ai_smell.py",
+    ):
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# bundled fixture\n", encoding="utf-8")
+    (root / "novel-distillation/library").mkdir(parents=True)
+    (root / "novel-kb-manager/library").mkdir(parents=True)
+    return root
+
+
 def test_assemble_verify_and_install_bundle(tmp_path: Path) -> None:
     workbench = _fixture_workbench(tmp_path)
     runtime_src = _fixture_runtime_src(tmp_path)
@@ -82,6 +98,39 @@ def test_assemble_verify_and_install_bundle(tmp_path: Path) -> None:
     assert (app / "runtime" / "src" / "zhimeng_runtime" / "__init__.py").is_file()
     assert (layout.skills_root / "demo-skill" / "SKILL.md").is_file()
     assert (layout.skills_root / ".seeded-from-bundle.txt").read_text(encoding="utf-8").strip() == "demo-skill"
+
+
+def test_assemble_includes_four_skills_runtime_and_exports_bundle_pointer(
+    tmp_path: Path,
+) -> None:
+    bundle_source = _fixture_four_skills_runtime(tmp_path)
+    bundle_dir = tmp_path / "bundle-with-four-skills"
+    manifest = assemble_portable_bundle(
+        output_dir=bundle_dir,
+        product_version="0.1.0-skills",
+        workbench_dist=_fixture_workbench(tmp_path),
+        runtime_src_root=_fixture_runtime_src(tmp_path),
+        four_skills_runtime_source=bundle_source,
+    )
+
+    assert manifest["components"]["four_skills_runtime"] == {
+        "kind": "domain_cli_bundle",
+        "source": str(bundle_source),
+        "entry": "four-skills-runtime",
+        "portable": True,
+    }
+    assert (
+        bundle_dir
+        / "four-skills-runtime"
+        / "novel-distillation"
+        / "scripts"
+        / "distill_kb.py"
+    ).is_file()
+    launcher = (bundle_dir / "launch" / "start-runtime.ps1").read_text(
+        encoding="utf-8"
+    )
+    assert "ZHIMENG_FOUR_SKILLS_BUNDLE_ROOT" in launcher
+    verify_portable_bundle(bundle_dir)
 
 
 def test_verify_detects_tamper(tmp_path: Path) -> None:

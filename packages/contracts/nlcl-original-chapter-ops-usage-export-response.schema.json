@@ -69,11 +69,13 @@
           "items": {
             "maxLength": 1024,
             "minLength": 1,
-            "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+\\.(?:json|jsonl|md|txt|yaml|yml)$",
+            "pattern": "^[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)*\\.(?:json|jsonl|md|txt|yaml|yml)$",
             "type": "string",
             "x-zhimeng-invariants": [
               "path segments cannot use Windows device names",
-              "path segments are at most 255 characters"
+              "path segments are at most 255 characters",
+              "folders inside the book are the author's own layout",
+              "project files must use a supported text suffix"
             ]
           },
           "maxItems": 64,
@@ -119,12 +121,14 @@
         "export_relative_path": {
           "maxLength": 1024,
           "minLength": 1,
-          "pattern": "^0[1-9]_[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)+\\.(?:json|jsonl|md|txt|yaml|yml)$",
+          "pattern": "^[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?(?:/[^./\\\\:<>\"|?*\\x00-\\x1f](?:[^/\\\\:<>\"|?*\\x00-\\x1f]*[^./\\\\:<>\"|?*\\x00-\\x1f ])?)*\\.(?:json|jsonl|md|txt|yaml|yml)$",
           "title": "Export Relative Path",
           "type": "string",
           "x-zhimeng-invariants": [
             "path segments cannot use Windows device names",
-            "path segments are at most 255 characters"
+            "path segments are at most 255 characters",
+            "folders inside the book are the author's own layout",
+            "project files must use a supported text suffix"
           ]
         },
         "export_absolute_path": {

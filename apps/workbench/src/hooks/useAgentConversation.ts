@@ -1,108 +1,152 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  AgentContractError,
+  agentSessionProviderPreference,
   cancelAgentRun,
+  compactAgentSession,
   createAgentRun,
   createAgentSession,
+  createUnboundAgentSession,
+  deleteAgentSession,
+  forkAgentSession,
+  getAgentRunContinuation,
+  getAgentRunAdmission,
   getAgentSession,
-  getAgentWorkflowState,
   getAgentStatus,
+  getLatestSessionCheckpoint,
   isTerminalAgentRun,
   listAgentActivities,
   listAgentMessages,
   listAgentRuns,
   listAgentSessions,
-  resumeAgentRun,
+  listUnboundAgentSessions,
   streamAgentRunEvents,
+  updateAgentSession,
+  withdrawAgentRunAdmission,
   type AgentActivity,
+  type AgentImageAttachment,
   type AgentAvailability,
   type AgentMessage,
+  type AgentMessagePage,
   type AgentMessagePayload,
   type AgentRun,
+  type AgentRunProcessSummary,
+  type AgentReviewSource,
+  type AgentRunContinuation,
   type AgentRunStatePayload,
+  type RunCreateResponse,
   type AgentSession,
-  type AgentWorkflowState,
+  type SessionCheckpointRecord,
   type WriterMode,
 } from '../api/agent'
-import {
-  createContextPack,
-  getContextPack,
-  getNlclRoute,
-  getNlclRouteExecution,
-  getPrewriteOperationPackage,
-  listSessionContextPacks,
-  projectKbContractBindingStatus,
-  type ContextPackRecord,
-  type FormalKnowledgeSelector,
-  type NlclRouteReceipt,
-  type NlclRouteExecutionState,
-  type PrewriteOperationPackage,
-} from '../api/contextPacks'
-import {
-  currentProjectKbBinding,
-  getProjectKbState,
-  type ProjectKbBinding,
-  type ProjectKbStateRecord,
-} from '../api/knowledge'
-import { RuntimeApiError } from '../api/runtime'
+import type { ProviderSettingsView } from '../api/providerSettings'
+import { inspectBoundProject } from '../api/projects'
+import { RuntimeApiError, RuntimeTimeoutError, isCancelledRequest } from '../api/runtime'
+import { mergeAgentMessages, readAgentMessageUpdates } from './agentMessageHistory'
+import { createActivityBuffer } from './agentActivityBuffer'
+import { AgentSendUnconfirmedError, claimPendingImageDraft, claimPendingSkillDraft, clearPendingAgentSend, readPendingAgentSend, savePendingAgentSend, type ImageDraftIdentity, type SkillDraftIdentity, type PendingAgentSend } from './agentSendReceipt'
+
+export { AgentSendUnconfirmedError } from './agentSendReceipt'
+
+export interface PendingSendView {
+  item: PendingAgentSend
+  status: 'checking' | 'unknown' | 'not_found' | 'withdrawn'
+}
+
+function isWithdrawnAdmission(error: unknown): boolean {
+  return error instanceof RuntimeApiError && error.status === 410
+    && (error.payload as { error?: { code?: string } })?.error?.code === 'agent_admission_withdrawn'
+}
 
 interface AgentConversationOptions {
   enabled: boolean
   projectId: string | null
   projectRevision: number | null
   projectFingerprint: string | null
-  activeChapterId: string | null
+  /** 用户这时在右栏开着的文件（打开的文件夹里的相对路径）；发消息时照实告诉后端，没开就是 null。 */
+  openFilePath: string | null
+  /**
+   * 换书时优先恢复这一条对话。左栏点的是「某本书下面的某条对话」，换书之后不能随便挑
+   * 最近那条，得落到点的那条上。只在换书那一下读一次，同一本书内换对话走 selectConversation。
+   */
+  preferredSessionId?: string | null
 }
 
+/** 发一句话。打开了文件夹就发到那个文件夹的对话里；没打开就是随便聊。 */
+export interface AgentSendRequest {
+  goal?: import('../api/sessionGoal').GoalAdmission
+  text: string
+  manualFileIds?: string[]
+  /** 作者在输入框用 / 点名的技能（引用标签）。 */
+  skillNames?: string[]
+  imageIds?: string[]
+  images?: AgentImageAttachment[]
+  imageDraftIdentity?: ImageDraftIdentity
+  skillDraftIdentity?: SkillDraftIdentity
+  writerMode?: WriterMode
+  /** 「继续任务」：接着上一轮没做完的事。 */
+  continuationSourceRunId?: string
+  reviewSourceRunId?: string
+}
+
+/** 对话链此刻在忙什么：恢复对话、发送、压缩对话。 */
+export type AgentConversationOperation = 'restoring' | 'sending' | 'compacting'
+
 export interface AgentConversationState {
+  messageSyncError?: string | null
+  syncingMessages?: boolean
   availability: AgentAvailability
   detail: string
   sessions: AgentSession[]
   session: AgentSession | null
+  /** 界面上的消息：打开时是最新的 500 条，点「显示更早的消息」再往前补。 */
   messages: AgentMessage[]
+  hasEarlierMessages: boolean
+  loadEarlierMessages: () => Promise<void>
   streamingContent: string
   activeRun: AgentRun | null
-  workflow: AgentWorkflowState | null
+  continuation: AgentRunContinuation | null
+  /** 当前这一轮的步骤（右栏「现在」、修改卡都只看这一轮）。 */
   activities: AgentActivity[]
-  pendingContextPack: ContextPackRecord | null
-  pendingNlclRoute: NlclRouteReceipt | null
-  pendingNlclRouteExecutions: NlclRouteExecutionState[]
-  pendingPrewriteOperationPackage: PrewriteOperationPackage | null
-  activeContextPack: ContextPackRecord | null
-  activeNlclRoute: NlclRouteReceipt | null
-  activeNlclRouteExecutions: NlclRouteExecutionState[]
-  activePrewriteOperationPackage: PrewriteOperationPackage | null
-  contextState:
-    | 'idle'
-    | 'restoring'
-    | 'compiling'
-    | 'ready'
-    | 'degraded'
-    | 'blocked'
-    | 'stale'
-    | 'confirming'
-  contextStaleReasons: string[]
+  /** 这条对话里前几轮的步骤，按轮存：旧回答上的「执行了 N 步」靠它，不跟着新一轮消失。没加载的轮不在里面。 */
+  pastActivities: Readonly<Record<string, AgentActivity[]>>
+  runProcessSummaries?: Readonly<Record<string, AgentRunProcessSummary>>
+  runOrigins?: Readonly<Record<string, 'user' | 'command_completion'>>
+  reviewSources?: Readonly<Record<string, AgentReviewSource>>
+  observeBackgroundRun?: (run: AgentRun) => Promise<void>
+  /** 重新打开的对话里，旧的一轮要看步骤时再去后台读。 */
+  loadRunActivities: (runId: string) => Promise<void>
+  contextState: AgentConversationOperation | 'idle'
   running: boolean
-  resuming: boolean
   switchingSession: boolean
   busy: boolean
   error: string | null
-  compileContext: (
-    message: string,
-    profile?: string,
-    formalKnowledgeSelector?: FormalKnowledgeSelector | null,
-    activeChapterIdOverride?: string | null,
-    manualFileIds?: string[],
-  ) => Promise<void>
-  confirmPendingContext: (writerMode?: WriterMode) => Promise<void>
-  discardPendingContext: () => void
-  refreshPendingContext: () => Promise<void>
-  openContextPackForReview: (contextPackId: string) => Promise<void>
+  latestCheckpoint: SessionCheckpointRecord | null
+  send: (request: AgentSendRequest) => Promise<void>
+  pendingSend?: PendingSendView | null
+  checkPendingSend?: () => Promise<void>
+  retryPendingSend?: () => Promise<void>
+  withdrawPendingSend?: () => Promise<string | null>
   cancel: () => Promise<void>
-  resume: () => Promise<void>
-  createConversation: () => Promise<void>
+  prepareContinuation: () => Promise<AgentRunContinuation | null>
+  rebindProvider: (settings?: Pick<ProviderSettingsView, 'provider_id' | 'model' | 'reasoning_effort'>) => Promise<void>
+  createConversation: (customTitle?: string) => Promise<AgentSession | void>
+  forkConversation: (upToMessageId: string, title?: string) => Promise<AgentSession>
+  compactConversation: () => Promise<SessionCheckpointRecord>
   selectConversation: (sessionId: string) => Promise<void>
+  renameConversation: (sessionId: string, title: string) => Promise<void>
+  setConversationPinned: (sessionId: string, pinned: boolean) => Promise<void>
+  deleteConversation: (sessionId: string) => Promise<void>
   refresh: () => void
+  /** 更新已落盘消息，保留当前流、草稿与会话选择。 */
+  refreshMessages?: () => Promise<boolean>
+}
+
+/**
+ * 对话链这会儿正忙（换了项目正在读它的对话、上一步还没收尾）：等它闲下来再做就行，不是出错。
+ * 外面排着队的「换完项目开一条新对话」认这个类型，接着等，不弹红字。
+ */
+export class AgentBusyError extends Error {
+  override readonly name = 'AgentBusyError'
 }
 
 function errorMessage(error: unknown): string {
@@ -110,315 +154,433 @@ function errorMessage(error: unknown): string {
     const payload = error.payload as { error?: { message?: unknown } } | null
     if (typeof payload?.error?.message === 'string') return payload.error.message
   }
-  return error instanceof Error ? error.message : 'Writing Agent 请求失败'
+  if (error instanceof RuntimeTimeoutError) {
+    return `${error.message}。可以先重试一次；要是每次都这样，看看本机服务（8787）是不是卡在别的事上。`
+  }
+  if (isCancelledRequest(error)) {
+    return '已经停下了，这不是出错。'
+  }
+  return error instanceof Error ? error.message : '这次请求没有成功'
 }
 
-function executorInstanceId(executor: Record<string, unknown> | null): string | null {
-  const value = executor?.instance_id
-  return typeof value === 'string' && value.length > 0 ? value : null
-}
-
-function sessionMatchesCurrentProvider(
-  session: AgentSession,
-  currentExecutor: Record<string, unknown> | null,
-): boolean {
-  const currentInstanceId = executorInstanceId(currentExecutor)
-  const sessionInstanceId = executorInstanceId(session.executor)
-  return currentInstanceId === null
-    || sessionInstanceId === null
-    || currentInstanceId === sessionInstanceId
-}
-
-function shouldReconcileResumeFailure(error: unknown): boolean {
-  if (error instanceof AgentContractError) return false
-  if (error instanceof RuntimeApiError) return error.status === 409 || error.status >= 500
-  return true
-}
-
-function projectKbUnavailableMessage(record: ProjectKbStateRecord): string {
-  if (record.status === 'missing') return '项目知识快照尚未生成，请先在知识库重建快照'
-  if (record.status === 'stale') return '项目知识快照已过期，请先在知识库重建快照'
-  if (record.status === 'tampered') return '项目知识快照校验失败，请先诊断或重新校验'
-  return '项目知识快照的 current pointer 与 Manifest 不完整或不一致'
-}
-
-function isManagedO2eContextPack(
-  record: ContextPackRecord,
-  route: NlclRouteReceipt | null,
-): boolean {
-  const packId = record.pack.context_pack_id
-  const sessionId = record.pack.session_id
-  return (
-    packId.startsWith('context-pack-o2e-')
-    && sessionId.startsWith('session-o2e-')
-    && route?.source === 'external_distillation'
-    && Boolean(record.pack.project_kb_state_id)
-    && Boolean(record.pack.project_kb_manifest_hash)
-  )
-}
-
-async function loadCurrentProjectKbBinding(
-  projectId: string,
-  projectRevision: number,
-  projectFingerprint: string,
-  signal?: AbortSignal,
-): Promise<ProjectKbBinding> {
-  const record = await getProjectKbState(projectId, {}, signal)
-  const binding = currentProjectKbBinding(record, {
-    projectId,
-    projectRevision,
-    projectFingerprint,
+function sortSessions(sessions: AgentSession[]): AgentSession[] {
+  return [...sessions].sort((left, right) => {
+    const pinned = Number(Boolean(right.pinned)) - Number(Boolean(left.pinned))
+    if (pinned !== 0) return pinned
+    const updated = Date.parse(right.updated_at) - Date.parse(left.updated_at)
+    return Number.isNaN(updated) ? left.session_id.localeCompare(right.session_id) : updated
   })
-  if (!binding) throw new Error(projectKbUnavailableMessage(record))
-  return binding
 }
 
-async function loadNlclBundle(record: ContextPackRecord, signal?: AbortSignal) {
-  const contextPackId = record.pack.context_pack_id
-  const [route, operationPackage] = await Promise.all([
-    getNlclRoute(contextPackId, {}, signal),
-    getPrewriteOperationPackage(contextPackId, {}, signal),
-  ])
-  if (
-    route.context_pack_id !== contextPackId
-    || route.context_pack_hash !== record.pack.pack_hash
-  ) {
-    throw new Error('Runtime 返回的 NLCL 路由与 Context Pack 不匹配')
-  }
-  if (projectKbContractBindingStatus(record, route) === 'mismatch') {
-    throw new Error('Runtime 返回的 NLCL 路由与项目知识快照绑定不匹配')
-  }
-  if (
-    operationPackage.context_pack_hash !== record.pack.pack_hash
-    || operationPackage.route_receipt_hash !== route.receipt_hash
-  ) {
-    throw new Error('Runtime 返回的写前运行包绑定不匹配')
-  }
-  const executions = await Promise.all(
-    route.chapter_call_list.map((call) => getNlclRouteExecution(
-      contextPackId,
-      call.ordinal,
-      {},
-      signal,
-    )),
-  )
-  for (const execution of executions) {
-    const call = route.chapter_call_list.find((item) => item.ordinal === execution.call_ordinal)
-    if (
-      !call
-      || execution.route_receipt_id !== route.route_receipt_id
-      || execution.context_pack_id !== contextPackId
-      || (execution.receipt && (
-        execution.receipt.route_receipt_id !== route.route_receipt_id
-        || execution.receipt.route_receipt_hash !== route.receipt_hash
-        || execution.receipt.context_pack_id !== contextPackId
-        || execution.receipt.context_pack_hash !== record.pack.pack_hash
-        || execution.receipt.call_ordinal !== call.ordinal
-      ))
-    ) {
-      throw new Error('Runtime 返回的 NLCL 执行收据绑定不匹配')
-    }
-  }
-  if (projectKbContractBindingStatus(record, route, executions) === 'mismatch') {
-    throw new Error('Runtime 返回的 NLCL 执行收据与项目知识快照绑定不匹配')
-  }
-  return { route, operationPackage, executions }
+const AGENT_CONTROL_TIMEOUT_MS = 30_000
+const SELECTED_SESSION_PREFIX = 'zhimeng.agent.selected-session:'
+function selectedSession(projectId: string | null): string | null {
+  try { return localStorage.getItem(SELECTED_SESSION_PREFIX + JSON.stringify(projectId)) } catch { return null }
+}
+function rememberSession(projectId: string | null, sessionId: string | null) {
+  try {
+    const key = SELECTED_SESSION_PREFIX + JSON.stringify(projectId)
+    if (sessionId) localStorage.setItem(key, sessionId)
+    else localStorage.removeItem(key)
+  } catch { /* 本页导航保持可用。 */ }
+}
+const FILE_EFFECT_TOOLS = new Set([
+  'write_file', 'edit_file', 'move_file', 'delete_file', 'make_folder', 'undo_change', 'computer_run_command',
+  'project_write_file', 'project_edit_file', 'project_move_file', 'project_delete_file', 'project_mkdir', 'project_undo_change',
+])
+
+/** 新对话的占位名字「新对话 · 9/27 10:05」：后台认得它是占位，第一轮收尾时按第一句话改成正经名字。 */
+function placeholderSessionTitle(): string {
+  return `新对话 · ${new Intl.DateTimeFormat('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date())}`
 }
 
-function newIdempotencyKey(prefix: 'context' | 'turn'): string {
+function newIdempotencyKey(prefix: 'turn'): string {
   const random = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
   return `${prefix}-${random.replace(/[^A-Za-z0-9._:-]/g, '')}`
 }
 
 function upsertMessage(messages: AgentMessage[], message: AgentMessage): AgentMessage[] {
-  const index = messages.findIndex((item) => item.message_id === message.message_id)
-  if (index < 0) return [...messages, message].sort((a, b) => a.ordinal - b.ordinal)
-  const next = [...messages]
-  next[index] = message
-  return next
+  return mergeAgentMessages(messages, [message])
 }
 
 function restoreStreamingContent(activities: AgentActivity[]): string {
   let content = ''
   for (const activity of [...activities].sort((left, right) => left.sequence - right.sequence)) {
+    if (activity.kind === 'message' && activity.payload.role === 'user' && activity.payload.phase === 'completed') {
+      content = ''
+      continue
+    }
     if (activity.kind !== 'message' || activity.payload.role !== 'assistant') continue
     if (activity.payload.phase === 'delta' && activity.payload.delta) {
       content += activity.payload.delta
     } else if (activity.payload.phase === 'completed' && activity.payload.content !== null) {
-      content = activity.payload.content
+      // 完整阶段已在消息列表中；恢复流只接着展示尚未完成的下一段。
+      content = ''
     }
   }
   return content
 }
 
+function executorInstanceId(session: AgentSession): string | null {
+  return typeof session.executor?.instance_id === 'string' ? session.executor.instance_id : null
+}
+
+/**
+ * 中栏那一条对话：恢复历史、发一句话、流式收回答、停、换对话。
+ *
+ * 发一句话就是一个请求（2026-09-27 起，纠偏指令 3.9）：打开了文件夹也不再先编资料包，只带开着哪个文件、
+ * 亲手附上了哪些文件；文件夹里的说明文件和用户记忆由后端放在对话开头，别的模型要用自己读。
+ * 更早（9-25 以前）中间还要查知识库快照、重建快照、拉路由回执和写前运行包。
+ */
 export function useAgentConversation({
   enabled,
   projectId,
   projectRevision,
   projectFingerprint,
-  activeChapterId,
+  openFilePath,
+  preferredSessionId = null,
 }: AgentConversationOptions): AgentConversationState {
   const [availability, setAvailability] = useState<AgentAvailability>('checking')
-  const [detail, setDetail] = useState('正在检查 Writing Agent')
+  const [detail, setDetail] = useState('正在检查 Agent')
+  // 只在换书那一下读，所以放 ref：它变了不该把整条链重来一遍。
+  const preferredSessionRef = useRef<string | null>(preferredSessionId)
+  preferredSessionRef.current = preferredSessionId
+  // 外部点击的是一次导航意图；恢复后刷新应保持后来实际选中的会话。
+  const preferredIntent = useRef({ projectId, sessionId: preferredSessionId, used: false })
+  if (preferredIntent.current.projectId !== projectId || preferredIntent.current.sessionId !== preferredSessionId) {
+    preferredIntent.current = { projectId, sessionId: preferredSessionId, used: false }
+  }
   const [sessions, setSessions] = useState<AgentSession[]>([])
   const [session, setSession] = useState<AgentSession | null>(null)
   const [messages, setMessages] = useState<AgentMessage[]>([])
-  const [historyOrdinal, setHistoryOrdinal] = useState(0)
+  const messagesRef = useRef<AgentMessage[]>(messages)
+  messagesRef.current = messages
+  const [hasEarlierMessages, setHasEarlierMessages] = useState(false)
+  const syncedMessagesRef = useRef({ sessionId: '', ordinal: 0 })
+  const [messageSyncError, setMessageSyncError] = useState<string | null>(null)
+  const [syncingMessages, setSyncingMessages] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
+  const streamingMessageIdRef = useRef<string | null>(null)
+  const streamingGenerationRef = useRef(0)
   const [activeRun, setActiveRun] = useState<AgentRun | null>(null)
-  const [workflow, setWorkflow] = useState<AgentWorkflowState | null>(null)
+  const [continuation, setContinuation] = useState<AgentRunContinuation | null>(null)
   const [activities, setActivities] = useState<AgentActivity[]>([])
-  const [pendingContextPack, setPendingContextPack] = useState<ContextPackRecord | null>(null)
-  const [pendingNlclRoute, setPendingNlclRoute] = useState<NlclRouteReceipt | null>(null)
-  const [pendingNlclRouteExecutions, setPendingNlclRouteExecutions] = useState<NlclRouteExecutionState[]>([])
-  const [pendingPrewriteOperationPackage, setPendingPrewriteOperationPackage] = useState<PrewriteOperationPackage | null>(null)
-  const [activeContextPack, setActiveContextPack] = useState<ContextPackRecord | null>(null)
-  const [activeNlclRoute, setActiveNlclRoute] = useState<NlclRouteReceipt | null>(null)
-  const [activeNlclRouteExecutions, setActiveNlclRouteExecutions] = useState<NlclRouteExecutionState[]>([])
-  const [activePrewriteOperationPackage, setActivePrewriteOperationPackage] = useState<PrewriteOperationPackage | null>(null)
-  const [contextOperation, setContextOperation] = useState<
-    'restoring' | 'compiling' | 'confirming' | null
-  >(null)
+  const [pastActivities, setPastActivities] = useState<Record<string, AgentActivity[]>>({})
+  const [runProcessSummaries, setRunProcessSummaries] = useState<Record<string, AgentRunProcessSummary>>({})
+  const [runOrigins, setRunOrigins] = useState<Record<string, 'user' | 'command_completion'>>({})
+  const [reviewSources, setReviewSources] = useState<Record<string, AgentReviewSource>>({})
+  const [latestCheckpoint, setLatestCheckpoint] = useState<SessionCheckpointRecord | null>(null)
+  const [operation, setOperationState] = useState<AgentConversationOperation | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [projectKbStaleReason, setProjectKbStaleReason] = useState<string | null>(null)
-  const [resuming, setResuming] = useState(false)
+  const [pendingSendState, setPendingSend] = useState<PendingSendView | null>(null)
   const [switchingSession, setSwitchingSession] = useState(false)
+  const [observationEpoch, setObservationEpoch] = useState(0)
   const [refreshKey, setRefreshKey] = useState(0)
   const sessionRef = useRef<AgentSession | null>(null)
-  const sessionPromiseRef = useRef<{
-    projectId: string
-    promise: Promise<AgentSession>
-  } | null>(null)
+  const sessionPromiseRef = useRef<{ projectId: string; promise: Promise<AgentSession> } | null>(null)
   const activeRunRef = useRef<AgentRun | null>(null)
   const streamCursorRef = useRef<string | null>(null)
   const streamRunIdRef = useRef<string | null>(null)
   const seenActivitiesRef = useRef(new Set<string>())
   const scopeControllerRef = useRef<AbortController | null>(null)
-  const contextOperationRef = useRef<'restoring' | 'compiling' | 'confirming' | null>(null)
-  const resumePromiseRef = useRef<Promise<void> | null>(null)
+  const streamControllerRef = useRef<AbortController | null>(null)
+  const operationRef = useRef<AgentConversationOperation | null>(null)
+  const preparingContinuationRef = useRef(false)
+  const activitiesRef = useRef<AgentActivity[]>([])
 
   useEffect(() => {
     sessionRef.current = session
   }, [session])
 
-  activeRunRef.current = activeRun
-
-  const refresh = useCallback(() => setRefreshKey((value) => value + 1), [])
-
-  const refreshMessages = useCallback(async (sessionId: string, signal?: AbortSignal) => {
-    const page = await listAgentMessages(sessionId, {}, signal)
-    setMessages(page.messages)
-    setHistoryOrdinal(page.last_ordinal)
+  const replaceActivities = useCallback((next: AgentActivity[]) => {
+    activitiesRef.current = next
+    setActivities(next)
   }, [])
 
-  const restoreSession = useCallback(async (
-    targetSession: AgentSession,
-    signal?: AbortSignal,
-  ) => {
-    const [messagePage, runs, contextPacks] = await Promise.all([
-      listAgentMessages(targetSession.session_id, {}, signal),
-      listAgentRuns(targetSession.session_id, {}, signal),
-      listSessionContextPacks(targetSession.session_id, {}, signal),
+  /**
+   * 换到新的一轮之前，把手上这几轮的步骤按轮挪进「前几轮」，再清空当前的。
+   * 以前直接清空：发一句新的，上一条回答的「执行了 N 步」就没了（改前改后都这样，2026-09-26 真机看到）。
+   */
+  const stashActivities = useCallback((nextRunId: string | null) => {
+    const previous = activitiesRef.current
+    if (previous.length === 0) return
+    const byRun = new Map<string, AgentActivity[]>()
+    for (const activity of previous) {
+      if (activity.run_id === nextRunId) continue
+      const list = byRun.get(activity.run_id)
+      if (list) list.push(activity)
+      else byRun.set(activity.run_id, [activity])
+    }
+    if (byRun.size === 0) return
+    setPastActivities((past) => ({ ...past, ...Object.fromEntries(byRun) }))
+  }, [])
+
+  activeRunRef.current = activeRun
+
+  const setOperation = useCallback((next: AgentConversationOperation | null) => {
+    operationRef.current = next
+    setOperationState(next)
+  }, [])
+  /** 只在自己这一步还占着的时候才清：换书之后旧的 finally 不能把新作用域的状态抹掉。 */
+  const releaseOperation = useCallback((mine: AgentConversationOperation, signal: AbortSignal | undefined) => {
+    if (scopeControllerRef.current?.signal === signal && operationRef.current === mine) setOperation(null)
+  }, [setOperation])
+
+  // 导航只更换浏览器的观察范围；后台任务及发送回执仍属于原对话。
+  const beginNavigation = useCallback(() => {
+    scopeControllerRef.current?.abort()
+    streamControllerRef.current?.abort()
+    const controller = new AbortController()
+    scopeControllerRef.current = controller
+    preparingContinuationRef.current = false
+    setOperation('restoring')
+    setSwitchingSession(true)
+    setObservationEpoch((value) => value + 1)
+    setError(null)
+    return controller.signal
+  }, [setOperation])
+
+  const refresh = useCallback(() => setRefreshKey((value) => value + 1), [])
+  const messageRefreshSequence = useRef(0)
+  const messageRefreshController = useRef<AbortController | null>(null)
+  const applyMessagePage = useCallback((target: string, page: AgentMessagePage) => {
+    const first = messagesRef.current[0]?.ordinal
+    if (first === undefined || (page.messages[0] && page.messages[0].ordinal <= first)) {
+      setHasEarlierMessages(page.has_earlier === true)
+    }
+    syncedMessagesRef.current = { sessionId: target, ordinal: Math.max(page.messages.at(-1)?.ordinal ?? 0,
+      syncedMessagesRef.current.sessionId === target ? syncedMessagesRef.current.ordinal : 0) }
+    setMessages((current) => mergeAgentMessages(current, page.messages))
+    setRunProcessSummaries((current) => ({ ...current, ...page.run_process_summaries }))
+    setRunOrigins((current) => ({ ...current, ...page.run_origins }))
+    setReviewSources((current) => ({ ...current, ...page.review_sources }))
+    setMessageSyncError(null)
+  }, [])
+  const refreshMessages = useCallback(async (): Promise<boolean> => {
+    const target = sessionRef.current?.session_id
+    if (!target) return false
+    messageRefreshController.current?.abort()
+    const controller = new AbortController()
+    messageRefreshController.current = controller
+    const scopeSignal = scopeControllerRef.current?.signal
+    const signal = scopeSignal ? AbortSignal.any([scopeSignal, controller.signal]) : controller.signal
+    const sequence = ++messageRefreshSequence.current
+    const generation = streamingGenerationRef.current
+    setSyncingMessages(true)
+    try {
+      const through = syncedMessagesRef.current.sessionId === target ? syncedMessagesRef.current.ordinal : 0
+      const page = await readAgentMessageUpdates(target, through, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal)
+      if (signal?.aborted || sessionRef.current?.session_id !== target || sequence !== messageRefreshSequence.current) return false
+      applyMessagePage(target, page)
+      const completedMessage = activeRunRef.current?.status === 'succeeded' || activitiesRef.current.some((activity) => activity.kind === 'message'
+        && activity.payload.message_id === streamingMessageIdRef.current && activity.payload.phase === 'completed')
+      if (generation === streamingGenerationRef.current && completedMessage
+        && page.messages.some((message) => message.message_id === streamingMessageIdRef.current)) setStreamingContent('')
+      return true
+    } catch (loadError) {
+      if (!signal?.aborted && sessionRef.current?.session_id === target && sequence === messageRefreshSequence.current) setMessageSyncError(errorMessage(loadError))
+      return false
+    } finally {
+      if (!signal?.aborted && sessionRef.current?.session_id === target && sequence === messageRefreshSequence.current) setSyncingMessages(false)
+    }
+  }, [applyMessagePage])
+
+  const adoptSession = useCallback((updated: AgentSession) => {
+    sessionRef.current = updated
+    setSession(updated)
+    setSessions((items) => sortSessions(items.map((item) => (item.session_id === updated.session_id ? updated : item))))
+  }, [])
+
+  /** 按这条对话自己的模型选择恢复 Provider，保留其他对话及全局默认。 */
+  const ensureProviderBound = useCallback(async (candidate: AgentSession, signal?: AbortSignal): Promise<AgentSession> => {
+    if (activeRunRef.current && !isTerminalAgentRun(activeRunRef.current.status)) {
+      throw new Error('这一轮还没结束，不能切换模型')
+    }
+    const preference = agentSessionProviderPreference(candidate)
+    const sessionInstanceId = executorInstanceId(candidate)
+    // 服务的地址、密钥和请求头可在两轮之间更新；旧会话身份不能证明当前配置仍相同。
+    // 下一轮开始前按该会话自己的精确选择刷新身份，保留模型、强度与全部历史。
+    if (!preference) {
+      const status = await getAgentStatus({ timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal)
+      const runtimeInstanceId = typeof status.executor?.instance_id === 'string' ? status.executor.instance_id : null
+      // 没有身份指纹时保留原有兼容行为；真正发生漂移时才原地 PATCH。
+      if (!runtimeInstanceId || !sessionInstanceId || runtimeInstanceId === sessionInstanceId) return candidate
+    }
+    const updated = await updateAgentSession(
+      candidate.session_id,
+      preference
+        ? { rebind_provider: true, provider_id: preference.providerId, model: preference.model, reasoning_effort: preference.reasoningEffort }
+        : { rebind_provider: true },
+      { timeoutMs: AGENT_CONTROL_TIMEOUT_MS },
+      signal,
+    )
+    if (signal?.aborted) throw signal.reason
+    adoptSession(updated)
+    return updated
+  }, [adoptSession])
+
+  const restoreSession = useCallback(async (targetSession: AgentSession, signal?: AbortSignal, preserveHistory = false) => {
+    const retained = preserveHistory && sessionRef.current?.session_id === targetSession.session_id
+    const pending = readPendingAgentSend(targetSession.session_id)
+    if (pending) claimPendingImageDraft(pending)
+    if (pending) claimPendingSkillDraft(pending)
+    let admission: RunCreateResponse | null = null
+    let pendingView: PendingSendView | null = pending ? { item: pending, status: 'checking' } : null
+    if (pending) {
+      try {
+        admission = await getAgentRunAdmission(pending.sessionId, pending.key, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal)
+        if (admission) { clearPendingAgentSend(pending); pendingView = null }
+        else pendingView = { item: pending, status: 'not_found' }
+      } catch (admissionError) {
+        pendingView = { item: pending, status: isWithdrawnAdmission(admissionError) ? 'withdrawn' : 'unknown' }
+      }
+    }
+    if (signal?.aborted) throw signal.reason
+    const [messagePage, runs, checkpoint] = await Promise.all([
+      retained
+        ? readAgentMessageUpdates(targetSession.session_id, syncedMessagesRef.current.ordinal, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal)
+        : listAgentMessages(targetSession.session_id, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal),
+      listAgentRuns(targetSession.session_id, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal),
+      getLatestSessionCheckpoint(targetSession.session_id, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal).catch(() => null),
     ])
-    const latestRun = runs.at(-1) ?? null
+    const latestRun = runs.at(-1) ?? admission?.run ?? null
     let restoredActivities: AgentActivity[] = []
     let restoredSequence = 0
     if (latestRun) {
-      const activityPage = await listAgentActivities(
-        latestRun.run_id,
-        0,
-        {},
-        signal,
-      )
+      const activityPage = await listAgentActivities(latestRun.run_id, 0, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal)
       if (activityPage.run_id !== latestRun.run_id) {
-        throw new Error('Runtime 返回了其他 Run 的 Activity')
+        throw new Error('本机服务返回的不是这一次处理的记录')
       }
       restoredActivities = activityPage.activities
-      restoredSequence = Math.max(
-        activityPage.last_sequence,
-        ...restoredActivities.map((activity) => activity.sequence),
-      )
+      restoredSequence = activityPage.last_event_sequence ?? activityPage.last_sequence
     }
-    const pendingPack = contextPacks.find(
-      (record) => record.consumed_by_run_id === null,
-    ) ?? null
-    const activePack = latestRun
-      ? contextPacks.find(
-          (record) => record.consumed_by_run_id === latestRun.run_id,
-        ) ?? null
-      : null
-    const [pendingBundle, activeBundle] = await Promise.all([
-      pendingPack ? loadNlclBundle(pendingPack, signal) : Promise.resolve(null),
-      activePack ? loadNlclBundle(activePack, signal) : Promise.resolve(null),
-    ])
     if (signal?.aborted) throw signal.reason
 
     setSession(targetSession)
+    rememberSession(projectId, targetSession.session_id)
+    setPendingSend(pendingView)
     sessionRef.current = targetSession
-    setMessages(messagePage.messages)
-    setHistoryOrdinal(messagePage.last_ordinal)
-    setPendingContextPack(pendingPack)
-    setPendingNlclRoute(pendingBundle?.route ?? null)
-    setPendingNlclRouteExecutions(pendingBundle?.executions ?? [])
-    setPendingPrewriteOperationPackage(pendingBundle?.operationPackage ?? null)
-    setActiveContextPack(activePack)
-    setActiveNlclRoute(activeBundle?.route ?? null)
-    setActiveNlclRouteExecutions(activeBundle?.executions ?? [])
-    setActivePrewriteOperationPackage(activeBundle?.operationPackage ?? null)
-    seenActivitiesRef.current.clear()
-    for (const activity of restoredActivities) {
-      seenActivitiesRef.current.add(activity.activity_id)
+    setMessageSyncError(null)
+    setSyncingMessages(false)
+    const restoredPage = admission ? { ...messagePage, messages: upsertMessage(messagePage.messages, admission.user_message) } : messagePage
+    if (retained) {
+      applyMessagePage(targetSession.session_id, restoredPage)
+      stashActivities(latestRun?.run_id ?? null)
+    } else {
+      syncedMessagesRef.current = { sessionId: targetSession.session_id, ordinal: messagePage.messages.at(-1)?.ordinal ?? 0 }
+      setMessages(restoredPage.messages)
+      setRunProcessSummaries(messagePage.run_process_summaries ?? {})
+      setRunOrigins(messagePage.run_origins ?? {})
+      setReviewSources(messagePage.review_sources ?? {})
+      setHasEarlierMessages(messagePage.has_earlier === true)
+      setPastActivities({})
     }
-    setActivities(restoredActivities)
+    setLatestCheckpoint(checkpoint)
+    seenActivitiesRef.current.clear()
+    for (const activity of restoredActivities) seenActivitiesRef.current.add(activity.activity_id)
+    replaceActivities(restoredActivities)
     setActiveRun(latestRun)
-    setWorkflow(null)
-    setStreamingContent(
-      latestRun && !isTerminalAgentRun(latestRun.status)
-        ? restoreStreamingContent(restoredActivities)
-        : '',
-    )
+    activeRunRef.current = latestRun
+    setContinuation(null)
+    // 阶段说明已在正式消息中；尚未收尾的下一段按活动恢复。
+    setStreamingContent(latestRun && latestRun.status !== 'succeeded' ? restoreStreamingContent(restoredActivities) : '')
+    const restoredMessage = [...restoredActivities].reverse().find((activity) => activity.kind === 'message' && activity.payload.role === 'assistant')
+    streamingMessageIdRef.current = restoredMessage?.kind === 'message' ? restoredMessage.payload.message_id : null
+    streamingGenerationRef.current += 1
     streamRunIdRef.current = latestRun?.run_id ?? null
-    streamCursorRef.current = latestRun && restoredSequence > 0
-      ? `${latestRun.run_id}:${restoredSequence}`
-      : null
-  }, [])
+    streamCursorRef.current = latestRun && restoredSequence > 0 ? `${latestRun.run_id}:${restoredSequence}` : null
+  }, [applyMessagePage, projectId, replaceActivities, stashActivities])
 
+  const observingBackground = useRef<string | null>(null)
+  const observeBackgroundRun = useCallback(async (candidate: AgentRun) => {
+    const target = sessionRef.current
+    const before = activeRunRef.current
+    if (!target || candidate.session_id !== target.session_id || operationRef.current || observingBackground.current
+      || (before && (!isTerminalAgentRun(before.status) || candidate.ordinal <= before.ordinal))) return
+    const signal = scopeControllerRef.current?.signal
+    observingBackground.current = candidate.run_id
+    const inScope = () => !signal?.aborted && scopeControllerRef.current?.signal === signal
+      && sessionRef.current?.session_id === target.session_id && activeRunRef.current?.run_id === before?.run_id
+      && operationRef.current === null
+    try {
+      const [page, activityPage] = await Promise.all([
+        readAgentMessageUpdates(target.session_id, syncedMessagesRef.current.sessionId === target.session_id ? syncedMessagesRef.current.ordinal : 0,
+          { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal),
+        listAgentActivities(candidate.run_id, 0, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal),
+      ])
+      if (!inScope()) return
+      if (activityPage.run_id !== candidate.run_id) throw new Error('后台接续返回的不是这次任务。')
+      stashActivities(candidate.run_id)
+      applyMessagePage(target.session_id, page)
+      setRunOrigins((current) => ({ ...current, [candidate.run_id]: candidate.origin_kind ?? 'user' }))
+      const nextActivities = activityPage.activities
+      replaceActivities(nextActivities)
+      seenActivitiesRef.current = new Set(nextActivities.map((activity) => activity.activity_id))
+      streamRunIdRef.current = candidate.run_id
+      const eventSequence = activityPage.last_event_sequence ?? activityPage.last_sequence
+      streamCursorRef.current = eventSequence > 0 ? `${candidate.run_id}:${eventSequence}` : null
+      setStreamingContent(candidate.status === 'succeeded' ? '' : restoreStreamingContent(nextActivities))
+      streamingMessageIdRef.current = null
+      streamingGenerationRef.current += 1
+      activeRunRef.current = candidate
+      setActiveRun(candidate)
+    } catch (loadError) {
+      if (inScope()) throw loadError
+    } finally {
+      if (observingBackground.current === candidate.run_id) observingBackground.current = null
+    }
+  }, [applyMessagePage, replaceActivities, stashActivities])
+
+  const loadedProject = useRef<string | null | undefined>(undefined)
+  // Connectivity changes pause observation; only a different project clears its history.
   useEffect(() => {
+    const retained = loadedProject.current === projectId && sessionRef.current !== null
+    loadedProject.current = projectId
     const controller = new AbortController()
+    const statusController = new AbortController()
     scopeControllerRef.current?.abort()
+    streamControllerRef.current?.abort()
     scopeControllerRef.current = controller
     let disposed = false
     setError(null)
-    setProjectKbStaleReason(null)
-    setSessions([])
-    setSession(null)
-    sessionRef.current = null
-    setMessages([])
-    setHistoryOrdinal(0)
-    setActivities([])
-    setStreamingContent('')
-    setActiveRun(null)
-    setWorkflow(null)
-    setPendingContextPack(null)
-    setPendingNlclRoute(null)
-    setPendingNlclRouteExecutions([])
-    setPendingPrewriteOperationPackage(null)
-    setActiveContextPack(null)
-    setActiveNlclRoute(null)
-    setActiveNlclRouteExecutions([])
-    setActivePrewriteOperationPackage(null)
-    setResuming(false)
+    const clearHistory = () => {
+      setPendingSend(null)
+      setSessions([])
+      setSession(null)
+      setLatestCheckpoint(null)
+      sessionRef.current = null
+      sessionPromiseRef.current = null
+      setMessages([])
+      setRunProcessSummaries({})
+      setRunOrigins({})
+      setReviewSources({})
+      setHasEarlierMessages(false)
+      syncedMessagesRef.current = { sessionId: '', ordinal: 0 }
+      setMessageSyncError(null)
+      setSyncingMessages(false)
+      replaceActivities([])
+      setPastActivities({})
+      setStreamingContent('')
+      setActiveRun(null)
+      setContinuation(null)
+      streamCursorRef.current = null
+      streamRunIdRef.current = null
+      seenActivitiesRef.current.clear()
+    }
+    if (!retained) clearHistory()
     setSwitchingSession(false)
-    resumePromiseRef.current = null
-    contextOperationRef.current = null
-    setContextOperation(null)
-    streamCursorRef.current = null
-    streamRunIdRef.current = null
-    seenActivitiesRef.current.clear()
+    setSyncingMessages(false)
+    preparingContinuationRef.current = false
 
-    if (!enabled || !projectId) {
+    if (!enabled) {
+      setOperation(null)
       setAvailability('checking')
-      setDetail(enabled ? '请先绑定小说项目' : 'Writing Runtime 尚未就绪')
+      setDetail('本机服务还没准备好')
       return () => {
         disposed = true
         controller.abort()
@@ -426,13 +588,15 @@ export function useAgentConversation({
       }
     }
 
-    contextOperationRef.current = 'restoring'
-    setContextOperation('restoring')
-
+    setOperation('restoring')
     const load = async () => {
+      // projectId 为空 = 「随便聊」：列出无项目会话，其余与项目会话同一套。
+      const sessionsRequest: Promise<AgentSession[]> = projectId
+        ? listAgentSessions(projectId, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, controller.signal)
+        : listUnboundAgentSessions({ timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, controller.signal)
       const [statusResult, sessionsResult] = await Promise.allSettled([
-        getAgentStatus({}, controller.signal),
-        listAgentSessions(projectId, {}, controller.signal),
+        getAgentStatus({ timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, statusController.signal),
+        sessionsRequest,
       ])
       if (disposed) return
       if (statusResult.status === 'fulfilled') {
@@ -442,149 +606,161 @@ export function useAgentConversation({
         setAvailability('error')
         setDetail(errorMessage(statusResult.reason))
       }
-      if (sessionsResult.status === 'rejected') {
-        setError(errorMessage(sessionsResult.reason))
-        contextOperationRef.current = null
-        setContextOperation(null)
-        return
-      }
-      const currentExecutor = statusResult.status === 'fulfilled'
-        ? statusResult.value.executor
-        : null
-      const compatibleSessions = sessionsResult.value.filter((item) =>
-        sessionMatchesCurrentProvider(item, currentExecutor),
-      )
-      setSessions(compatibleSessions)
-      const existing = compatibleSessions.find((item) =>
-        ['active', 'idle'].includes(item.status),
-      ) ?? compatibleSessions[0] ?? null
-      if (!existing) {
-        contextOperationRef.current = null
-        setContextOperation(null)
-        return
-      }
-      await restoreSession(existing, controller.signal)
-      if (disposed) return
-      contextOperationRef.current = null
-      setContextOperation(null)
+      if (controller.signal.aborted) return
+      if (sessionsResult.status === 'rejected') throw sessionsResult.reason
+      const allSessions = sessionsResult.value.filter((item) => item.status !== 'closed')
+      setSessions(sortSessions(allSessions))
+      const preferred = preferredIntent.current.used ? null : preferredSessionRef.current
+      preferredIntent.current.used = true
+      const remembered = selectedSession(projectId)
+      const existing = (preferred ? allSessions.find((item) => item.session_id === preferred) : null)
+        ?? (remembered ? allSessions.find((item) => item.session_id === remembered) : null)
+        ?? [...allSessions]
+          .filter((item) => ['active', 'idle'].includes(item.status))
+          .sort((left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at))[0]
+        ?? allSessions[0]
+        ?? null
+      if (existing) await restoreSession(existing, controller.signal, retained)
+      else { clearHistory(); rememberSession(projectId, null) }
     }
-    void load().catch((loadError) => {
-      if (!disposed) {
+    void load()
+      .catch((loadError) => {
+        if (disposed || controller.signal.aborted) return
         setAvailability('error')
-        setDetail('Writing Agent 状态读取失败')
+        setDetail('Agent 的状态没读到')
         setError(errorMessage(loadError))
-        contextOperationRef.current = null
-        setContextOperation(null)
-      }
-    })
+      })
+      .finally(() => {
+        if (!disposed && !controller.signal.aborted && operationRef.current === 'restoring') setOperation(null)
+      })
     return () => {
       disposed = true
       controller.abort()
-      if (scopeControllerRef.current === controller) scopeControllerRef.current = null
+      statusController.abort()
+      scopeControllerRef.current?.abort()
+      streamControllerRef.current?.abort()
+      scopeControllerRef.current = null
     }
-  }, [enabled, projectId, refreshKey, restoreSession])
+  }, [enabled, projectId, refreshKey, replaceActivities, restoreSession, setOperation])
 
-  const workflowTarget = activeRun
-    && activeRun.project_revision.project_id === projectId
-    && ['paused', 'interrupted', 'failed', 'cancelled'].includes(activeRun.status)
-    ? { runId: activeRun.run_id, status: activeRun.status }
+  // 这一轮结束了：问一下后台能不能「继续任务」（失败、中断、停下的那几种）。
+  const continuationTarget = activeRun && activeRun.session_id === session?.session_id && isTerminalAgentRun(activeRun.status)
+    ? activeRun.run_id
     : null
-  const workflowTargetRunId = workflowTarget?.runId ?? null
-  const workflowTargetStatus = workflowTarget?.status ?? null
-
   useEffect(() => {
-    if (!workflowTargetRunId || !workflowTargetStatus) return
-    const targetRunId = workflowTargetRunId
-    const targetStatus = workflowTargetStatus
+    setContinuation(null)
+    if (!continuationTarget) return
     const controller = new AbortController()
-    const scopeSignal = scopeControllerRef.current?.signal
-    const abortFromScope = () => controller.abort(scopeSignal?.reason)
-    let disposed = false
-    if (scopeSignal?.aborted) {
-      controller.abort(scopeSignal.reason)
-    } else {
-      scopeSignal?.addEventListener('abort', abortFromScope, { once: true })
-    }
-
-    const isCurrentTarget = () => {
-      const current = activeRunRef.current
-      return current?.run_id === targetRunId
-        && current.status === targetStatus
-        && current.project_revision.project_id === projectId
-    }
-
-    void getAgentWorkflowState(targetRunId, {}, controller.signal)
-      .then((state) => {
-        if (disposed || controller.signal.aborted || !isCurrentTarget()) return
-        if (state.run_id !== targetRunId) {
-          throw new Error('Runtime 返回了其他 Run 的 Workflow')
-        }
-        setWorkflow(state)
-        if (state.run_status !== targetStatus) {
-          setActiveRun((current) => current?.run_id === targetRunId
-            && current.status === targetStatus
-            ? { ...current, status: state.run_status }
-            : current)
-        }
-      })
-      .catch((workflowError) => {
-        if (disposed || controller.signal.aborted || !isCurrentTarget()) return
-        const ordinaryTerminal = targetStatus !== 'paused'
-          && workflowError instanceof RuntimeApiError
-          && workflowError.status === 404
-        if (ordinaryTerminal) {
-          setWorkflow((current) => current?.run_id === targetRunId ? null : current)
-          return
-        }
-        setError(errorMessage(workflowError))
-      })
-
-    return () => {
-      disposed = true
-      scopeSignal?.removeEventListener('abort', abortFromScope)
-      controller.abort()
-    }
-  }, [projectId, workflowTargetRunId, workflowTargetStatus])
-
-  const activeRouteContextPackId = activeContextPack?.pack.context_pack_id ?? null
-  const activeRouteRunId = activeRun?.run_id ?? null
-  const activeRouteRunStatus = activeRun?.status ?? null
-
-  useEffect(() => {
-    if (!activeRouteContextPackId || !activeRouteRunId || !activeNlclRoute) return
-    const controller = new AbortController()
-    void Promise.all(activeNlclRoute.chapter_call_list.map((call) => (
-      getNlclRouteExecution(
-        activeRouteContextPackId,
-        call.ordinal,
-        {},
-        controller.signal,
-      )
-    )))
-      .then((states) => setActiveNlclRouteExecutions(states))
-      .catch((stateError) => {
-        if (!controller.signal.aborted) setError(errorMessage(stateError))
-    })
+    void getAgentRunContinuation(continuationTarget, {}, controller.signal).then((state) => {
+      if (!controller.signal.aborted && activeRunRef.current?.run_id === continuationTarget) setContinuation(state)
+    }).catch(() => { /* 未支持旧服务或暂时断线时不虚构可继续状态。 */ })
     return () => controller.abort()
-  }, [activeNlclRoute, activeRouteContextPackId, activeRouteRunId, activeRouteRunStatus, activities.length])
+  }, [continuationTarget, projectId])
 
-  const streamTargetId = activeRun
-    && activeRun.status !== 'paused'
-    && !isTerminalAgentRun(activeRun.status)
+  const restoreContinuedRun = useCallback(async (sourceRunId: string, signal?: AbortSignal): Promise<boolean> => {
+    const origin = sessionRef.current
+    if (!origin) return false
+    const state = await getAgentRunContinuation(sourceRunId, {}, signal)
+    if (signal?.aborted || sessionRef.current?.session_id !== origin.session_id) throw new DOMException('Aborted', 'AbortError')
+    if (!state.continued_by_run_id || state.reason_code !== 'already_continued') return false
+    await restoreSession(origin, signal)
+    return true
+  }, [restoreSession])
+
+  const prepareContinuation = useCallback(async () => {
+    const current = activeRunRef.current
+    const originSession = sessionRef.current?.session_id
+    if (!current || !isTerminalAgentRun(current.status) || operationRef.current || preparingContinuationRef.current) {
+      throw new Error('Agent 正在处理，请稍后再继续')
+    }
+    preparingContinuationRef.current = true
+    setOperation('restoring')
+    const signal = scopeControllerRef.current?.signal
+    try {
+      const state = await getAgentRunContinuation(current.run_id, {}, signal)
+      if (signal?.aborted || sessionRef.current?.session_id !== originSession || activeRunRef.current?.run_id !== current.run_id) {
+        throw new DOMException('Aborted', 'AbortError')
+      }
+      if (state.continued_by_run_id && state.reason_code === 'already_continued') {
+        await restoreSession(sessionRef.current!, signal)
+        return null
+      }
+      if (!state.can_continue) throw new Error(state.reason || '这次任务不能继续')
+      setContinuation(state)
+      return state
+    } finally {
+      if (scopeControllerRef.current?.signal === signal) preparingContinuationRef.current = false
+      releaseOperation('restoring', signal)
+    }
+  }, [releaseOperation, restoreSession, setOperation])
+
+  // 正在跑的这一轮：接上事件流，断了自己重连，收尾后从后台读正式的对话记录。
+  const streamTargetId = enabled && operation !== 'restoring' && !switchingSession && activeRun && activeRun.status !== 'paused' && !isTerminalAgentRun(activeRun.status)
     ? activeRun.run_id
     : null
   useEffect(() => {
     if (!streamTargetId) return
     const activeRunId = streamTargetId
+    const targetSessionId = sessionRef.current?.session_id
     const controller = new AbortController()
+    streamControllerRef.current = controller
     if (streamRunIdRef.current !== activeRunId) {
       streamRunIdRef.current = activeRunId
       streamCursorRef.current = null
       seenActivitiesRef.current.clear()
-      setActivities([])
+      stashActivities(activeRunId)
+      replaceActivities([])
       setStreamingContent('')
+      streamingMessageIdRef.current = null
+      streamingGenerationRef.current += 1
     }
 
+    const buffer = createActivityBuffer((batch) => {
+      if (sessionRef.current?.session_id !== targetSessionId || streamRunIdRef.current !== activeRunId) return
+      replaceActivities([...activitiesRef.current, ...batch])
+      let resetContent: string | undefined
+      let appendContent = ''
+      let refreshHistory = false
+      let completedGeneration: number | undefined
+      let latestState: { status: AgentRunStatePayload['status']; updated_at: string } | undefined
+      for (const activity of batch) {
+        if (activity.kind === 'message') {
+          const payload = activity.payload as AgentMessagePayload
+          if (payload.role === 'user' && payload.phase === 'completed') {
+            // 同轮插话是消息边界，旧段已经独立落盘。
+            resetContent = ''; appendContent = ''
+            streamingMessageIdRef.current = null
+            streamingGenerationRef.current += 1
+            completedGeneration = undefined
+            refreshHistory = true
+          } else if (payload.role === 'assistant' && payload.phase === 'delta' && payload.delta) {
+            if (payload.message_id && payload.message_id !== streamingMessageIdRef.current) {
+              resetContent = ''; appendContent = ''
+            }
+            streamingMessageIdRef.current = payload.message_id
+            streamingGenerationRef.current += 1
+            completedGeneration = undefined
+            appendContent += payload.delta
+          } else if (payload.role === 'assistant' && payload.phase === 'completed' && payload.content !== null) {
+            streamingMessageIdRef.current = payload.message_id
+            completedGeneration = ++streamingGenerationRef.current
+            resetContent = payload.content; appendContent = ''
+            refreshHistory = true
+          }
+        } else if (activity.kind === 'run_state') {
+          const payload = activity.payload as AgentRunStatePayload
+          if (!isTerminalAgentRun(payload.status)) latestState = { status: payload.status, updated_at: activity.created_at }
+        }
+      }
+      if (resetContent !== undefined || appendContent) setStreamingContent((current) => (resetContent ?? current) + appendContent)
+      if (latestState) setActiveRun((current) => current ? { ...current, ...latestState } : current)
+      if (refreshHistory) void refreshMessages().then((loaded) => {
+        if (loaded && completedGeneration !== undefined && completedGeneration === streamingGenerationRef.current
+          && !controller.signal.aborted) setStreamingContent('')
+      })
+    })
+    // 导航、停止观察或卸载前同步交付已接收尾段，旧计时器不留到新会话。
+    controller.signal.addEventListener('abort', buffer.flush, { once: true })
     const consume = async () => {
       let completed = false
       let completedRun: AgentRun | null = null
@@ -594,8 +770,11 @@ export function useAgentConversation({
             signal: controller.signal,
             lastEventId: streamCursorRef.current,
             onEvent: (event) => {
+              if (controller.signal.aborted || sessionRef.current?.session_id !== targetSessionId
+                || activeRunRef.current?.run_id !== activeRunId) return
               streamCursorRef.current = event.event_id
               if (event.event_type === 'done' && event.data.run) {
+                buffer.flush()
                 completed = true
                 completedRun = event.data.run
                 return
@@ -603,42 +782,32 @@ export function useAgentConversation({
               const activity = event.data.activity
               if (!activity || seenActivitiesRef.current.has(activity.activity_id)) return
               seenActivitiesRef.current.add(activity.activity_id)
-              setActivities((current) => [...current, activity])
-              if (activity.kind === 'message') {
-                const payload = activity.payload as AgentMessagePayload
-                if (payload.role === 'assistant' && payload.phase === 'delta' && payload.delta) {
-                  setStreamingContent((current) => current + payload.delta)
-                } else if (
-                  payload.role === 'assistant' &&
-                  payload.phase === 'completed' &&
-                  payload.content !== null
-                ) {
-                  setStreamingContent(payload.content)
-                }
-              } else if (activity.kind === 'run_state') {
-                const payload = activity.payload as AgentRunStatePayload
-                if (!isTerminalAgentRun(payload.status)) {
-                  setActiveRun((current) => current
-                    ? { ...current, status: payload.status, updated_at: activity.created_at }
-                    : current)
-                }
-              }
+              buffer.push(activity)
+              // 消息边界立即可见；连续增量按同一批更新正文和过程。
+              if (activity.kind === 'message' && activity.payload.phase === 'completed') buffer.flush()
             },
           })
+          buffer.flush()
           if (!completed && !controller.signal.aborted) {
+            // 流是正常回来（服务器收尾/瞬断后重连成功）才走到这里，
+            // 把上一轮挂着的「连接中断」横幅摘掉，不要一直挂到这一轮结束。
+            setError(null)
             await new Promise((resolve) => window.setTimeout(resolve, 250))
           }
         } catch (streamError) {
+          buffer.flush()
           if (controller.signal.aborted) return
           setError(`Agent 流连接中断，正在恢复：${errorMessage(streamError)}`)
           await new Promise((resolve) => window.setTimeout(resolve, 500))
         }
       }
       const currentSession = sessionRef.current
-      if (completed && currentSession && !controller.signal.aborted) {
+      if (completed && currentSession?.session_id === targetSessionId && currentSession && !controller.signal.aborted) {
         try {
-          await refreshMessages(currentSession.session_id, controller.signal)
-          setStreamingContent('')
+          const loaded = await refreshMessages()
+          if (controller.signal.aborted || sessionRef.current?.session_id !== currentSession.session_id) return
+          // 失败 / 停下的一轮可能已经流出了一段能用的回答，留着；成功的一轮以存下的回答为准。
+          if (loaded && (completedRun as AgentRun | null)?.status === 'succeeded') setStreamingContent('')
           setError(null)
         } catch (historyError) {
           if (!controller.signal.aborted) setError(errorMessage(historyError))
@@ -648,659 +817,625 @@ export function useAgentConversation({
       }
     }
     void consume()
-    return () => controller.abort()
-  }, [refreshMessages, streamTargetId])
+    return () => {
+      controller.abort()
+      if (streamControllerRef.current === controller) streamControllerRef.current = null
+    }
+  }, [observationEpoch, refreshMessages, replaceActivities, stashActivities, streamTargetId])
 
-  const requireSession = useCallback(async (): Promise<AgentSession> => {
+  /** 这本书还没有对话就现开一条（同一时刻只开一次）。 */
+  const requireBookSession = useCallback(async (projectId: string, signal?: AbortSignal): Promise<AgentSession> => {
     if (sessionRef.current) return sessionRef.current
-    if (!projectId) throw new Error('请先绑定小说项目')
     const pending = sessionPromiseRef.current
     if (pending?.projectId === projectId) return pending.promise
-    const signal = scopeControllerRef.current?.signal
-    const promise = createAgentSession(
-      projectId,
-      '写作对话',
-      {},
-      signal,
-    )
+    // 占位名字和「新对话」按钮开的一样：第一轮收尾时后台会按第一句话起个正经名字（以前固定叫「写作对话」，一直不改名）。
+    const promise = createAgentSession(projectId, placeholderSessionTitle(), { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal)
       .then((created) => {
         if (signal?.aborted) throw signal.reason
         sessionRef.current = created
         setSession(created)
-        setSessions((current) => [
-          created,
-          ...current.filter((item) => item.session_id !== created.session_id),
-        ])
+        rememberSession(projectId, created.session_id)
+        setSessions((current) => sortSessions([created, ...current.filter((item) => item.session_id !== created.session_id)]))
         return created
       })
-    const entry = { projectId, promise }
+    const entry = { projectId: projectId, promise }
     sessionPromiseRef.current = entry
     void promise.finally(() => {
       if (sessionPromiseRef.current === entry) sessionPromiseRef.current = null
     }).catch(() => undefined)
     return promise
-  }, [projectId])
-
-  const contextStaleReasons = useMemo(() => {
-    if (!pendingContextPack) return []
-    const pack = pendingContextPack.pack
-    const reasons: string[] = []
-    if (!projectId || pack.project_id !== projectId) reasons.push('绑定项目已经变化')
-    if (projectRevision === null || pack.project_revision !== projectRevision) {
-      reasons.push(`项目 revision 已从 ${pack.project_revision} 变为 ${projectRevision ?? '不可用'}`)
-    }
-    if (!projectFingerprint || pack.project_fingerprint !== projectFingerprint) {
-      reasons.push('项目内容指纹已经变化')
-    }
-    if (pack.active_chapter_id !== activeChapterId) reasons.push('当前章节已经变化')
-    if (pack.history_through_ordinal !== historyOrdinal) {
-      reasons.push(`会话历史已从 ordinal ${pack.history_through_ordinal} 变为 ${historyOrdinal}`)
-    }
-    if (session && pack.session_id !== session.session_id) reasons.push('Writing Agent 会话已经变化')
-    if (pendingContextPack.consumed_by_run_id !== null) reasons.push('Context Pack 已被其他 Run 消费')
-    const kbBindingStatus = projectKbContractBindingStatus(
-      pendingContextPack,
-      pendingNlclRoute,
-      pendingNlclRouteExecutions,
-    )
-    if (kbBindingStatus === 'legacy') {
-      reasons.push('旧 Context Pack 未绑定项目知识快照，只能查看，必须重新编译')
-    } else if (kbBindingStatus === 'mismatch') {
-      reasons.push('Context、NLCL 或执行收据的项目知识快照绑定不匹配')
-    }
-    if (projectKbStaleReason) reasons.push(projectKbStaleReason)
-    if (!pendingNlclRoute) {
-      reasons.push('NLCL 路由收据尚未就绪')
-    } else {
-      if (pendingNlclRoute.context_pack_id !== pack.context_pack_id) reasons.push('NLCL 路由绑定了其他 Context Pack')
-      if (pendingNlclRoute.context_pack_hash !== pack.pack_hash) reasons.push('NLCL 路由的 Context hash 不匹配')
-      if (pendingNlclRoute.project_id !== pack.project_id
-        || pendingNlclRoute.project_revision !== pack.project_revision
-        || pendingNlclRoute.project_fingerprint !== pack.project_fingerprint) {
-        reasons.push('NLCL 路由的项目真值不匹配')
-      }
-      if (pendingNlclRoute.knowledge_fingerprint !== pack.knowledge_fingerprint) {
-        reasons.push('NLCL 路由的知识指纹不匹配')
-      }
-    }
-    if (!pendingPrewriteOperationPackage) {
-      reasons.push('写前运行包尚未就绪')
-    } else if (
-      pendingPrewriteOperationPackage.context_pack_hash !== pack.pack_hash
-      || pendingPrewriteOperationPackage.route_receipt_hash !== pendingNlclRoute?.receipt_hash
-    ) {
-      reasons.push('写前运行包绑定不匹配')
-    } else if (pendingPrewriteOperationPackage.missing_requirements.includes(
-      'migrated_prewrite_package_requires_recompile',
-    )) {
-      reasons.push('写前运行包来自旧版本，必须重新编译')
-    }
-    return reasons
-  }, [
-    activeChapterId,
-    historyOrdinal,
-    pendingContextPack,
-    pendingNlclRoute,
-    pendingNlclRouteExecutions,
-    pendingPrewriteOperationPackage,
-    projectFingerprint,
-    projectId,
-    projectKbStaleReason,
-    projectRevision,
-    session,
-  ])
-
-  const compilePack = useCallback(async (
-    rawMessage: string,
-    profile: string,
-    replacePending: boolean,
-    formalKnowledgeSelector: FormalKnowledgeSelector | null,
-    targetChapterId: string | null,
-    manualFileIds: string[],
-  ) => {
-    const message = rawMessage.trim()
-    if (!message) return
-    if (!projectId || projectRevision === null || !projectFingerprint) throw new Error('项目快照尚未就绪')
-    if (activeRun && !isTerminalAgentRun(activeRun.status)) {
-      throw new Error('当前 Run 尚未结束')
-    }
-    if (pendingContextPack && !replacePending) {
-      throw new Error('已有待确认的 Context Pack，请先确认、刷新或放弃')
-    }
-    if (contextOperationRef.current !== null) throw new Error('Context 操作正在进行')
-    contextOperationRef.current = 'compiling'
-    setContextOperation('compiling')
-    setError(null)
-    setProjectKbStaleReason(null)
-    const signal = scopeControllerRef.current?.signal
-    try {
-      const projectKbBinding = await loadCurrentProjectKbBinding(
-        projectId,
-        projectRevision,
-        projectFingerprint,
-        signal,
-      )
-      const currentSession = await requireSession()
-      const messagePage = await listAgentMessages(currentSession.session_id, {}, signal)
-      if (signal?.aborted) throw signal.reason
-      setMessages(messagePage.messages)
-      setHistoryOrdinal(messagePage.last_ordinal)
-      const record = await createContextPack(
-        currentSession.session_id,
-        {
-          objective: message,
-          profile,
-          active_chapter_id: targetChapterId,
-          expected_project_revision: projectRevision,
-          expected_project_fingerprint: projectFingerprint,
-          project_kb_state_id: projectKbBinding.project_kb_state_id,
-          project_kb_manifest_hash: projectKbBinding.project_kb_manifest_hash,
-          formal_knowledge_selector: formalKnowledgeSelector,
-          manual_file_ids: [...new Set(manualFileIds)].sort(),
-        },
-        newIdempotencyKey('context'),
-        {},
-        signal,
-      )
-      if (record.consumed_by_run_id !== null) {
-        throw new Error('Runtime 返回了已被消费的 Context Pack')
-      }
-      if (
-        record.pack.project_kb_state_id !== projectKbBinding.project_kb_state_id
-        || record.pack.project_kb_manifest_hash !== projectKbBinding.project_kb_manifest_hash
-      ) {
-        throw new Error('Runtime 返回的 Context Pack 未绑定请求中的项目知识快照')
-      }
-      const bundle = await loadNlclBundle(record, signal)
-      setPendingContextPack(record)
-      setPendingNlclRoute(bundle.route)
-      setPendingNlclRouteExecutions(bundle.executions)
-      setPendingPrewriteOperationPackage(bundle.operationPackage)
-    } catch (compileError) {
-      if (!signal?.aborted) setError(errorMessage(compileError))
-      throw compileError
-    } finally {
-      if (contextOperationRef.current === 'compiling') {
-        contextOperationRef.current = null
-        setContextOperation(null)
-      }
-    }
-  }, [
-    activeRun,
-    pendingContextPack,
-    projectFingerprint,
-    projectId,
-    projectRevision,
-    requireSession,
-  ])
-
-
-  const openContextPackForReview = useCallback(async (contextPackId: string) => {
-    const targetId = contextPackId.trim()
-    if (!targetId) throw new Error('缺少 Context Pack ID')
-    if (contextOperationRef.current !== null) throw new Error('Context 操作正在进行')
-    if (activeRun && !isTerminalAgentRun(activeRun.status)) throw new Error('当前 Run 尚未结束，不能切换到其他 Context Pack')
-    contextOperationRef.current = 'restoring'
-    setContextOperation('restoring')
-    setError(null)
-    setProjectKbStaleReason(null)
-    const signal = scopeControllerRef.current?.signal
-    try {
-      const record = await getContextPack(targetId, {}, signal)
-      if (signal?.aborted) throw signal.reason
-      if (projectId && record.pack.project_id !== projectId) throw new Error('该 Context Pack 不属于当前项目')
-      const packSession = await getAgentSession(record.pack.session_id, {}, signal)
-      if (signal?.aborted) throw signal.reason
-      sessionRef.current = packSession
-      setSession(packSession)
-      const messagePage = await listAgentMessages(packSession.session_id, {}, signal)
-      if (signal?.aborted) throw signal.reason
-      setMessages(messagePage.messages)
-      setHistoryOrdinal(messagePage.last_ordinal)
-      const bundle = await loadNlclBundle(record, signal)
-      if (signal?.aborted) throw signal.reason
-      setPendingContextPack(record)
-      setPendingNlclRoute(bundle.route)
-      setPendingNlclRouteExecutions(bundle.executions)
-      setPendingPrewriteOperationPackage(bundle.operationPackage)
-      setActiveContextPack(null)
-      setActiveNlclRoute(null)
-      setActiveNlclRouteExecutions([])
-      setActivePrewriteOperationPackage(null)
-      setActiveRun(null)
-      setWorkflow(null)
-      setActivities([])
-      setStreamingContent('')
-      seenActivitiesRef.current.clear()
-      streamCursorRef.current = null
-      streamRunIdRef.current = null
-    } catch (openError) {
-      if (!signal?.aborted) setError(errorMessage(openError))
-      throw openError
-    } finally {
-      if (contextOperationRef.current === 'restoring') {
-        contextOperationRef.current = null
-        setContextOperation(null)
-      }
-    }
-  }, [activeRun, projectId])
-
-  const compileContext = useCallback((
-    message: string,
-    profile?: string,
-    formalKnowledgeSelector: FormalKnowledgeSelector | null = null,
-    activeChapterIdOverride?: string | null,
-    manualFileIds: string[] = [],
-  ) => (
-    compilePack(
-      message,
-      profile ?? (
-        (activeChapterIdOverride === undefined ? activeChapterId : activeChapterIdOverride) === null
-          ? 'draft_assist'
-          : 'chapter'
-      ),
-      false,
-      formalKnowledgeSelector,
-      activeChapterIdOverride === undefined ? activeChapterId : activeChapterIdOverride,
-      manualFileIds,
-    )
-  ), [activeChapterId, compilePack])
-
-  const refreshPendingContext = useCallback(async () => {
-    if (!pendingContextPack) return
-    await compilePack(
-      pendingContextPack.pack.objective,
-      pendingContextPack.pack.profile,
-      true,
-      pendingContextPack.pack.formal_knowledge_selector ?? null,
-      pendingContextPack.pack.active_chapter_id,
-      pendingContextPack.pack.manual_file_ids ?? [],
-    )
-  }, [compilePack, pendingContextPack])
-
-  const discardPendingContext = useCallback(() => {
-    if (contextOperationRef.current !== null) return
-    setPendingContextPack(null)
-    setPendingNlclRoute(null)
-    setPendingNlclRouteExecutions([])
-    setPendingPrewriteOperationPackage(null)
-    setError(null)
-    setProjectKbStaleReason(null)
   }, [])
 
-  const confirmPendingContext = useCallback(async (
-    writerMode: WriterMode = 'repair_only',
-  ) => {
-    if (!pendingContextPack) return
-    if (!pendingNlclRoute) throw new Error('NLCL 路由收据尚未就绪')
-    if (!pendingPrewriteOperationPackage) throw new Error('写前运行包尚未就绪')
-    if (availability !== 'available') throw new Error(detail)
-    if (activeRun && !isTerminalAgentRun(activeRun.status)) {
-      throw new Error('当前 Run 尚未结束')
+  const adoptAdmission = useCallback((result: RunCreateResponse) => {
+    setMessages((existing) => upsertMessage(existing, result.user_message))
+    stashActivities(result.run.run_id)
+    replaceActivities([])
+    setStreamingContent('')
+    seenActivitiesRef.current.clear()
+    streamCursorRef.current = null
+    streamRunIdRef.current = result.run.run_id
+    activeRunRef.current = result.run
+    setActiveRun(result.run)
+    setPendingSend(null)
+    setError(null)
+  }, [replaceActivities, stashActivities])
+
+  const transmitPending = useCallback(async (pending: PendingAgentSend, signal?: AbortSignal, isRetry = false) => {
+    const inScope = () => !signal?.aborted && sessionRef.current?.session_id === pending.sessionId
+    let result: RunCreateResponse
+    try {
+      result = await createAgentRun(pending.sessionId, pending.request, pending.key, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal)
+    } catch (sendError) {
+      if (!inScope()) throw new AgentSendUnconfirmedError('发送结果尚未确认，原消息已保留，回到这条对话后会继续核对。')
+      setPendingSend({ item: pending, status: 'checking' })
+      let admission: RunCreateResponse | null
+      try {
+        admission = await getAgentRunAdmission(pending.sessionId, pending.key, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal)
+      } catch (admissionError) {
+        if (isWithdrawnAdmission(admissionError)) {
+          if (inScope()) setPendingSend({ item: pending, status: 'withdrawn' })
+          throw new AgentSendUnconfirmedError('这条发送已取回，原文仍保留，可以重新编辑。')
+        }
+        if (inScope()) setPendingSend({ item: pending, status: 'unknown' })
+        throw new AgentSendUnconfirmedError('发送结果尚未确认，原消息已保留。可以核对发送结果，或重试这条消息。')
+      }
+      if (!admission) {
+        // 完整错误响应可确认这个 POST 被拒绝；网络故障/超时仍可能晚到。
+        if (sendError instanceof RuntimeApiError && sendError.status >= 400 && sendError.status < 500
+          && sendError.status !== 408) {
+          if (isRetry) {
+            // 这次重试被拒绝不能证明更早的网络请求永不晚到，保留原身份。
+            if (inScope()) setPendingSend({ item: pending, status: 'not_found' })
+            throw sendError
+          }
+          clearPendingAgentSend(pending)
+          if (inScope()) setPendingSend(null)
+          throw sendError
+        }
+        if (inScope()) setPendingSend({ item: pending, status: 'not_found' })
+        throw new AgentSendUnconfirmedError('暂未查到这条消息，原内容已保留。重试会沿用同一条发送记录。')
+      }
+      result = admission
     }
-    if (pendingContextPack.pack.readiness === 'blocked') {
-      throw new Error('Context Pack 存在阻断 Gate，不能启动 Run')
+    clearPendingAgentSend(pending)
+    if (inScope()) {
+      adoptAdmission(result)
+      // ACK 可能很晚才恢复；终态没有事件流，补读已经保存的完整回答。
+      if (isTerminalAgentRun(result.run.status)) await refreshMessages()
     }
-    if (pendingPrewriteOperationPackage.missing_requirements.includes(
-      'migrated_prewrite_package_requires_recompile',
-    )) {
-      throw new Error('写前运行包来自旧版本，必须重新编译')
-    }
-    if (contextStaleReasons.length > 0) {
-      throw new Error('Context Pack 已过期，请刷新后再运行')
-    }
-    if (contextOperationRef.current !== null) throw new Error('Context 操作正在进行')
-    contextOperationRef.current = 'confirming'
-    setContextOperation('confirming')
+  }, [adoptAdmission, refreshMessages])
+
+  const resolvePendingSend = useCallback(async (retry: boolean) => {
+    const origin = sessionRef.current
+    if (!origin || operationRef.current) return
+    const pending = readPendingAgentSend(origin.session_id)
+    if (!pending) { setPendingSend(null); return }
+    setOperation('sending')
+    setPendingSend({ item: pending, status: 'checking' })
     setError(null)
     const signal = scopeControllerRef.current?.signal
+    const inScope = () => !signal?.aborted && sessionRef.current?.session_id === origin.session_id
     try {
-      const pack = pendingContextPack.pack
-      const managedO2ePack = isManagedO2eContextPack(pendingContextPack, pendingNlclRoute)
-      if (!managedO2ePack) {
-        let projectKbBinding: ProjectKbBinding
-        try {
-          projectKbBinding = await loadCurrentProjectKbBinding(
-            pack.project_id,
-            pack.project_revision,
-            pack.project_fingerprint,
-            signal,
-          )
-        } catch (kbError) {
-          setProjectKbStaleReason('当前项目知识快照不可运行，请先重建或校验后重新编译')
-          throw kbError
+      const admission = await getAgentRunAdmission(pending.sessionId, pending.key, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal)
+      if (admission) {
+        clearPendingAgentSend(pending)
+        if (inScope()) {
+          adoptAdmission(admission)
+          await restoreSession(origin, signal)
         }
-        if (
-          pack.project_kb_state_id !== projectKbBinding.project_kb_state_id
-          || pack.project_kb_manifest_hash !== projectKbBinding.project_kb_manifest_hash
-        ) {
-          setProjectKbStaleReason('项目知识快照已变化，当前 Context Pack 只能查看，请重新编译')
-          throw new Error('项目知识快照已变化，请重新编译 Context Pack')
+        return
+      }
+      if (!inScope()) return
+      setPendingSend({ item: pending, status: 'not_found' })
+      if (!retry) return
+      if (activeRunRef.current && !isTerminalAgentRun(activeRunRef.current.status)) throw new Error('当前任务仍在运行，请稍后再重试这条消息')
+      // 重试使用当时的模型和权限，不读取后来编辑过的草稿或附加项。
+      if (pending.provider && JSON.stringify(agentSessionProviderPreference(origin)) !== JSON.stringify(pending.provider)) {
+        const updated = await updateAgentSession(origin.session_id, {
+          rebind_provider: true, provider_id: pending.provider.providerId, model: pending.provider.model,
+          reasoning_effort: pending.provider.reasoningEffort,
+        }, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal)
+        if (!inScope()) return
+        adoptSession(updated)
+      } else await ensureProviderBound(origin, signal)
+      if (!inScope()) return
+      await transmitPending(pending, signal, true)
+    } catch (pendingError) {
+      if (inScope()) {
+        const remaining = readPendingAgentSend(origin.session_id)
+        if (remaining) setPendingSend((current) => isWithdrawnAdmission(pendingError)
+          ? { item: remaining, status: 'withdrawn' }
+          : current?.status === 'checking' ? { item: remaining, status: 'unknown' } : current)
+        if (!isWithdrawnAdmission(pendingError)) setError(errorMessage(pendingError))
+      }
+    } finally { releaseOperation('sending', signal) }
+  }, [adoptAdmission, adoptSession, ensureProviderBound, releaseOperation, restoreSession, setOperation, transmitPending])
+
+  const checkPendingSend = useCallback(() => resolvePendingSend(false), [resolvePendingSend])
+  const retryPendingSend = useCallback(() => resolvePendingSend(true), [resolvePendingSend])
+  const withdrawPendingSend = useCallback(async (): Promise<string | null> => {
+    const origin = sessionRef.current
+    if (!origin || operationRef.current) return null
+    const pending = readPendingAgentSend(origin.session_id)
+    if (!pending) return null
+    setOperation('sending')
+    setPendingSend({ item: pending, status: 'checking' })
+    setError(null)
+    const signal = scopeControllerRef.current?.signal
+    const inScope = () => !signal?.aborted && sessionRef.current?.session_id === origin.session_id
+    try {
+      const result = await withdrawAgentRunAdmission(pending.sessionId, pending.key, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal)
+      if (result.state === 'accepted') {
+        clearPendingAgentSend(pending)
+        if (inScope()) {
+          adoptAdmission(result.accepted)
+          await restoreSession(origin, signal)
+        }
+        return null
+      }
+      // 切走时保留原文；回来 GET 会读到已撤销，可再取回，迟到请求不能新开任务。
+      if (!inScope()) return null
+      clearPendingAgentSend(pending)
+      setPendingSend(null)
+      return pending.request.message
+    } catch (withdrawError) {
+      if (inScope()) {
+        if (readPendingAgentSend(origin.session_id)) {
+          setPendingSend({ item: pending, status: 'unknown' })
+          setError(`取回结果尚未确认，原文仍保留：${errorMessage(withdrawError)}`)
+        } else setError(`消息已接收，恢复对话记录时遇到问题：${errorMessage(withdrawError)}`)
+      }
+      return null
+    } finally { releaseOperation('sending', signal) }
+  }, [adoptAdmission, releaseOperation, restoreSession, setOperation])
+  useEffect(() => {
+    if (!pendingSendState || pendingSendState.item.sessionId !== session?.session_id) return
+    const reconcile = () => { void resolvePendingSend(false) }
+    window.addEventListener('online', reconcile)
+    window.addEventListener('focus', reconcile)
+    return () => { window.removeEventListener('online', reconcile); window.removeEventListener('focus', reconcile) }
+  }, [pendingSendState, resolvePendingSend, session?.session_id])
+
+  const send = useCallback(async ({
+    text,
+    manualFileIds = [],
+    skillNames = [],
+    imageIds = [],
+    images: imageAttachments,
+    imageDraftIdentity,
+    skillDraftIdentity,
+    writerMode = 'repair_only',
+    continuationSourceRunId,
+    reviewSourceRunId,
+    goal,
+  }: AgentSendRequest) => {
+    const message = text.trim()
+    if (!message && imageIds.length === 0) throw new Error('先写点什么或添加图片再发送')
+    if (operationRef.current !== null) throw new Error('Agent 正在处理，请稍后再发送')
+    if (availability !== 'available') throw new Error(detail)
+    const current = activeRunRef.current
+    if (current && !isTerminalAgentRun(current.status)) throw new Error('上一条回复还在生成，稍等一下')
+    if (continuationSourceRunId && current?.run_id !== continuationSourceRunId) throw new Error('当前任务已经切换，请重新继续')
+    if (projectId && (projectRevision === null || !projectFingerprint)) throw new Error('这个文件夹还没读完')
+    if (sessionRef.current && readPendingAgentSend(sessionRef.current.session_id)) {
+      throw new Error('上一条消息的发送结果还没确认，请先核对发送结果或重试保留的那条消息。')
+    }
+
+    setOperation('sending')
+    setError(null)
+    const signal = scopeControllerRef.current?.signal
+    const control = { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }
+    const skills = skillNames.length > 0 ? { manual_skill_names: skillNames } : {}
+    const images = imageIds.length > 0 ? { image_ids: [...new Set(imageIds)] } : {}
+    const continued = continuationSourceRunId ? { continuation_source_run_id: continuationSourceRunId } : {}
+    const reviewed = reviewSourceRunId ? { review_source_run_id: reviewSourceRunId } : {}
+    try {
+      let target: AgentSession
+      let request: PendingAgentSend['request']
+      if (projectId && projectRevision !== null && projectFingerprint) {
+        target = await ensureProviderBound(await requireBookSession(projectId, signal), signal)
+        let revision = projectRevision
+        let fingerprint = projectFingerprint
+        // 文件改动后的界面刷新可能尚未结束；停止命令也可能已经写过文件。
+        // 这类轮次之后先读当前快照，再发下一轮。纯聊天与纯读取仍直接发送。
+        const previousMayHaveChangedFiles = activitiesRef.current.some((activity) => (
+          activity.session_id === target.session_id && activity.run_id === current?.run_id
+          && (activity.kind === 'command' || (activity.kind === 'tool_call' && FILE_EFFECT_TOOLS.has(activity.payload.tool_name)))
+        ))
+        if (previousMayHaveChangedFiles) {
+          const latest = await inspectBoundProject(projectId, { signal })
+          if (signal?.aborted) throw signal.reason
+          if (latest.project.project_id !== projectId) throw new Error('读取到的不是当前文件夹，请重新打开后再试')
+          revision = latest.project.revision
+          fingerprint = latest.project.fingerprint
+        }
+        // 不再每轮先编资料包（纠偏指令 3.9）：直接发这一轮，只带开着哪个文件、亲手附上了哪些文件；
+        // 后端在对话开头带上文件夹里的说明文件（AGENTS.md 等）和用户记忆，别的模型要用自己读。
+        request = {
+            message,
+            expected_project_revision: revision,
+            expected_project_fingerprint: fingerprint,
+            ...(openFilePath ? { open_file_path: openFilePath } : {}),
+            manual_file_ids: [...new Set(manualFileIds)].sort(),
+            writer_mode: writerMode,
+            ...continued,
+            ...reviewed,
+            ...skills,
+            ...images,
         }
       } else {
-        // O2-E packs are closed over the managed distillation-index binding.
-        setProjectKbStaleReason(null)
+        let casual = sessionRef.current
+        if (!casual) {
+          casual = await createUnboundAgentSession('新对话', control, signal)
+          if (signal?.aborted) throw signal.reason
+          sessionRef.current = casual
+          setSession(casual)
+          rememberSession(null, casual.session_id)
+        }
+        target = await ensureProviderBound(casual, signal)
+          // 不绑书也按作者选的挡位发：「只读」时后台不给执行命令、不写笔记。
+        request = { message, writer_mode: writerMode, ...continued, ...reviewed, ...skills, ...images }
       }
-      const messagePage = await listAgentMessages(pack.session_id, {}, signal)
+      if (goal) request.goal = goal
       if (signal?.aborted) throw signal.reason
-      setMessages(messagePage.messages)
-      setHistoryOrdinal(messagePage.last_ordinal)
-      if (messagePage.last_ordinal !== pack.history_through_ordinal) {
-        throw new Error('会话历史已变化，请重新编译 Context Pack')
+      const pending: PendingAgentSend = {
+        version: 1, sessionId: target.session_id,
+        key: continuationSourceRunId ? `continue:${continuationSourceRunId}` : newIdempotencyKey('turn'),
+        request, provider: agentSessionProviderPreference(target), createdAt: new Date().toISOString(),
+        ...(imageAttachments?.length ? { images: imageAttachments } : {}),
+        ...(imageDraftIdentity ? { imageDraft: imageDraftIdentity } : {}),
+        ...(skillDraftIdentity ? { skillDraft: skillDraftIdentity } : {}),
       }
-      const result = await createAgentRun(
-        pack.session_id,
-        {
-          message: pack.objective,
-          expected_project_revision: pack.project_revision,
-          expected_project_fingerprint: pack.project_fingerprint,
-          active_chapter_id: pack.active_chapter_id,
-          writer_mode: writerMode,
-          context_pack_id: pack.context_pack_id,
-          expected_context_pack_hash: pack.pack_hash,
-        },
-        newIdempotencyKey('turn'),
-        {},
-        signal,
-      )
-      setActiveContextPack(pendingContextPack)
-      setActiveNlclRoute(pendingNlclRoute)
-      setActiveNlclRouteExecutions(pendingNlclRouteExecutions)
-      setActivePrewriteOperationPackage(pendingPrewriteOperationPackage)
-      setPendingContextPack(null)
-      setPendingNlclRoute(null)
-      setPendingNlclRouteExecutions([])
-      setPendingPrewriteOperationPackage(null)
-      setMessages((current) => upsertMessage(current, result.user_message))
-      setHistoryOrdinal((current) => Math.max(current, result.user_message.ordinal))
-      setActivities([])
-      setStreamingContent('')
-      seenActivitiesRef.current.clear()
-      streamCursorRef.current = null
-      streamRunIdRef.current = result.run.run_id
-      setActiveRun(result.run)
-      setWorkflow(null)
-    } catch (confirmError) {
-      if (!signal?.aborted) setError(errorMessage(confirmError))
-      throw confirmError
+      const saved = savePendingAgentSend(pending)
+      if (saved.persistent === false) setPendingSend({ item: saved, status: 'checking' })
+      await transmitPending(saved, signal)
+    } catch (sendError) {
+      if (continuationSourceRunId && !signal?.aborted) {
+        try {
+          if (await restoreContinuedRun(continuationSourceRunId, signal)) {
+            const pending = sessionRef.current && readPendingAgentSend(sessionRef.current.session_id)
+            if (pending) clearPendingAgentSend(pending)
+            setPendingSend(null)
+            return
+          }
+        } catch { /* 下次继续先核实，不自动重复发出任务。 */ }
+      }
+      if (!signal?.aborted) setError(errorMessage(sendError))
+      throw sendError
     } finally {
-      if (contextOperationRef.current === 'confirming') {
-        contextOperationRef.current = null
-        setContextOperation(null)
-      }
+      releaseOperation('sending', signal)
     }
   }, [
-    activeRun,
     availability,
-    contextStaleReasons,
     detail,
-    pendingContextPack,
-    pendingNlclRoute,
-    pendingNlclRouteExecutions,
-    pendingPrewriteOperationPackage,
+    ensureProviderBound,
+    openFilePath,
+    projectFingerprint,
+    projectId,
+    projectRevision,
+    releaseOperation,
+    requireBookSession,
+    restoreContinuedRun,
+    setOperation,
+    transmitPending,
   ])
 
   const cancel = useCallback(async () => {
-    if (!activeRun || activeRun.status === 'paused' || isTerminalAgentRun(activeRun.status)) return
+    const current = activeRunRef.current
+    if (!current || current.status === 'paused' || isTerminalAgentRun(current.status)) return
     const signal = scopeControllerRef.current?.signal
+    const stillCurrent = () => !signal?.aborted && scopeControllerRef.current?.signal === signal
+      && sessionRef.current?.session_id === current.session_id
+      && activeRunRef.current?.run_id === current.run_id
+      && !isTerminalAgentRun(activeRunRef.current.status)
     try {
-      const cancelled = await cancelAgentRun(
-        activeRun.run_id,
-        {},
+      const cancelled = await cancelAgentRun(current.run_id, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal)
+      if (!stillCurrent() || cancelled.run_id !== current.run_id || cancelled.session_id !== current.session_id) return
+      // 取消接口可能先于事件流返回终态。继续收取最后的工具结果和文件版本，
+      // 和自然结束一样，由 SSE done 完成这一轮，避免提前关闭流丢掉已发生的改动。
+      if (!isTerminalAgentRun(cancelled.status)) setActiveRun((latest) => (
+        latest?.run_id === current.run_id && !isTerminalAgentRun(latest.status) ? cancelled : latest
+      ))
+    } catch (cancelError) {
+      if (stillCurrent()) setError(errorMessage(cancelError))
+    }
+  }, [])
+
+  const rebindProvider = useCallback(async (
+    settings?: Pick<ProviderSettingsView, 'provider_id' | 'model' | 'reasoning_effort'>,
+  ) => {
+    const current = sessionRef.current
+    if (!current) return
+    if (operationRef.current !== null) throw new Error('Agent 正在处理，请稍后再换模型')
+    if (activeRunRef.current && !isTerminalAgentRun(activeRunRef.current.status)) {
+      throw new Error('当前任务尚未结束，请先停止或等待任务完成')
+    }
+    const signal = scopeControllerRef.current?.signal
+    setOperation('restoring')
+    setSwitchingSession(true)
+    setError(null)
+    try {
+      const updated = await updateAgentSession(
+        current.session_id,
+        {
+          rebind_provider: true,
+          provider_id: settings?.provider_id || undefined,
+          model: settings?.model || undefined,
+          reasoning_effort: settings?.reasoning_effort,
+        },
+        { timeoutMs: AGENT_CONTROL_TIMEOUT_MS },
         signal,
       )
-      setActiveRun(cancelled)
-    } catch (cancelError) {
-      if (!signal?.aborted) setError(errorMessage(cancelError))
+      if (signal?.aborted || sessionRef.current?.session_id !== current.session_id) throw new DOMException('Aborted', 'AbortError')
+      adoptSession(updated)
+    } catch (rebindError) {
+      if (!signal?.aborted) setError(errorMessage(rebindError))
+      throw rebindError
+    } finally {
+      if (scopeControllerRef.current?.signal === signal) setSwitchingSession(false)
+      releaseOperation('restoring', signal)
     }
-  }, [activeRun])
+  }, [adoptSession, releaseOperation, setOperation])
 
-  const resume = useCallback((): Promise<void> => {
-    if (resumePromiseRef.current) return resumePromiseRef.current
-    const run = activeRun
-    const state = workflow
-    if (!run || run.status !== 'paused' || !state?.resume_allowed) {
-      return Promise.reject(new Error('当前工作流不可继续'))
+  /** 修改当前任务历史前核对状态；查看或新建另一条对话不受它约束。 */
+  const requireIdle = useCallback((action: string) => {
+    if (operationRef.current !== null) throw new AgentBusyError(`Agent 正在处理，请稍后再${action}`)
+    if (activeRunRef.current && !isTerminalAgentRun(activeRunRef.current.status)) {
+      throw new Error(`当前任务尚未结束，不能${action}`)
     }
-    if (state.run_id !== run.run_id
-      || state.run_status !== 'paused'
-      || state.resume_state !== 'resumable'
-      || state.plan.run_id !== run.run_id
-      || state.provider_boundary !== null) {
-      return Promise.reject(new AgentContractError('Workflow Resume 身份或边界状态无效'))
-    }
-    const signal = scopeControllerRef.current?.signal
-    const promise = (async () => {
-      setResuming(true)
-      setError(null)
-      try {
-        const result = await resumeAgentRun(
-          run.run_id,
-          {
-            schema: 'zhimeng.agent-run-resume-request.v1',
-            expected_workflow_plan_id: state.plan.workflow_plan_id,
-            expected_plan_hash: state.plan.plan_hash,
-            expected_checkpoint_id: state.last_checkpoint_id,
-            expected_checkpoint_hash: state.last_checkpoint_hash,
-          },
-          {},
-          signal,
-        )
-        if (signal?.aborted) throw signal.reason
-        streamRunIdRef.current = result.run.run_id
-        setActiveRun(result.run)
-        setWorkflow((current) => current?.run_id === result.run.run_id
-          ? {
-              ...current,
-              run_status: result.run.status,
-              resume_state: 'running',
-              resume_allowed: false,
-              reason_code: 'workflow_execution_active',
-            }
-          : current)
-      } catch (resumeError) {
-        if (!signal?.aborted && shouldReconcileResumeFailure(resumeError)) {
-          try {
-            const reconciled = await getAgentWorkflowState(run.run_id, {}, signal)
-            if (signal?.aborted) throw signal.reason
-            const current = activeRunRef.current
-            if (current?.run_id === run.run_id && current.status === 'paused') {
-              setWorkflow(reconciled)
-              setActiveRun((latest) => latest?.run_id === run.run_id
-                && latest.status === 'paused'
-                ? { ...latest, status: reconciled.run_status }
-                : latest)
-              if (reconciled.run_status !== 'paused'
-                && !isTerminalAgentRun(reconciled.run_status)) {
-                setError(null)
-                return
-              }
-            } else if (current?.run_id === run.run_id
-              && !isTerminalAgentRun(current.status)
-              && current.status !== 'paused') {
-              setError(null)
-              return
-            }
-          } catch (reconcileError) {
-            if (signal?.aborted) throw reconcileError
-            if (reconcileError instanceof AgentContractError) {
-              setError(errorMessage(reconcileError))
-              throw reconcileError
-            }
-          }
-        }
-        if (!signal?.aborted) setError(errorMessage(resumeError))
-        throw resumeError
-      } finally {
-        setResuming(false)
-      }
-    })()
-    resumePromiseRef.current = promise
-    void promise.finally(() => {
-      if (resumePromiseRef.current === promise) resumePromiseRef.current = null
-    }).catch(() => undefined)
-    return promise
-  }, [activeRun, workflow])
+  }, [])
 
   const selectConversation = useCallback(async (sessionId: string) => {
     const targetId = sessionId.trim()
-    if (!targetId || targetId === sessionRef.current?.session_id) return
-    if (contextOperationRef.current !== null || resuming) {
-      throw new Error('写作助手正在处理当前任务，请稍后切换对话')
-    }
-    if (activeRun && !isTerminalAgentRun(activeRun.status)) {
-      throw new Error('当前任务尚未结束，不能切换对话')
-    }
-    if (pendingContextPack) {
-      throw new Error('当前资料已经备齐，请先发送或放弃后再切换对话')
-    }
-    const target = sessions.find((item) => item.session_id === targetId)
-    if (!target) throw new Error('找不到这条历史对话，请刷新后重试')
-
-    contextOperationRef.current = 'restoring'
-    setContextOperation('restoring')
-    setSwitchingSession(true)
-    setError(null)
-    const signal = scopeControllerRef.current?.signal
+    if (!targetId || (targetId === sessionRef.current?.session_id && operationRef.current !== 'restoring')) return
+    const signal = beginNavigation()
     try {
-      const latest = await getAgentSession(targetId, {}, signal)
+      const latest = await getAgentSession(targetId, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal)
+      if (signal.aborted) return
+      // 阅读和接回事件流不修改模型绑定；下一次发送时再刷新原会话的连接。
       await restoreSession(latest, signal)
-      setSessions((current) => current.map((item) => (
-        item.session_id === latest.session_id ? latest : item
-      )))
+      setSessions((current) => sortSessions(current.map((item) => (item.session_id === latest.session_id ? latest : item))))
     } catch (switchError) {
-      if (!signal?.aborted) setError(errorMessage(switchError))
+      if (signal.aborted) return
+      setError(errorMessage(switchError))
       throw switchError
     } finally {
-      setSwitchingSession(false)
-      if (contextOperationRef.current === 'restoring') {
-        contextOperationRef.current = null
-        setContextOperation(null)
+      if (scopeControllerRef.current?.signal === signal) setSwitchingSession(false)
+      releaseOperation('restoring', signal)
+    }
+  }, [beginNavigation, releaseOperation, restoreSession])
+
+  const createConversation = useCallback(async (customTitle?: string) => {
+    const signal = beginNavigation()
+    const title = customTitle?.trim() || placeholderSessionTitle()
+    try {
+      // 「随便聊」与项目会话走同一套会话/运行/事件流，只是不绑定项目。
+      const created = projectId
+        ? await createAgentSession(projectId, title, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal)
+        : await createUnboundAgentSession(title, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal)
+      await restoreSession(created, signal)
+      setSessions((current) => sortSessions([created, ...current.filter((item) => item.session_id !== created.session_id)]))
+      return created
+    } catch (createError) {
+      if (signal.aborted) return
+      setError(errorMessage(createError))
+      throw createError
+    } finally {
+      if (scopeControllerRef.current?.signal === signal) setSwitchingSession(false)
+      releaseOperation('restoring', signal)
+    }
+  }, [beginNavigation, projectId, releaseOperation, restoreSession])
+
+  const renameConversation = useCallback(async (sessionId: string, title: string) => {
+    const normalized = title.trim()
+    if (!normalized) throw new Error('对话名称不能为空')
+    try {
+      const updated = await updateAgentSession(sessionId, { title: normalized }, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, scopeControllerRef.current?.signal)
+      setSessions((current) => sortSessions(current.map((item) => (item.session_id === updated.session_id ? updated : item))))
+      if (sessionRef.current?.session_id === updated.session_id) {
+        sessionRef.current = updated
+        setSession(updated)
       }
+      setError(null)
+    } catch (renameError) {
+      setError(errorMessage(renameError))
+      throw renameError
     }
-  }, [activeRun, pendingContextPack, restoreSession, resuming, sessions])
+  }, [])
 
-  const createConversation = useCallback(async () => {
-    if (!projectId) throw new Error('请先打开一本作品')
-    if (contextOperationRef.current !== null || resuming) {
-      throw new Error('写作助手正在处理当前任务，请稍后新建对话')
+  const setConversationPinned = useCallback(async (sessionId: string, pinned: boolean) => {
+    try {
+      const updated = await updateAgentSession(sessionId, { pinned }, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, scopeControllerRef.current?.signal)
+      setSessions((current) => sortSessions(current.map((item) => (item.session_id === updated.session_id ? updated : item))))
+      if (sessionRef.current?.session_id === updated.session_id) {
+        sessionRef.current = updated
+        setSession(updated)
+      }
+      setError(null)
+    } catch (pinError) {
+      setError(errorMessage(pinError))
+      throw pinError
     }
-    if (activeRun && !isTerminalAgentRun(activeRun.status)) {
-      throw new Error('当前任务尚未结束，不能新建对话')
-    }
-    if (pendingContextPack) {
-      throw new Error('当前资料已经备齐，请先发送或放弃后再新建对话')
-    }
+  }, [])
 
-    contextOperationRef.current = 'restoring'
-    setContextOperation('restoring')
+  const deleteConversation = useCallback(async (sessionId: string) => {
+    const targetId = sessionId.trim()
+    if (!targetId) throw new Error('找不到要删除的对话')
+    const deletingCurrent = sessionRef.current?.session_id === targetId
+    if (deletingCurrent) requireIdle('删除对话')
+    try {
+      await deleteAgentSession(targetId, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, scopeControllerRef.current?.signal)
+      setSessions((current) => current.filter((item) => item.session_id !== targetId))
+      if (deletingCurrent) setRefreshKey((current) => current + 1)
+      setError(null)
+    } catch (deleteError) {
+      setError(errorMessage(deleteError))
+      throw deleteError
+    }
+  }, [requireIdle])
+
+  const forkConversation = useCallback(async (upToMessageId: string, title?: string) => {
+    const current = sessionRef.current
+    if (!current) throw new Error('当前没有打开的对话')
+    requireIdle('分叉对话')
+    setOperation('restoring')
     setSwitchingSession(true)
     setError(null)
     const signal = scopeControllerRef.current?.signal
-    const title = `新对话 · ${new Intl.DateTimeFormat('zh-CN', {
-      month: 'numeric',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date())}`
     try {
-      const created = await createAgentSession(projectId, title, {}, signal)
-      await restoreSession(created, signal)
-      setSessions((current) => [
-        created,
-        ...current.filter((item) => item.session_id !== created.session_id),
-      ])
-    } catch (createError) {
-      if (!signal?.aborted) setError(errorMessage(createError))
-      throw createError
+      const forked = await forkAgentSession(current.session_id, upToMessageId, title, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal)
+      if (signal?.aborted || sessionRef.current?.session_id !== current.session_id) throw new DOMException('Aborted', 'AbortError')
+      await restoreSession(forked, signal)
+      setSessions((existing) => sortSessions([forked, ...existing.filter((item) => item.session_id !== forked.session_id)]))
+      return forked
+    } catch (forkError) {
+      if (!signal?.aborted) setError(errorMessage(forkError))
+      throw forkError
     } finally {
-      setSwitchingSession(false)
-      if (contextOperationRef.current === 'restoring') {
-        contextOperationRef.current = null
-        setContextOperation(null)
-      }
+      if (scopeControllerRef.current?.signal === signal) setSwitchingSession(false)
+      releaseOperation('restoring', signal)
     }
-  }, [activeRun, pendingContextPack, projectId, restoreSession, resuming])
+  }, [releaseOperation, requireIdle, restoreSession, setOperation])
 
-  const paused = activeRun?.status === 'paused'
-  const running = activeRun !== null && !paused && !isTerminalAgentRun(activeRun.status)
-  const busy = contextOperation !== null || running || paused || resuming
-  const contextState = contextOperation ?? (
-    pendingContextPack === null
-      ? 'idle'
-      : contextStaleReasons.length > 0
-        ? 'stale'
-        : pendingContextPack.pack.readiness
-  )
+  const compactConversation = useCallback(async () => {
+    const current = sessionRef.current
+    if (!current) throw new Error('当前没有打开的对话')
+    requireIdle('压缩对话')
+    setOperation('compacting')
+    setError(null)
+    const signal = scopeControllerRef.current?.signal
+    try {
+      const checkpoint = await compactAgentSession(current.session_id, { timeoutMs: 120_000 }, signal)
+      if (signal?.aborted || sessionRef.current?.session_id !== current.session_id) throw new DOMException('Aborted', 'AbortError')
+      setLatestCheckpoint(checkpoint)
+      return checkpoint
+    } catch (compactError) {
+      if (!signal?.aborted) setError(errorMessage(compactError))
+      throw compactError
+    } finally {
+      releaseOperation('compacting', signal)
+    }
+  }, [releaseOperation, requireIdle, setOperation])
+
+  const loadRunActivities = useCallback(async (runId: string) => {
+    const signal = scopeControllerRef.current?.signal
+    const page = await listAgentActivities(runId, 0, { timeoutMs: AGENT_CONTROL_TIMEOUT_MS }, signal)
+    if (signal?.aborted) return
+    if (page.run_id !== runId) throw new Error('本机服务返回的不是这一轮的记录')
+    setPastActivities((past) => ({ ...past, [runId]: page.activities }))
+  }, [])
+
+  const loadEarlierMessages = useCallback(async () => {
+    const current = sessionRef.current
+    const first = messagesRef.current[0]
+    if (!current || !first) return
+    const signal = scopeControllerRef.current?.signal
+    const page = await listAgentMessages(
+      current.session_id,
+      { timeoutMs: AGENT_CONTROL_TIMEOUT_MS },
+      signal,
+      first.ordinal,
+    )
+    if (signal?.aborted || sessionRef.current?.session_id !== current.session_id) return
+    setRunProcessSummaries((current) => ({ ...current, ...page.run_process_summaries }))
+    setRunOrigins((current) => ({ ...current, ...page.run_origins }))
+    setReviewSources((current) => ({ ...current, ...page.review_sources }))
+    setMessages((existing) => {
+      const oldest = existing[0]?.ordinal ?? Number.POSITIVE_INFINITY
+      return [...page.messages.filter((message) => message.ordinal < oldest), ...existing]
+    })
+    setHasEarlierMessages(page.has_earlier === true)
+  }, [])
+
+  const running = activeRun !== null && activeRun.status !== 'paused' && !isTerminalAgentRun(activeRun.status)
+  const busy = operation !== null || running
+  const contextState = operation ?? 'idle'
+  const pendingSend = pendingSendState?.item.sessionId === session?.session_id ? pendingSendState : null
   return useMemo(() => ({
     availability,
+    messageSyncError,
+    syncingMessages,
     detail,
     sessions,
     session,
     messages,
+    hasEarlierMessages,
+    loadEarlierMessages,
     streamingContent,
     activeRun,
-    workflow,
+    continuation,
     activities,
-    pendingContextPack,
-    pendingNlclRoute,
-    pendingNlclRouteExecutions,
-    pendingPrewriteOperationPackage,
-    activeContextPack,
-    activeNlclRoute,
-    activeNlclRouteExecutions,
-    activePrewriteOperationPackage,
+    pastActivities,
+    runProcessSummaries,
+    runOrigins,
+    reviewSources,
+    observeBackgroundRun,
+    loadRunActivities,
     contextState,
-    contextStaleReasons,
     running,
-    resuming,
     switchingSession,
     busy,
     error,
-    compileContext,
-    confirmPendingContext,
-    discardPendingContext,
-    refreshPendingContext,
-    openContextPackForReview,
+    latestCheckpoint,
+    send,
+    pendingSend,
+    checkPendingSend,
+    retryPendingSend,
+    withdrawPendingSend,
     cancel,
-    resume,
+    prepareContinuation,
+    rebindProvider,
     createConversation,
+    forkConversation,
+    compactConversation,
     selectConversation,
+    renameConversation,
+    setConversationPinned,
+    deleteConversation,
     refresh,
+    refreshMessages,
   }), [
     activeRun,
-    activeContextPack,
-    activeNlclRoute,
-    activeNlclRouteExecutions,
-    activePrewriteOperationPackage,
     activities,
     availability,
     busy,
+    checkPendingSend,
     cancel,
-    compileContext,
-    confirmPendingContext,
-    createConversation,
-    contextStaleReasons,
+    compactConversation,
     contextState,
+    continuation,
+    createConversation,
+    deleteConversation,
     detail,
-    discardPendingContext,
     error,
+    forkConversation,
+    hasEarlierMessages,
+    latestCheckpoint,
+    loadEarlierMessages,
+    loadRunActivities,
     messages,
-    pendingContextPack,
-    pendingNlclRoute,
-    pendingNlclRouteExecutions,
-    pendingPrewriteOperationPackage,
+    messageSyncError,
+    syncingMessages,
+    pastActivities,
+    runProcessSummaries,
+    runOrigins,
+    reviewSources,
+    observeBackgroundRun,
+    pendingSend,
+    prepareContinuation,
+    rebindProvider,
     refresh,
-    openContextPackForReview,
-    refreshPendingContext,
-    resume,
-    resuming,
+    refreshMessages,
+    renameConversation,
     running,
+    retryPendingSend,
     selectConversation,
+    send,
     session,
     sessions,
-    switchingSession,
+    setConversationPinned,
     streamingContent,
-    workflow,
+    switchingSession,
+    withdrawPendingSend,
   ])
 }

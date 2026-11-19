@@ -13,7 +13,7 @@ try {
     $state = Read-AuthorWorkbenchState -StatePath $StatePath
     if ($null -eq $state) {
         Write-Host ""
-        Write-Host "没有本项目的运行记录，织梦作者工作台已经关闭。"
+        Write-Host "没有本项目的运行记录，织梦已经关闭。"
         Write-Host "未扫描、未关闭任何其他 Python 或 Node 进程。"
         exit 0
     }
@@ -25,7 +25,7 @@ try {
     }
 
     Write-Host ""
-    Write-Host "正在关闭织梦作者工作台 ..."
+    Write-Host "正在关闭织梦 ..."
     $stopped = 0
     $identityMismatches = 0
 

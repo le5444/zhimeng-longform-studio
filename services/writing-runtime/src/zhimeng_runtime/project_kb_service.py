@@ -54,6 +54,7 @@ from zhimeng_runtime.project_kb_models import (
     project_kb_state_id,
 )
 from zhimeng_runtime.project_reader import ProjectReader, ProjectReaderError
+from zhimeng_runtime.fs_atomic import replace_with_retry
 
 
 PROJECT_ID_PATTERN = re.compile(r"^project-[0-9a-f]{24}$")
@@ -459,7 +460,7 @@ class ProjectKbService:
                             if reused_snapshot:
                                 self._assert_snapshot_matches(snapshot_root, bundle)
                             else:
-                                os.replace(temporary, snapshot_root)
+                                replace_with_retry(temporary, snapshot_root)
                                 published_snapshot = True
                             pointer = self._pointer_for(bundle)
                             try:
@@ -808,7 +809,7 @@ class ProjectKbService:
         temporary = project_root / f".publication-{uuid4().hex}.tmp"
         try:
             _write_new_file(temporary, _json_bytes(publication))
-            os.replace(temporary, target)
+            replace_with_retry(temporary, target)
         finally:
             temporary.unlink(missing_ok=True)
         return target
@@ -879,7 +880,7 @@ class ProjectKbService:
         temporary = project_root / f".current-{uuid4().hex}.tmp"
         try:
             _write_new_file(temporary, _json_bytes(pointer))
-            os.replace(temporary, project_root / "current.json")
+            replace_with_retry(temporary, project_root / "current.json")
         finally:
             temporary.unlink(missing_ok=True)
 

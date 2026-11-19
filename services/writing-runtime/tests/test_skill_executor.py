@@ -88,6 +88,7 @@ def setup_executor(
     script: str,
     *,
     timeout_seconds: int = 5,
+    four_skills_bundle_root: Path | None = None,
 ) -> tuple[SkillExecutor, ManagedSkillService, Path, Path, Path]:
     store = SqliteStore(tmp_path / "runtime.sqlite3")
     store.initialize()
@@ -118,7 +119,11 @@ def setup_executor(
     service = ManagedSkillService(store, managed_root, contracts_root=contracts)
     service.register_builtin(package)
     return (
-        SkillExecutor(service, contracts_root=contracts),
+        SkillExecutor(
+            service,
+            contracts_root=contracts,
+            four_skills_bundle_root=four_skills_bundle_root,
+        ),
         service,
         package,
         snapshot,
@@ -236,6 +241,37 @@ print(json.dumps({
 '''
 
 
+BUNDLE_ROOT_SCRIPT = r'''
+import json
+import os
+import sys
+from pathlib import Path
+
+request = json.load(sys.stdin)
+snapshot = Path(sys.argv[1])
+assert sys.argv[2:] == ["--json"]
+result = {
+    "snapshot_name": snapshot.name,
+    "request": request,
+}
+artifact = {
+    **result,
+    "bundle_root": os.environ.get("ZHIMENG_FOUR_SKILLS_BUNDLE_ROOT"),
+}
+Path("audit.json").write_text(json.dumps(artifact), encoding="utf-8")
+print(json.dumps({
+    "health": "healthy",
+    "summary": "Snapshot audit completed.",
+    "result": result,
+    "artifacts": [{
+        "artifact_type": "project_audit",
+        "relative_path": "audit.json",
+        "payload": artifact,
+    }],
+}))
+'''
+
+
 def test_executes_fixed_python_argv_and_returns_self_contained_receipt(
     tmp_path: Path,
 ) -> None:
@@ -268,6 +304,28 @@ def test_executes_fixed_python_argv_and_returns_self_contained_receipt(
         sort_keys=True,
     ).encode("utf-8")
     assert outcome.receipt_hash == hashlib.sha256(canonical).hexdigest()
+
+
+def test_forwards_a_validated_four_skills_bundle_root_to_the_child(
+    tmp_path: Path,
+) -> None:
+    bundle_root = tmp_path / "four-skills-runtime"
+    bundle_root.mkdir()
+    executor, _, _, snapshot, staging = setup_executor(
+        tmp_path,
+        BUNDLE_ROOT_SCRIPT,
+        four_skills_bundle_root=bundle_root,
+    )
+
+    outcome = asyncio.run(execute(executor, snapshot, staging))
+
+    assert outcome.receipt.execution_status == "succeeded"
+    assert outcome.result == {"snapshot_name": "snapshot", "request": {"mode": "audit"}}
+    assert outcome.artifacts[0].payload == {
+        "snapshot_name": "snapshot",
+        "request": {"mode": "audit"},
+        "bundle_root": str(bundle_root.resolve()),
+    }
 
 
 def test_instruction_source_is_rejected_without_starting_a_process(

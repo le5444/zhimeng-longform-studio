@@ -533,6 +533,26 @@ def test_initialize_is_idempotent(tmp_path: Path) -> None:
     assert store.probe().ready is True
 
 
+def test_v23_migration_adds_session_pinning_without_losing_history(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "runtime.sqlite3"
+    store = SqliteStore(database_path)
+    store.initialize()
+    project, session, _, _ = _create_session_and_run(store)
+    with store.connection() as connection:
+        connection.execute("ALTER TABLE execution_session DROP COLUMN pinned")
+        connection.execute("PRAGMA user_version = 23")
+
+    migrated = SqliteStore(database_path)
+    health = migrated.initialize()
+
+    assert health.schema_version == SCHEMA_VERSION
+    restored = AgentStore(migrated).list_sessions(project.project_id)
+    assert [item.session_id for item in restored] == [session.session_id]
+    assert restored[0].pinned is False
+
+
 def test_failed_post_draft_gate_receipt_allows_a_new_successful_attempt(
     tmp_path: Path,
 ) -> None:
@@ -2036,7 +2056,7 @@ def test_v18_migration_marks_legacy_skill_rows_unmanaged_without_forging_activat
     store = SqliteStore(database_path)
     health = store.initialize()
 
-    assert health.schema_version == SCHEMA_VERSION == 21
+    assert health.schema_version == SCHEMA_VERSION
     with store.connection() as connection:
         row = connection.execute(
             "SELECT * FROM skill_version WHERE skill_id = 'fixture.legacy-skill'"
@@ -2105,7 +2125,7 @@ def test_v19_source_import_migration_preserves_tomato_and_adds_source_key(
         connection.execute("PRAGMA user_version = 18")
 
     migrated = SqliteStore(database_path)
-    assert migrated.initialize().schema_version == SCHEMA_VERSION == 21
+    assert migrated.initialize().schema_version == SCHEMA_VERSION
     assert migrated.get_source_import_job(str(payload["import_id"])) == payload
     with migrated.connection() as connection:
         row = connection.execute(

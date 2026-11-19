@@ -478,14 +478,26 @@ def test_versions_are_immutable_and_activation_upgrade_and_rollback_use_cas(
     statuses = {str(row["id"]): str(row["status"]) for row in rows}
     assert statuses[first.skill_version_id] == "active"
     assert statuses[second.skill_version_id] == "active"
-    assert service.get_active("project-fixture", second.manifest.id) == first
+    assert service.get_active("project-fixture", second.manifest.id) == second
+
+    author_rollback = service.activate(
+        second.manifest.id,
+        ManagedSkillActivationRequest(
+            action="rollback",
+            skill_version_id=first.skill_version_id,
+            expected_state_revision=2,
+            expected_version_id=second.skill_version_id,
+        ),
+    )
+    assert author_rollback.activation.effective_version_id == first.skill_version_id
+    assert author_rollback.receipt.action == "rollback"
 
     upgraded = service.activate(
         second.manifest.id,
         ManagedSkillActivationRequest(
             action="upgrade",
             skill_version_id=second.skill_version_id,
-            expected_state_revision=1,
+            expected_state_revision=3,
             expected_version_id=first.skill_version_id,
         ),
     )
@@ -498,12 +510,133 @@ def test_versions_are_immutable_and_activation_upgrade_and_rollback_use_cas(
         ManagedSkillActivationRequest(
             action="rollback",
             skill_version_id=first.skill_version_id,
-            expected_state_revision=2,
+            expected_state_revision=4,
             expected_version_id=second.skill_version_id,
         ),
     )
     assert rolled_back.activation.effective_version_id == first.skill_version_id
     assert rolled_back.receipt.action == "rollback"
+
+
+def test_builtin_registration_upgrades_an_unmodified_builtin_default(
+    tmp_path: Path,
+) -> None:
+    store, service, managed_root = setup_service(tmp_path)
+    first = service.register_builtin(write_package(managed_root, "v1"))
+
+    second = service.register_builtin(
+        write_package(
+            managed_root,
+            "v2",
+            version="2026.07.20-m3a.2",
+            script="print('v2')\n",
+        )
+    )
+
+    active = service.get_active("project-fixture", second.manifest.id)
+    assert active.skill_version_id == second.skill_version_id
+    with store.connection() as connection:
+        activation = connection.execute(
+            """
+            SELECT active_version_id, state_revision
+            FROM skill_activation
+            WHERE scope_key = 'application' AND skill_id = ?
+            """,
+            (second.manifest.id,),
+        ).fetchone()
+        recovery = connection.execute(
+            """
+            SELECT action, previous_version_id, next_version_id
+            FROM skill_activation_receipt
+            WHERE scope_key = 'application' AND skill_id = ? AND state_revision = 2
+            """,
+            (second.manifest.id,),
+        ).fetchone()
+    assert dict(activation) == {
+        "active_version_id": second.skill_version_id,
+        "state_revision": 2,
+    }
+    assert dict(recovery) == {
+        "action": "builtin_bootstrap",
+        "previous_version_id": first.skill_version_id,
+        "next_version_id": second.skill_version_id,
+    }
+
+
+def test_builtin_registration_preserves_an_explicit_author_rollback(
+    tmp_path: Path,
+) -> None:
+    _, service, managed_root = setup_service(tmp_path)
+    first = service.register_builtin(write_package(managed_root, "v1"))
+    second = service.register_builtin(
+        write_package(
+            managed_root,
+            "v2",
+            version="2026.07.20-m3a.2",
+            script="print('v2')\n",
+        )
+    )
+    service.activate(
+        first.manifest.id,
+        ManagedSkillActivationRequest(
+            action="rollback",
+            skill_version_id=first.skill_version_id,
+            expected_state_revision=2,
+            expected_version_id=second.skill_version_id,
+        ),
+    )
+
+    third = service.register_builtin(
+        write_package(
+            managed_root,
+            "v3",
+            version="2026.07.20-m3a.3",
+            script="print('v3')\n",
+        )
+    )
+
+    assert service.get_active("project-fixture", third.manifest.id) == first
+
+
+def test_lifecycle_reports_missing_history_and_refuses_to_reactivate_it(
+    tmp_path: Path,
+) -> None:
+    _, service, managed_root = setup_service(tmp_path)
+    first = service.register_builtin(write_package(managed_root, "v1"))
+    shutil.rmtree(first.package_root)
+    second = service.register_builtin(
+        write_package(
+            managed_root,
+            "v2",
+            version="2026.07.20-m3a.2",
+            script="print('v2')\n",
+        )
+    )
+
+    lifecycle = service.list_lifecycle()
+
+    assert [item.skill_version_id for item in lifecycle.versions] == [
+        second.skill_version_id
+    ]
+    assert len(lifecycle.unavailable_versions) == 1
+    unavailable = lifecycle.unavailable_versions[0]
+    assert unavailable.skill_version_id == first.skill_version_id
+    assert unavailable.skill_id == first.manifest.id
+    assert unavailable.version == first.manifest.version
+    assert unavailable.package_fingerprint == first.package_fingerprint
+    assert unavailable.reason == "snapshot_missing"
+    assert service.get_active("project-fixture", second.manifest.id) == second
+
+    with pytest.raises(ManagedSkillPackageError, match="not accessible"):
+        service.activate(
+            second.manifest.id,
+            ManagedSkillActivationRequest(
+                action="rollback",
+                skill_version_id=first.skill_version_id,
+                expected_state_revision=2,
+                expected_version_id=second.skill_version_id,
+            ),
+        )
 
 
 def test_rejects_untrusted_imports_links_hardlinks_and_budgets(tmp_path: Path) -> None:
@@ -729,10 +862,22 @@ def test_failed_import_and_restart_recovery_leave_no_partial_snapshot(
     orphan.mkdir()
     (orphan / "partial").write_text("orphan", encoding="utf-8")
 
+    foreign_store = SqliteStore(tmp_path / "foreign-runtime.sqlite3")
+    foreign_store.initialize()
+    foreign_service = ManagedSkillService(foreign_store, managed_root)
+    foreign_snapshot = foreign_service.register_builtin(
+        write_package(
+            tmp_path / "foreign-source",
+            version="2026.07.20-m3a.2",
+            script="print('foreign')\n",
+        )
+    ).package_root
+
     recovered = service.recover_imports()
     assert recovered == {"removed_staging": 1, "removed_orphans": 1}
     assert not interrupted.exists()
     assert not orphan.exists()
+    assert foreign_snapshot.is_dir()
 
 
 def test_activation_cas_allows_only_one_competing_author_decision(tmp_path: Path) -> None:
@@ -764,7 +909,12 @@ def test_activation_cas_allows_only_one_competing_author_decision(tmp_path: Path
 
 
 def test_activation_rejects_stale_cas_and_false_rollback_label(tmp_path: Path) -> None:
-    _, service, managed_root = setup_service(tmp_path)
+    trusted = tmp_path / "trusted"
+    trusted.mkdir()
+    _, service, managed_root = setup_service(
+        tmp_path,
+        trusted_import_roots=(trusted,),
+    )
     first = service.register_builtin(write_package(managed_root, "v1"))
     second = service.register_builtin(
         write_package(
@@ -772,6 +922,14 @@ def test_activation_rejects_stale_cas_and_false_rollback_label(tmp_path: Path) -
             "v2",
             version="2026.07.20-m3a.2",
             script="print('v2')\n",
+        )
+    )
+    never_active = service.import_package(
+        write_package(
+            trusted,
+            "v3",
+            version="2026.07.20-m3a.3",
+            script="print('v3')\n",
         )
     )
 
@@ -789,9 +947,9 @@ def test_activation_rejects_stale_cas_and_false_rollback_label(tmp_path: Path) -
             first.manifest.id,
             ManagedSkillActivationRequest(
                 action="rollback",
-                skill_version_id=second.skill_version_id,
-                expected_state_revision=1,
-                expected_version_id=first.skill_version_id,
+                skill_version_id=never_active.version.skill_version_id,
+                expected_state_revision=2,
+                expected_version_id=second.skill_version_id,
             ),
         )
 

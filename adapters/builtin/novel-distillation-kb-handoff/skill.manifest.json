@@ -4,7 +4,7 @@
   "display_name": "Novel Distillation to KB Manager Handoff",
   "description": "Managed thin adapter that turns a formal novel-distillation work/voice/validator batch into a controlled novel-kb-manager distillation_index handoff artifact without copying full card text.",
   "kind": "deterministic_tool",
-  "version": "2026.07.24-o2d.1",
+  "version": "2026.07.24-o2d.2",
   "source": {
     "type": "builtin_managed",
     "reference": "PROVENANCE.md",

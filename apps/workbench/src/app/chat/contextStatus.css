@@ -1,0 +1,13 @@
+.zm-context-status { position: relative; color: var(--zm-fg-3); font-size: var(--zm-fs-2); margin: 0 4px 6px; }
+.zm-context-status > summary { display: flex; align-items: center; gap: 6px; width: fit-content; max-width: 100%; cursor: pointer; list-style: none; padding: 3px 0; }
+.zm-context-status > summary::-webkit-details-marker { display: none; }
+.zm-context-status summary svg { width: 13px; height: 13px; flex: none; }
+.zm-context-count { font-size: var(--zm-fs-1); color: var(--zm-fg-3); }
+.zm-context-chevron { transition: transform .15s; }
+.zm-context-status[open] .zm-context-chevron { transform: rotate(180deg); }
+.zm-context-body { margin-top: 6px; padding: 12px 14px; border: 1px solid var(--zm-line); border-radius: var(--zm-r-2); background: var(--zm-bg); color: var(--zm-fg-2); max-height: 220px; overflow-y: auto; }
+.zm-context-body p { margin: 0 0 8px; line-height: 1.65; }
+.zm-context-body p:last-child { margin-bottom: 0; }
+.zm-context-note { color: var(--zm-fg-3); font-size: var(--zm-fs-1); }
+.zm-context-summary > summary { cursor: pointer; color: var(--zm-fg); padding: 4px 0; }
+.zm-context-summary > div { white-space: pre-wrap; overflow-wrap: anywhere; padding-top: 8px; line-height: 1.7; }

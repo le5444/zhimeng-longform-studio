@@ -72,6 +72,147 @@
       "title": "DistillationDraft",
       "type": "object"
     },
+    "FeedbackExperienceCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "const": 1,
+          "default": 1,
+          "title": "Index",
+          "type": "integer"
+        },
+        "package_id": {
+          "pattern": "^formal-knowledge-promotion-package-[0-9a-f]{32}$",
+          "title": "Package Id",
+          "type": "string"
+        },
+        "change_set_id": {
+          "pattern": "^changeset-[0-9a-f]{32}$",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "feedback_candidate_id": {
+          "pattern": "^feedback-candidate-[0-9a-f]{32}$",
+          "title": "Feedback Candidate Id",
+          "type": "string"
+        },
+        "package_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Package Hash",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "package_id",
+        "change_set_id",
+        "feedback_candidate_id",
+        "package_hash",
+        "title"
+      ],
+      "title": "FeedbackExperienceCandidate",
+      "type": "object"
+    },
+    "FeedbackSourceImportJob": {
+      "additionalProperties": false,
+      "description": "Synthetic source lineage for feedback-derived knowledge review candidates.\n\nThis is not a Tomato/local book import. It only exists so staged formal-knowledge\npackages can become pending knowledge candidates without writing formal knowledge.",
+      "properties": {
+        "schema": {
+          "const": "zhimeng.source-import.v3",
+          "default": "zhimeng.source-import.v3",
+          "title": "Schema",
+          "type": "string"
+        },
+        "import_id": {
+          "pattern": "^source-import-[0-9a-f]{32}$",
+          "title": "Import Id",
+          "type": "string"
+        },
+        "provider": {
+          "const": "feedback_experience",
+          "default": "feedback_experience",
+          "title": "Provider",
+          "type": "string"
+        },
+        "query": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Query",
+          "type": "string"
+        },
+        "candidate": {
+          "$ref": "#/$defs/FeedbackExperienceCandidate"
+        },
+        "status": {
+          "$ref": "#/$defs/SourceImportStatus"
+        },
+        "retry_of": {
+          "anyOf": [
+            {
+              "pattern": "^source-import-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retry Of"
+        },
+        "progress": {
+          "$ref": "#/$defs/SourceImportProgress"
+        },
+        "source_packet": {
+          "default": null,
+          "title": "Source Packet",
+          "type": "null"
+        },
+        "distillation_draft": {
+          "default": null,
+          "title": "Distillation Draft",
+          "type": "null"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "maxLength": 8000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "import_id",
+        "query",
+        "candidate",
+        "status",
+        "progress",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "FeedbackSourceImportJob",
+      "type": "object"
+    },
     "LocalFileSourceCandidate": {
       "additionalProperties": false,
       "properties": {
@@ -747,6 +888,9 @@
           },
           {
             "$ref": "#/$defs/LocalSourceImportJob"
+          },
+          {
+            "$ref": "#/$defs/FeedbackSourceImportJob"
           }
         ]
       },

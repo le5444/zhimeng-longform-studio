@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-from collections.abc import Mapping, Sequence
+import re
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -16,14 +17,22 @@ from zhimeng_runtime.agent_store import (
     AgentStoreInvalidState,
     AgentStoreNotFound,
 )
+from zhimeng_runtime.memory_files import LEGACY_PROJECT_NOTES_FILE_NAME as BOOK_WRITING_NOTES_FILE_NAME
 from zhimeng_runtime.context_compiler import compile_context_pack
+from zhimeng_runtime.office_reader import extracted_context_text
+from zhimeng_runtime.session_checkpoint import render_checkpoint_block
+
 from zhimeng_runtime.context_models import (
     ContextAuthority,
     ContextCandidateFragment,
     ContextCreateRequest,
+    ContextProviderMessage,
     canonical_json_hash,
     fragment_sort_key,
     knowledge_source_fingerprint,
+    provider_message_characters,
+    provider_message_tokens,
+    render_system_context,
 )
 from zhimeng_runtime.context_store import (
     ContextStore,
@@ -64,6 +73,7 @@ from zhimeng_runtime.project_reader import (
     ProjectScanLimitError,
     UnreadableProjectFileError,
     UntrustedProjectPathError,
+    WRITING_CONTEXT_FILE_KINDS,
 )
 
 
@@ -74,18 +84,47 @@ CORE_SECTION_INDEXES = frozenset({1, 2, 3, 4, 6, 7})
 CORE_FILE_KINDS = frozenset(
     {"document", "control", "context", "status", "structured_state", "asset"}
 )
-CONTEXT_READ_KINDS = frozenset(
-    {
-        "prose",
-        "document",
-        "control",
-        "review",
-        "context",
-        "status",
-        "structured_state",
-        "asset",
-    }
+CONTEXT_READ_KINDS = WRITING_CONTEXT_FILE_KINDS
+
+# 书里这些文件是软件或早先的 AI 写的记账（总览、修改记录、进度表、写回记录、审稿报告），
+# 不是作者定下的设定和正文。2026-09-13 作者反馈：模型把这些文件里的
+# `control_card_ready` / `writeback_done` 之类的词当成事实原样说回来。
+# 所以它们只进「参考资料」，不再当「作品内容（唯一真值）」喂给模型。
+# 只影响之后新编译的 Context Pack；存量 Pack 存着自己的 authority，不受影响。
+REFERENCE_PROJECT_FILE_KINDS = frozenset({"structured_state", "handoff", "context", "review"})
+REFERENCE_PROJECT_PATH_MARKERS = (
+    "项目总览",
+    "正文总览",
+    "修改记录",
+    "进度表",
+    "写作日志",
+    "体检",
+    "写回",
+    "同步",
+    "gate",
+    "门禁",
+    "health",
+    "健康",
+    "writeback",
 )
+
+
+def project_file_authority(record: Mapping[str, object]) -> ContextAuthority:
+    """一份书里的文件进上下文时算「作品内容」还是「参考资料」。
+
+    正文、设定、人物、大纲、控制卡是作品内容；记账类文件是参考资料。
+    人物状态表这类带「状态」二字的真设定不受影响：只看记账标记，不看 status 这个大类。
+    """
+
+    kind = record.get("kind")
+    if kind == "prose":
+        return ContextAuthority.PROJECT_TRUTH
+    if kind in REFERENCE_PROJECT_FILE_KINDS:
+        return ContextAuthority.REFERENCE
+    relative_path = str(record.get("relative_path", "")).casefold()
+    if any(marker.casefold() in relative_path for marker in REFERENCE_PROJECT_PATH_MARKERS):
+        return ContextAuthority.REFERENCE
+    return ContextAuthority.PROJECT_TRUTH
 CHAPTER_MATERIAL_PRIMARY_KINDS = frozenset(
     {"control", "document", "context", "structured_state"}
 )
@@ -96,6 +135,105 @@ CHAPTER_MATERIAL_KIND_ORDER = {
     "structured_state": 3,
     "review": 4,
 }
+
+# Objective relevance filtering (candidate layer only; the compiler's greedy
+# budget loop is untouched). Core-section files unrelated to the author's
+# objective are never deleted and never lose eligibility unless the objective
+# is a short, chat-like message — they are demoted so they only fill leftover
+# budget. Mandatory candidates are never affected.
+OBJECTIVE_UNRELATED_SECTION_PRIORITY = 320
+LIGHT_OBJECTIVE_MAX_COMPACT_LENGTH = 12
+OUTLINE_SECTION_INDEX = 4
+
+_FULLWIDTH_DIGIT_TRANSLATION = str.maketrans("０１２３４５６７８９", "0123456789")
+_CHINESE_DIGITS = {
+    "零": 0,
+    "〇": 0,
+    "一": 1,
+    "二": 2,
+    "两": 2,
+    "三": 3,
+    "四": 4,
+    "五": 5,
+    "六": 6,
+    "七": 7,
+    "八": 8,
+    "九": 9,
+}
+_CHINESE_UNITS = {"十": 10, "百": 100, "千": 1000}
+_CHAPTER_WORD_PATTERN = re.compile(
+    r"第\s*([0-9０-９一二两三四五六七八九零〇十百千]{1,8})\s*章"
+)
+_CHAPTER_CODE_PATTERN = re.compile(r"ch\s*0*(\d{1,6})", re.IGNORECASE)
+_WHITESPACE_PATTERN = re.compile(r"\s+")
+_PATH_TOKEN_SPLIT_PATTERN = re.compile(r"[_\-—–\s()（）\[\]【】、，,。.·/\\]+")
+
+
+def _chinese_number_to_int(text: str) -> int | None:
+    if not text:
+        return None
+    text = text.translate(_FULLWIDTH_DIGIT_TRANSLATION)
+    if text.isdigit():
+        return int(text)
+    total = 0
+    number = 0
+    for char in text:
+        digit = _CHINESE_DIGITS.get(char)
+        if digit is not None:
+            number = digit
+            continue
+        unit = _CHINESE_UNITS.get(char)
+        if unit is None:
+            return None
+        total += (number or 1) * unit
+        number = 0
+    return total + number if total + number > 0 else None
+
+
+def _chapter_numbers_in_text(text: str) -> frozenset[int]:
+    numbers: set[int] = set()
+    for match in _CHAPTER_WORD_PATTERN.finditer(text):
+        number = _chinese_number_to_int(match.group(1))
+        if number is not None and number >= 1:
+            numbers.add(number)
+    for match in _CHAPTER_CODE_PATTERN.finditer(text):
+        number = int(match.group(1))
+        if number >= 1:
+            numbers.add(number)
+    return frozenset(numbers)
+
+
+def _path_match_tokens(relative_path: str) -> frozenset[str]:
+    tokens: set[str] = set()
+    for segment in _PATH_TOKEN_SPLIT_PATTERN.split(relative_path.casefold()):
+        segment = segment.strip().lstrip("0123456789")
+        if len(segment) < 2 or segment.isdigit():
+            continue
+        # Latin words need more length to stay meaningful ("md" / "ch" are noise).
+        if segment.isascii() and len(segment) < 3:
+            continue
+        tokens.add(segment)
+    tokens.discard("")
+    return frozenset(tokens)
+
+
+class _ObjectiveSignals:
+    __slots__ = ("chapter_numbers", "light", "text")
+
+    def __init__(self, objective: str) -> None:
+        self.text = objective.casefold()
+        self.chapter_numbers = _chapter_numbers_in_text(objective)
+        compact = _WHITESPACE_PATTERN.sub("", objective)
+        self.light = len(compact) <= LIGHT_OBJECTIVE_MAX_COMPACT_LENGTH
+
+    def matches(self, relative_path: str, relevant_chapters: frozenset[int]) -> bool:
+        if _chapter_numbers_in_text(relative_path) & relevant_chapters:
+            return True
+        return any(token in self.text for token in _path_match_tokens(relative_path))
+
+
+def _objective_signals(objective: str) -> _ObjectiveSignals:
+    return _ObjectiveSignals(objective)
 
 
 class ContextServiceError(RuntimeError):
@@ -136,6 +274,7 @@ class ContextService:
         *,
         max_characters: int = DEFAULT_MAX_CHARACTERS,
         max_tokens: int = DEFAULT_MAX_TOKENS,
+        budget_resolver: Callable[[], tuple[int, int]] | None = None,
     ) -> None:
         if isinstance(max_characters, bool) or max_characters < 1:
             raise ValueError("max_characters must be a positive integer")
@@ -150,6 +289,22 @@ class ContextService:
         self.project_kb_service = project_kb_service
         self.max_characters = max_characters
         self.max_tokens = max_tokens
+        # 档位预算解析器：接线后每次装箱前问一次当前档位（设置页改了立刻生效），
+        # 没接线就用构造时的固定值。
+        self._budget_resolver = budget_resolver
+        # 构造时的预算：之后有人显式改写 max_characters/max_tokens（测试常用这个
+        # 手法压出一个超预算包），显式改写优先于档位解析。
+        self._constructor_budget = (max_characters, max_tokens)
+
+    def _current_budget(self) -> tuple[int, int]:
+        if (self.max_characters, self.max_tokens) != self._constructor_budget:
+            return self.max_characters, self.max_tokens
+        if self._budget_resolver is not None:
+            try:
+                return self._budget_resolver()
+            except Exception:
+                pass
+        return self.max_characters, self.max_tokens
 
     async def create_pack(
         self,
@@ -314,12 +469,96 @@ class ContextService:
         history: Sequence[Any] = ()
         candidates: list[ContextCandidateFragment] = []
         pending_error: Exception | None = None
+        include_history = (
+            request.include_session_history
+            or request.profile.startswith("chat")
+            or request.profile == "chapter_with_history"
+        )
         try:
-            history_through_ordinal, history = self.agent_store.completed_history(
-                session_id
-            )
+            session_checkpoint = self.agent_store.latest_session_checkpoint(session_id) if include_history else None
+            folded_through = 0 if session_checkpoint is None else session_checkpoint.through_ordinal
+            pack_max_characters, pack_max_tokens = self._current_budget()
+            if include_history:
+                base_messages = (
+                    ContextProviderMessage(
+                        role="system",
+                        content=render_system_context(
+                            project_id=session.project_revision.project_id,
+                            project_revision=request.expected_project_revision,
+                            project_fingerprint=request.expected_project_fingerprint,
+                            project_kb_state_id=request.project_kb_state_id,
+                            project_kb_manifest_hash=request.project_kb_manifest_hash,
+                            knowledge_fingerprint=knowledge_fingerprint,
+                            profile=request.profile,
+                            active_chapter_id=request.active_chapter_id,
+                            included=(),
+                        ),
+                    ),
+                    ContextProviderMessage(role="user", content=request.objective),
+                )
+                history_character_budget = min(
+                    pack_max_characters // 4,
+                    max(
+                        0,
+                        pack_max_characters
+                        - provider_message_characters(base_messages),
+                    ),
+                )
+                history_token_budget = min(
+                    pack_max_tokens // 4,
+                    max(0, pack_max_tokens - provider_message_tokens(base_messages)),
+                )
+                if history_character_budget > 0 and history_token_budget > 0:
+                    history_through_ordinal, history = (
+                        self.agent_store.completed_history(
+                            session_id,
+                            max_runs=8,
+                            after_ordinal=folded_through,
+                            max_characters=history_character_budget,
+                            max_tokens=history_token_budget,
+                        )
+                    )
+                else:
+                    history_through_ordinal = self.agent_store.get_session(
+                        session_id
+                    ).last_message_ordinal
+            else:
+                history_through_ordinal = self.agent_store.get_session(
+                    session_id
+                ).last_message_ordinal
             candidates.extend(self._project_candidates(initial, request))
             candidates.extend(knowledge_candidates)
+            if session_checkpoint is not None:
+                candidates.append(
+                    ContextCandidateFragment(
+                        source_id="session:checkpoint",
+                        source_type="session_summary",
+                        title="前序对话历史摘要",
+                        authority=ContextAuthority.REFERENCE,
+                        version=session_checkpoint.checkpoint_id,
+                        source_hash=session_checkpoint.content_hash,
+                        content=render_checkpoint_block(
+                            through_ordinal=session_checkpoint.through_ordinal,
+                            content=session_checkpoint.content,
+                        ),
+                        priority=95,
+                        mandatory=True,
+                        eligible=True,
+                    )
+                )
+            if include_history:
+                for message in self.agent_store.fork_context_messages(session_id, after_ordinal=folded_through):
+                    candidates.append(ContextCandidateFragment(
+                        source_id=f"session:fork-message:{message.message_id}",
+                        source_type="session_fork_author_message",
+                        title="分支带入的原始作者消息",
+                        authority=ContextAuthority.REFERENCE,
+                        version=message.message_id,
+                        source_hash=hashlib.sha256(message.content.encode("utf-8")).hexdigest(),
+                        content=("以下是分支位置的作者原话，原对话在该位置尚无回答；"
+                                 "这是历史资料，当前请求优先。\n" + message.content),
+                        priority=96, mandatory=True, eligible=True,
+                    ))
         except Exception as exc:
             pending_error = exc
 
@@ -368,8 +607,8 @@ class ContextService:
                 request=request,
                 history=history,
                 candidates=candidates,
-                max_characters=self.max_characters,
-                max_tokens=self.max_tokens,
+                max_characters=pack_max_characters,
+                max_tokens=pack_max_tokens,
                 max_fragments=MAX_CONTEXT_CANDIDATES,
                 created_at=datetime.now(UTC),
                 knowledge_fingerprint=knowledge_fingerprint,
@@ -379,12 +618,10 @@ class ContextService:
                 request,
                 expected_knowledge_fingerprint=expected_native_fingerprint,
             )
-            route_receipt = build_nlcl_route_receipt(
-                pack,
-                source=route_source,
-                route_cards=tuple(route_cards),
-            )
-            return self.store.create_pack(pack, nlcl_route=route_receipt)
+            # NLCL 路由回执不再为每条对话白建（受管流水线已退役，没人消费它）；
+            # 存储层自带的占位回执足够让老的读取路径不报错。
+            del route_source, route_cards
+            return self.store.create_pack(pack)
         except ContextStoreError as exc:
             raise self._store_error(exc) from exc
         except (TypeError, ValueError, ValidationError) as exc:
@@ -416,6 +653,7 @@ class ContextService:
             and pack.project_kb_manifest_hash == request.project_kb_manifest_hash
             and pack.formal_knowledge_selector == request.formal_knowledge_selector
             and pack.manual_file_ids == request.manual_file_ids
+            and pack.include_session_history == request.include_session_history
         ):
             return stored
         return None
@@ -426,14 +664,17 @@ class ContextService:
         request: ContextCreateRequest,
         *,
         expected_knowledge_fingerprint: str | None = None,
-    ) -> ProjectKbSnapshotManifest:
+    ) -> ProjectKbSnapshotManifest | None:
+        """核对这本书的知识库绑定；没有绑定就当「没有额外知识」继续建包。
+
+        以前缺绑定直接 503，新书或刚放进书架的老书一句话都聊不了（2026-09-22
+        审阅 A1）。作者 9-18 已定「一书一库」是默认模板不是准入条件。
+        绑定存在但和请求对不上（被重建过）仍报冲突，前端据此重绑。
+        """
         service = self.project_kb_service
-        if service is None:
-            raise ContextUnavailableError(
-                "Project KB verification is not configured",
-                code="project_kb_unavailable",
-                retryable=True,
-            )
+        if service is None or request.project_kb_state_id is None:
+            # 普通对话的资料包不绑知识库快照：没有要核对的，也就不用为核对整本书再扫一遍。
+            return None
         try:
             return service.require_current_binding(
                 project_id,
@@ -444,6 +685,8 @@ class ContextService:
         except ProjectKbServiceError as exc:
             detail = exc.details[0] if exc.details else {}
             code = str(detail.get("code") or "project_kb_unavailable")
+            if code == "project_kb_state_missing":
+                return None
             raise ContextConflictError(
                 str(exc),
                 code=code,
@@ -606,6 +849,33 @@ class ContextService:
                 )
             )
 
+        # 书根《写作笔记.md》是这本书的跨对话记忆：存在就作为必带候选装进
+        # 资料包（优先级 990，排在手选文件之后）；不存在、空白或读不出就
+        # 不装、不报错，也不让它再走后面的普通分区候选。
+        notes_record = next(
+            (
+                record
+                for record in files
+                if str(record.get("relative_path", "")).replace("\\", "/")
+                == BOOK_WRITING_NOTES_FILE_NAME
+            ),
+            None,
+        )
+        if notes_record is not None:
+            notes_file_id = notes_record.get("file_id")
+            if isinstance(notes_file_id, str) and notes_file_id not in selected_file_ids:
+                selected_file_ids.add(notes_file_id)
+                notes_candidate = self._read_project_candidate(
+                    snapshot,
+                    notes_record,
+                    source_type="project_writing_notes",
+                    priority=990,
+                    mandatory=True,
+                    project_revision=request.expected_project_revision,
+                )
+                if notes_candidate.eligible:
+                    candidates.append(notes_candidate)
+
         if request.active_chapter_id is not None:
             active_index = next(
                 (
@@ -692,6 +962,17 @@ class ContextService:
                         )
 
         section_priorities = {1: 760, 2: 770, 3: 800, 4: 790, 6: 750, 7: 720}
+        # 作者自命名夹子（非 0N_ 前缀，section_index=None）与书根文件和
+        # 默认模板分区同权参选：布局是作者自己的事，不因名字进不了上下文。
+        unsectioned_priority = 700
+        signals = _objective_signals(request.objective)
+        relevant_chapters = set(signals.chapter_numbers)
+        for number in signals.chapter_numbers:
+            relevant_chapters.update((number - 1, number + 1))
+        if request.active_chapter_id is not None:
+            for number in _chapter_numbers_in_text(request.active_chapter_id):
+                relevant_chapters.update((number - 1, number, number + 1))
+        relevant_chapters.discard(0)
         for record in files:
             file_id = record.get("file_id")
             section_index = record.get("section_index")
@@ -699,18 +980,54 @@ class ContextService:
             if (
                 not isinstance(file_id, str)
                 or file_id in selected_file_ids
-                or section_index not in CORE_SECTION_INDEXES
+                or (section_index is not None and section_index not in CORE_SECTION_INDEXES)
                 or kind not in CORE_FILE_KINDS
             ):
                 continue
+            priority = (
+                unsectioned_priority
+                if section_index is None
+                else section_priorities[int(section_index)]
+            )
+            eligible = True
+            exclusion_reason = None
+            relative_path = record.get("relative_path")
+            related = signals.matches(
+                str(relative_path) if isinstance(relative_path, str) else "",
+                frozenset(relevant_chapters),
+            )
+            if not related and (
+                signals.chapter_numbers
+                and section_index is not None
+                and int(section_index) == OUTLINE_SECTION_INDEX
+            ):
+                # Chapter outlines span every chapter and cannot be located by
+                # filename; keep them whenever the objective names a chapter.
+                related = True
+            if not related:
+                if signals.light:
+                    # Short, chat-like objectives get the minimal set: mandatory
+                    # chapters and hand-picked files only. The file stays
+                    # observable through the excluded list and the gate feed.
+                    eligible = False
+                    exclusion_reason = "objective_light_unrelated_section"
+                priority = min(priority, OBJECTIVE_UNRELATED_SECTION_PRIORITY)
             candidates.append(
                 self._read_project_candidate(
                     snapshot,
                     record,
                     source_type="project_section",
-                    priority=section_priorities[int(section_index)],
+                    priority=priority,
                     mandatory=False,
                     project_revision=request.expected_project_revision,
+                )
+                if eligible
+                else self._unavailable_file_candidate(
+                    record,
+                    source_type="project_section",
+                    priority=priority,
+                    mandatory=False,
+                    reason=exclusion_reason or "objective_light_unrelated_section",
                 )
             )
         return candidates
@@ -826,6 +1143,9 @@ class ContextService:
                 allowed_kinds=CONTEXT_READ_KINDS,
             )
             content = payload.get("content")
+            extraction = payload.get("extraction")
+            if isinstance(content, str):
+                content = extracted_context_text(content, extraction)
             if not isinstance(content, str) or not content.strip():
                 return self._unavailable_file_candidate(
                     record,
@@ -838,7 +1158,7 @@ class ContextService:
                 source_id=f"project-file:{file_id}",
                 source_type=source_type,
                 title=relative_path[:500],
-                authority=ContextAuthority.PROJECT_TRUTH,
+                authority=project_file_authority(record),
                 version=f"project-revision-{project_revision}",
                 source_hash=source_hash,
                 content=content,
@@ -876,7 +1196,7 @@ class ContextService:
             source_id=f"project-file:{file_id}",
             source_type=source_type,
             title=relative_path[:500],
-            authority=ContextAuthority.PROJECT_TRUTH,
+            authority=project_file_authority(record),
             version="project-file-unavailable",
             source_hash=source_hash,
             content="Project file was unavailable for this Context Pack.",

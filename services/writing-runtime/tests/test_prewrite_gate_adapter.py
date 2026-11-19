@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -190,6 +191,14 @@ def _run_gate(
         cwd=staging,
         input=json.dumps(request, ensure_ascii=False),
         text=True,
+        # 与 test_draft_gate_adapter.py 同一处理：生产路径
+        # （skill_executor.py 走 bytes + 显式 encode("utf-8")）不受终端影响，
+        # 但 text=True 默认按系统 ANSI 代码页编码 stdin（本机是 gbk）。
+        # 外部设了 PYTHONIOENCODING=utf-8 跑 pytest 时两边就打架，中文请求会
+        # UnicodeDecodeError，表面报成「JSONDecodeError: Expecting value」，
+        # 看着像代码回归其实是环境陷阱（2026-09-12 实测：prewrite 5 红，去掉前缀全绿）。
+        encoding="utf-8",
+        env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"},
         capture_output=True,
         check=False,
         timeout=30,

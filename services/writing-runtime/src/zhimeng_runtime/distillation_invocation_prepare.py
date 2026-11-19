@@ -244,7 +244,7 @@ class SourceImportDistillationPrepareService:
             project=project_binding,
             knowledge=knowledge,
             instruction=instruction,
-            provider=provider,
+            provider=provider_binding,
             anchor_catalog_id=catalog.catalog_id,
             anchor_catalog_hash=catalog.catalog_hash,
             anchor_count=catalog.anchor_count,
@@ -288,7 +288,7 @@ class SourceImportDistillationPrepareService:
                 project=project_binding,
                 knowledge=knowledge,
                 instruction=instruction,
-                provider=provider,
+                provider=provider_binding,
                 anchor_catalog=catalog,
             )
 

@@ -102,5 +102,5 @@ def test_project_kb_api_is_explicitly_unavailable_without_project_reader(
             "/api/v1/projects/project-000000000000000000000000/knowledge/kb-state"
         )
 
-    assert response.status_code == 503, response.text
-    assert response.json()["error"]["code"] == "project_kb_unavailable"
+    assert response.status_code == 404, response.text
+    assert response.json()["error"]["code"] == "project_kb_not_found"

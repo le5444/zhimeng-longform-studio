@@ -28,19 +28,16 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from zhimeng_runtime import skill_bundle
+
 # consume_kb_manager_context 用退出码 78 表示"门禁拦截"，不是崩溃
 GATE_BLOCKED_EXIT_CODE = 78
 DEFAULT_TIMEOUT_SECONDS = 300
-
-KB_MANAGER_RELATIVE = Path(".codex/skills/novel-kb-manager/scripts/kb_manager.py")
-CONSUMER_RELATIVE = Path(".codex/skills/novel-creation-suite/scripts/consume_kb_manager_context.py")
 
 
 class KnowledgeContextError(RuntimeError):
     code = "knowledge_context_failed"
 
-
-DISTILLATION_CARDS_RELATIVE = Path(".codex/skills/novel-distillation/library/cards.jsonl")
 
 # 从真卡里挑出「人能读、对写作有用」的字段。其余（校验梯、分数、来源、
 # 时间戳）是给系统看的，塞进提示词只会稀释信号，还会把文笔带偏。
@@ -155,34 +152,81 @@ class KnowledgeContext:
         }
 
 
-def _resolve(explicit: str | os.PathLike[str] | None, env_name: str, relative: Path) -> Path | None:
-    for candidate in (explicit, os.environ.get(env_name), Path.home() / relative):
+def _resolve(
+    explicit: str | os.PathLike[str] | None,
+    env_name: str,
+    relative: Path,
+    runtime_state_root: Path | None,
+) -> Path | None:
+    """显式传入 → 环境变量 → 随包快照 → 本机 `~/.codex/skills` 兜底。"""
+    for candidate in (explicit, os.environ.get(env_name)):
         if not candidate:
             continue
         path = Path(candidate)
         if path.is_file():
             return path
-    return None
+    return skill_bundle.find_file(relative, runtime_state_root)
 
 
 @dataclass
 class KnowledgeContextService:
     kb_manager_path: str | os.PathLike[str] | None = None
     consumer_path: str | os.PathLike[str] | None = None
+    runtime_state_root: Path | None = None
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS
     _clean_env: dict = field(default_factory=dict, init=False, repr=False)
 
     @property
     def kb_manager(self) -> Path | None:
-        return _resolve(self.kb_manager_path, "ZHIMENG_KB_MANAGER_SCRIPT", KB_MANAGER_RELATIVE)
+        return _resolve(
+            self.kb_manager_path,
+            "ZHIMENG_KB_MANAGER_SCRIPT",
+            skill_bundle.KB_MANAGER_SCRIPT,
+            self.runtime_state_root,
+        )
 
     @property
     def consumer(self) -> Path | None:
-        return _resolve(self.consumer_path, "ZHIMENG_KB_CONSUMER_SCRIPT", CONSUMER_RELATIVE)
+        return _resolve(
+            self.consumer_path,
+            "ZHIMENG_KB_CONSUMER_SCRIPT",
+            skill_bundle.KB_CONSUMER_SCRIPT,
+            self.runtime_state_root,
+        )
+
+    @property
+    def cards_path(self) -> Path | None:
+        """真卡库 cards.jsonl —— 知识注入要按 card_id 回这里捞人话内容。
+
+        找不到就返回 None：`build_writing_guidance` 会退回空指导而不是编造。
+        """
+        return skill_bundle.find_file(
+            skill_bundle.DISTILLATION_CARDS,
+            self.runtime_state_root,
+        )
+
+    @property
+    def library(self) -> Path | None:
+        """kb-manager 的 library 根，**必须独立于脚本位置解析**。
+
+        坑：kb_manager.py 默认用 `SKILL_ROOT/library`，即脚本旁边那个。
+        随包快照里的 `novel-kb-manager/library` 只有空骨架目录（打包脚本只
+        建目录不拷内容），而作者真实建档的书都在本机 `~/.codex` 那份库里。
+        如果跟着脚本走，随包一上线，`find_project_for_root` 会一本书都找不到，
+        知识增强静默全失效——而面板还显示「ready」。
+
+        所以这里按内容判据选库（必须含至少一个 `.kb`），并在调用时显式传
+        `--library`，让脚本来源和知识库来源解耦。
+        """
+        return skill_bundle.kb_manager_library(self.runtime_state_root)
 
     @property
     def available(self) -> bool:
-        return self.kb_manager is not None and self.consumer is not None
+        return (
+            self.kb_manager is not None
+            and self.consumer is not None
+            and self.library is not None
+        )
 
     def find_project_for_root(self, project_root: Path) -> str | None:
         """反查某本小说在 kb 库里叫什么项目名。
@@ -190,10 +234,10 @@ class KnowledgeContextService:
         kb 库里每个 `<名>.kb/manifest.json` 记着它绑定的 `creation_project_root`。
         没建档的书返回 None —— 调用方据此跳过知识增强，不报错。
         """
-        kb_manager = self.kb_manager
-        if kb_manager is None:
+        library = self.library
+        if library is None:
             return None
-        projects_dir = kb_manager.parent.parent / "library" / "projects"
+        projects_dir = library / "projects"
         if not projects_dir.is_dir():
             return None
 
@@ -240,21 +284,34 @@ class KnowledgeContextService:
     ) -> KnowledgeContext:
         kb_manager = self.kb_manager
         consumer = self.consumer
+        library = self.library
         if kb_manager is None or consumer is None:
             raise KnowledgeContextError("没找到 kb_manager.py 或 consume_kb_manager_context.py")
+        if library is None:
+            raise KnowledgeContextError(
+                "没找到装着 .kb 的 novel-kb-manager 知识库目录（随包快照里只有空骨架）"
+            )
 
         with tempfile.TemporaryDirectory(prefix="zhimeng-kb-ctx-") as workspace:
             context_pack = Path(workspace) / "ctx.json"
             writer_input = Path(workspace) / "writer_input.json"
 
+            # --library 是全局参数，必须放在子命令前面；显式传它，脚本才不会
+            # 去用自己旁边那个空的 library（见 self.library 的注释）。
             command = [
-                sys.executable, str(kb_manager), "assemble-context",
+                sys.executable, str(kb_manager),
+                "--library", str(library),
+                "assemble-context",
                 "--project", project,
                 "--chapter-id", chapter_id,
                 "--stage", stage,
                 "--max-chars", "2600",
                 "--out", str(context_pack),
             ]
+            cards = self.cards_path
+            if cards is not None:
+                # 同理：不显式传就会掉回 kb_manager.py 里硬编码的作者本机路径
+                command += ["--source-library", str(cards.parent)]
             for flag, value in (("--genre", genre), ("--platform", platform), ("--style", style)):
                 if value:
                     command += [flag, value]
@@ -291,11 +348,16 @@ class KnowledgeContextService:
 
             guidance = ""
             if writer_input.is_file():
+                cards_path = self.cards_path
                 try:
                     payload = json.loads(writer_input.read_text(encoding="utf-8"))
-                    guidance = build_writing_guidance(
-                        payload.get("must_consume") or {},
-                        Path.home() / DISTILLATION_CARDS_RELATIVE,
+                    guidance = (
+                        build_writing_guidance(
+                            payload.get("must_consume") or {},
+                            cards_path,
+                        )
+                        if cards_path is not None
+                        else ""
                     )
                 except (OSError, json.JSONDecodeError):
                     guidance = ""

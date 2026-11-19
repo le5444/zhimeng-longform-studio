@@ -23,8 +23,8 @@ class BackupModel(BaseModel):
 
 
 class RuntimeBackupManifest(BackupModel):
-    schema_id: Literal["zhimeng.runtime-backup-manifest.v1"] = Field(
-        default="zhimeng.runtime-backup-manifest.v1",
+    schema_id: Literal["zhimeng.runtime-backup-manifest.v1", "zhimeng.runtime-backup-manifest.v2"] = Field(
+        default="zhimeng.runtime-backup-manifest.v2",
         alias="schema",
     )
     backup_id: BackupId
@@ -38,19 +38,27 @@ class RuntimeBackupManifest(BackupModel):
     database_size_bytes: int = Field(ge=0)
     integrity_check: Literal["ok", "failed", "unavailable"]
     foreign_key_violations: int = Field(ge=0)
-    includes_secrets: Literal[False] = False
-    includes_novel_body: Literal[False] = False
+    # A full database can contain text copied into conversations and tool results.
+    # None means unverified, not absent. False is accepted only for old manifests.
+    includes_secrets: Literal[False] | None = None
+    includes_novel_body: Literal[False] | None = None
+    content_scope: Literal["runtime_database_unredacted"] | None = None
     includes_project_files: Literal[False] = False
     formal_draft_allowed: Literal[False] = False
-    policy_version: Literal["local-v1-runtime-backup-1"] = "local-v1-runtime-backup-1"
+    policy_version: Literal["local-v1-runtime-backup-1", "local-v1-runtime-backup-2"] = "local-v1-runtime-backup-2"
     manifest_hash: Sha256
 
     @model_validator(mode="after")
     def validate_manifest(self) -> "RuntimeBackupManifest":
-        if self.includes_secrets is not False:
-            raise ValueError("runtime backup cannot include secrets")
-        if self.includes_novel_body is not False:
-            raise ValueError("runtime backup cannot include novel body")
+        if self.schema_id == "zhimeng.runtime-backup-manifest.v1":
+            if (self.policy_version != "local-v1-runtime-backup-1"
+                    or self.includes_secrets is not False or self.includes_novel_body is not False
+                    or self.content_scope is not None):
+                raise ValueError("legacy runtime backup metadata mismatch")
+        elif (self.policy_version != "local-v1-runtime-backup-2"
+              or self.includes_secrets is not None or self.includes_novel_body is not None
+              or self.content_scope != "runtime_database_unredacted"):
+            raise ValueError("full database backup must disclose unredacted content and unverified sensitive text")
         if self.includes_project_files is not False:
             raise ValueError("runtime backup cannot include project files")
         if self.formal_draft_allowed is not False:
@@ -115,6 +123,9 @@ class RuntimeBackupSummary(BackupModel):
     integrity_check: Literal["ok", "failed", "unavailable"]
     manifest_hash: Sha256
     backup_relative_path: str = Field(min_length=1, max_length=512)
+    # Applies to legacy packages too, whose stored false flags are not evidence
+    # that the database was inspected or redacted.
+    content_scope: Literal["runtime_database_unredacted"] = "runtime_database_unredacted"
 
 
 class RuntimeBackupListResponse(BackupModel):
@@ -188,8 +199,9 @@ class RuntimeRestoreResponse(BackupModel):
 
 
 def runtime_backup_manifest_hash(manifest: RuntimeBackupManifest) -> str:
+    legacy = manifest.schema_id == "zhimeng.runtime-backup-manifest.v1"
     material = {
-        "schema": "zhimeng.runtime-backup-manifest-hash.v1",
+        "schema": "zhimeng.runtime-backup-manifest-hash.v1" if legacy else "zhimeng.runtime-backup-manifest-hash.v2",
         "backup_id": manifest.backup_id,
         "created_at": manifest.created_at.isoformat(),
         "product_version": manifest.product_version,
@@ -201,12 +213,14 @@ def runtime_backup_manifest_hash(manifest: RuntimeBackupManifest) -> str:
         "database_size_bytes": manifest.database_size_bytes,
         "integrity_check": manifest.integrity_check,
         "foreign_key_violations": manifest.foreign_key_violations,
-        "includes_secrets": False,
-        "includes_novel_body": False,
+        "includes_secrets": manifest.includes_secrets,
+        "includes_novel_body": manifest.includes_novel_body,
         "includes_project_files": False,
         "formal_draft_allowed": False,
         "policy_version": manifest.policy_version,
     }
+    if not legacy:
+        material["content_scope"] = manifest.content_scope
     return canonical_json_hash(material)
 
 

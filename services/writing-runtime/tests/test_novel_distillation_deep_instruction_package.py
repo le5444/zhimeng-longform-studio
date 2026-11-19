@@ -17,8 +17,8 @@ PACKAGE_ROOT = (
     REPO_ROOT / "adapters" / "builtin" / "novel-distillation-deep-instruction"
 )
 SOURCE_RELATIVE_PATH = "references/bundled-skills/novel-distillation/SKILL.md"
-SOURCE_SHA256 = "f4bffb45f6881ebb31ef2a4187ba92d5de4f6c241f7870308458e72bb9bfd003"
-SOURCE_BYTES = 25_674
+SOURCE_SHA256 = "4068f30ce891cad0f4e9ca688b2ea06515d687184d9d2ae81391cf1bc8a7d83d"
+SOURCE_BYTES = 25_673
 PACKAGE_ID = "novel-distillation.deep-instruction"
 
 

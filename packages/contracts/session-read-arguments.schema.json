@@ -1,0 +1,55 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "session_id": {
+      "description": "Conversation from session_search, or 'current'.",
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Session Id",
+      "type": "string"
+    },
+    "message_id": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Read this exact message in chunks. Without it, read a chronological message page.",
+      "title": "Message Id"
+    },
+    "after_ordinal": {
+      "default": 0,
+      "description": "Read messages after this ordinal. Use next_after_ordinal to continue.",
+      "minimum": 0,
+      "title": "After Ordinal",
+      "type": "integer"
+    },
+    "limit": {
+      "default": 10,
+      "maximum": 30,
+      "minimum": 1,
+      "title": "Limit",
+      "type": "integer"
+    },
+    "start_offset": {
+      "default": 0,
+      "description": "For a single message, continue at its next_start_offset. Offsets refer to masked text.",
+      "minimum": 0,
+      "title": "Start Offset",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "session_id"
+  ],
+  "title": "SessionReadArguments",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/session-read-arguments.schema.json"
+}

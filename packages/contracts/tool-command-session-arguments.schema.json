@@ -1,0 +1,189 @@
+{
+  "$defs": {
+    "CommandSessionCursor": {
+      "additionalProperties": false,
+      "properties": {
+        "stderr": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Stderr",
+          "type": "integer"
+        },
+        "stdout": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Stdout",
+          "type": "integer"
+        }
+      },
+      "title": "CommandSessionCursor",
+      "type": "object"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/tool-command-session-arguments.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "anyOf": [
+        {
+          "properties": {
+            "action": {
+              "const": "list"
+            }
+          }
+        },
+        {
+          "properties": {
+            "session_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "session_id"
+          ]
+        }
+      ]
+    },
+    {
+      "anyOf": [
+        {
+          "properties": {
+            "action": {
+              "enum": [
+                "read",
+                "stop",
+                "list",
+                "resize"
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "input": {
+              "minLength": 1
+            }
+          },
+          "required": [
+            "input"
+          ]
+        },
+        {
+          "properties": {
+            "close_stdin": {
+              "const": true
+            }
+          },
+          "required": [
+            "close_stdin"
+          ]
+        }
+      ]
+    }
+  ],
+  "properties": {
+    "action": {
+      "enum": [
+        "read",
+        "input",
+        "stop",
+        "list",
+        "resize"
+      ],
+      "title": "Action",
+      "type": "string"
+    },
+    "close_stdin": {
+      "default": false,
+      "description": "For action input, true sends EOF after any supplied text; true also works on its own.",
+      "title": "Close Stdin",
+      "type": "boolean"
+    },
+    "columns": {
+      "anyOf": [
+        {
+          "maximum": 32767,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Columns"
+    },
+    "cursor": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CommandSessionCursor"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Byte offsets from the previous result's cursor or next_read.cursor. Pass both stdout and stderr to continue reading; omitted/null starts at byte zero."
+    },
+    "encoding": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Input encoding when different from the command's reported stdin_encoding, for example utf-8.",
+      "title": "Encoding"
+    },
+    "input": {
+      "default": "",
+      "description": "Text to send for action input, including its line ending: for example 'hello\n'. A single '\n' submits an empty line.",
+      "title": "Input",
+      "type": "string"
+    },
+    "rows": {
+      "anyOf": [
+        {
+          "maximum": 32767,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Rows"
+    },
+    "session_id": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The command session_id returned by computer_run_command or command_session list.",
+      "title": "Session Id"
+    },
+    "wait_ms": {
+      "default": 0,
+      "description": "Wait for new output in integer milliseconds: 1000 means one second; 0 returns immediately.",
+      "minimum": 0,
+      "title": "Wait Ms",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "action"
+  ],
+  "title": "CommandSessionArguments",
+  "type": "object"
+}

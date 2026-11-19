@@ -1,0 +1,153 @@
+{
+  "$defs": {
+    "TextEditArguments": {
+      "additionalProperties": false,
+      "properties": {
+        "find": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "title": "Find",
+          "type": "string"
+        },
+        "replace": {
+          "maxLength": 8388608,
+          "title": "Replace",
+          "type": "string"
+        },
+        "replace_all": {
+          "default": false,
+          "title": "Replace All",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "find",
+        "replace"
+      ],
+      "title": "TextEditArguments",
+      "type": "object"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/tool-edit-file-arguments.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Apply one replacement or an ordered batch, committing once.",
+  "oneOf": [
+    {
+      "not": {
+        "required": [
+          "edits"
+        ]
+      },
+      "properties": {
+        "find": {
+          "type": "string"
+        },
+        "replace": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "find",
+        "replace"
+      ]
+    },
+    {
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "find"
+            ]
+          },
+          {
+            "required": [
+              "replace"
+            ]
+          },
+          {
+            "required": [
+              "replace_all"
+            ]
+          }
+        ]
+      },
+      "properties": {
+        "edits": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "edits"
+      ]
+    }
+  ],
+  "properties": {
+    "edits": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/TextEditArguments"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Ordered replacements in one file. All must match before one save; use instead of top-level find/replace.",
+      "title": "Edits"
+    },
+    "find": {
+      "anyOf": [
+        {
+          "maxLength": 20000,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Find"
+    },
+    "note": {
+      "default": "",
+      "maxLength": 500,
+      "title": "Note",
+      "type": "string"
+    },
+    "path": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "title": "Path",
+      "type": "string"
+    },
+    "replace": {
+      "anyOf": [
+        {
+          "maxLength": 8388608,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Replace"
+    },
+    "replace_all": {
+      "default": false,
+      "title": "Replace All",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "path"
+  ],
+  "title": "ProjectEditFileArguments",
+  "type": "object"
+}

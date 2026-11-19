@@ -1,4 +1,4 @@
-* text=auto
+* text=auto eol=lf
 
 *.py text eol=lf
 *.ts text eol=lf
@@ -10,6 +10,8 @@
 *.yml text eol=lf
 *.yaml text eol=lf
 *.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
 
 *.png binary
 *.jpg binary

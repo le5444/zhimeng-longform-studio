@@ -1,0 +1,577 @@
+{
+  "$defs": {
+    "CapabilityExtension": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Version"
+        },
+        "config": {
+          "$ref": "#/$defs/JsonValue"
+        }
+      },
+      "required": [
+        "version",
+        "config"
+      ],
+      "title": "CapabilityExtension",
+      "type": "object"
+    },
+    "CapabilityName": {
+      "enum": [
+        "streaming",
+        "cancel",
+        "resume",
+        "checkpoints",
+        "tool_calls",
+        "file_read",
+        "file_write",
+        "shell",
+        "mcp",
+        "skills",
+        "subagents",
+        "compaction",
+        "approvals",
+        "artifacts"
+      ],
+      "title": "CapabilityName",
+      "type": "string"
+    },
+    "CapabilityProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "protocol_version": {
+          "minLength": 1,
+          "title": "Protocol Version",
+          "type": "string"
+        },
+        "names": {
+          "items": {
+            "$ref": "#/$defs/CapabilityName"
+          },
+          "title": "Names",
+          "type": "array"
+        },
+        "extensions": {
+          "patternProperties": {
+            "^x-[a-z0-9][a-z0-9._/-]*$": {
+              "$ref": "#/$defs/CapabilityExtension"
+            }
+          },
+          "propertyNames": {
+            "maxLength": 128,
+            "minLength": 3
+          },
+          "title": "Extensions",
+          "type": "object"
+        }
+      },
+      "required": [
+        "protocol_version",
+        "names",
+        "extensions"
+      ],
+      "title": "CapabilityProfile",
+      "type": "object"
+    },
+    "CommandBackgroundEvent": {
+      "properties": {
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "event_id": {
+          "title": "Event Id",
+          "type": "string"
+        },
+        "command_session_id": {
+          "title": "Command Session Id",
+          "type": "string"
+        },
+        "owner_session_id": {
+          "title": "Owner Session Id",
+          "type": "string"
+        },
+        "owner_run_id": {
+          "title": "Owner Run Id",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "exit_code": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Exit Code"
+        },
+        "ended_at": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ended At"
+        },
+        "delivery_state": {
+          "enum": [
+            "pending",
+            "delivered",
+            "suppressed"
+          ],
+          "title": "Delivery State",
+          "type": "string"
+        },
+        "delivered_run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delivered Run Id"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        }
+      },
+      "required": [
+        "sequence",
+        "event_id",
+        "command_session_id",
+        "owner_session_id",
+        "owner_run_id",
+        "status",
+        "exit_code",
+        "ended_at",
+        "delivery_state",
+        "payload"
+      ],
+      "title": "CommandBackgroundEvent",
+      "type": "object"
+    },
+    "ErrorDetail": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "request_id": {
+          "title": "Request Id",
+          "type": "string"
+        },
+        "retryable": {
+          "title": "Retryable",
+          "type": "boolean"
+        },
+        "details": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Details"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "request_id",
+        "retryable"
+      ],
+      "title": "ErrorDetail",
+      "type": "object"
+    },
+    "ErrorEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.error.v1",
+          "default": "zhimeng.error.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "error": {
+          "$ref": "#/$defs/ErrorDetail"
+        }
+      },
+      "required": [
+        "error"
+      ],
+      "title": "ErrorEnvelope",
+      "type": "object"
+    },
+    "ExecutorIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "executor_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Executor Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ExecutorKind"
+        },
+        "implementation": {
+          "minLength": 1,
+          "title": "Implementation",
+          "type": "string"
+        },
+        "version": {
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "protocol_version": {
+          "minLength": 1,
+          "title": "Protocol Version",
+          "type": "string"
+        },
+        "instance_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Instance Id"
+        }
+      },
+      "required": [
+        "executor_id",
+        "kind",
+        "implementation",
+        "version",
+        "protocol_version",
+        "instance_id"
+      ],
+      "title": "ExecutorIdentity",
+      "type": "object"
+    },
+    "ExecutorKind": {
+      "enum": [
+        "embedded",
+        "process",
+        "remote"
+      ],
+      "title": "ExecutorKind",
+      "type": "string"
+    },
+    "JsonValue": {},
+    "ProjectRevision": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fingerprint",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "revision",
+        "fingerprint",
+        "observed_at"
+      ],
+      "title": "ProjectRevision",
+      "type": "object"
+    },
+    "Run": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "zhimeng.execution-run.v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "ordinal": {
+          "minimum": 1,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/RunStatus"
+        },
+        "objective": {
+          "minLength": 1,
+          "title": "Objective",
+          "type": "string"
+        },
+        "origin_kind": {
+          "default": "user",
+          "enum": [
+            "user",
+            "command_completion"
+          ],
+          "title": "Origin Kind",
+          "type": "string"
+        },
+        "stop_generation": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Stop Generation",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Started At"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Completed At"
+        },
+        "executor": {
+          "$ref": "#/$defs/ExecutorIdentity"
+        },
+        "capabilities": {
+          "$ref": "#/$defs/CapabilityProfile"
+        },
+        "project_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProjectRevision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correlation_id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "causation_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Causation Id"
+        },
+        "last_activity_sequence": {
+          "minimum": 0,
+          "title": "Last Activity Sequence",
+          "type": "integer"
+        },
+        "checkpoint_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Checkpoint Id"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorEnvelope"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema",
+        "run_id",
+        "session_id",
+        "ordinal",
+        "status",
+        "objective",
+        "created_at",
+        "updated_at",
+        "started_at",
+        "completed_at",
+        "executor",
+        "capabilities",
+        "project_revision",
+        "correlation_id",
+        "causation_id",
+        "last_activity_sequence",
+        "checkpoint_id",
+        "error"
+      ],
+      "title": "Run",
+      "type": "object"
+    },
+    "RunStatus": {
+      "enum": [
+        "queued",
+        "starting",
+        "running",
+        "awaiting_approval",
+        "paused",
+        "cancelling",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "interrupted"
+      ],
+      "title": "RunStatus",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "events": {
+      "items": {
+        "$ref": "#/$defs/CommandBackgroundEvent"
+      },
+      "title": "Events",
+      "type": "array"
+    },
+    "next_cursor": {
+      "title": "Next Cursor",
+      "type": "integer"
+    },
+    "active_run": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Run"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "latest_run": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Run"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "has_running_commands": {
+      "title": "Has Running Commands",
+      "type": "boolean"
+    },
+    "pending_count": {
+      "title": "Pending Count",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "events",
+    "next_cursor",
+    "active_run",
+    "latest_run",
+    "has_running_commands",
+    "pending_count"
+  ],
+  "title": "CommandBackgroundResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/command-background-events.schema.json"
+}

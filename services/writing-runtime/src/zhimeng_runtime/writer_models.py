@@ -58,7 +58,7 @@ def _writer_task_schema_invariants(schema: dict[str, object]) -> None:
         "the Writer task binds one completed three-step Creation workflow",
         "Writer intent and the presence of bound prose targets determine the mode",
         "an upstream blocked handoff remains risk evidence and does not authorize project writes",
-        "author_review_change_proposal requires an active chapter and prose targets",
+        "author_review_change_proposal requires bound targets; prose targets additionally require an active chapter",
         "selected card IDs and hashes preserve the canonical NLCL route order",
         "formal_draft_allowed and writes_project_truth remain false",
         "task_hash hashes every field except task_hash",
@@ -69,7 +69,7 @@ def _writer_result_schema_invariants(schema: dict[str, object]) -> None:
     schema["x-zhimeng-invariants"] = [
         "the result binds one immutable Writer task and Agent candidate by identity and hash",
         "author_review_change_proposal requires exactly one same-Run Agent ChangeSet",
-        "the ChangeSet updates exactly the task's prose targets from their bound hashes",
+        "the ChangeSet updates only task-bound targets from their bound hashes; prose targets are complete and project-file targets may be a selected subset",
         "repair_only permits only repair_plan and forbids every ChangeSet identity",
         "formal_draft_allowed and writes_project_truth remain false",
         "result_hash hashes every field except result_hash",
@@ -89,14 +89,19 @@ class WriterTargetFile(WriterModel):
     file_id: FileId
     relative_path: RelativeProjectPath
     content_hash: Sha256
-    content_role: Literal["prose_body"] = "prose_body"
+    content_role: Literal["prose_body", "project_file"] = "prose_body"
 
     @model_validator(mode="after")
-    def validate_prose_path(self) -> "WriterTargetFile":
-        if not self.relative_path.startswith("05_\u6b63\u6587\u5185\u5bb9/"):
-            raise ValueError("Writer targets must remain inside 05_\u6b63\u6587\u5185\u5bb9")
-        if not self.relative_path.casefold().endswith((".md", ".txt")):
-            raise ValueError("Writer prose targets must be Markdown or text files")
+    def validate_target_path(self) -> "WriterTargetFile":
+        if self.content_role == "prose_body" and not self.relative_path.startswith("05_\u6b63\u6587\u5185\u5bb9/"):
+            raise ValueError("Writer prose targets must remain inside 05_\u6b63\u6587\u5185\u5bb9")
+        if self.content_role == "project_file" and self.relative_path.startswith("05_\u6b63\u6587\u5185\u5bb9/"):
+            raise ValueError("Writer prose files must use the prose_body target role")
+        allowed_extensions = (".md", ".txt") if self.content_role == "prose_body" else (
+            ".json", ".md", ".txt", ".yaml", ".yml"
+        )
+        if not self.relative_path.casefold().endswith(allowed_extensions):
+            raise ValueError("Writer targets must be supported text files")
         return self
 
 
@@ -175,9 +180,16 @@ class WriterTask(WriterModel):
         if self.knowledge_fingerprint is None and self.selected_card_hashes:
             raise ValueError("Writer selected card hashes require a knowledge fingerprint")
         if self.mode == "author_review_change_proposal":
-            if self.active_chapter_id is None or not self.target_files:
+            if not self.target_files:
                 raise ValueError(
-                    "author-review Writer tasks require an active chapter and prose targets"
+                    "author-review Writer tasks require prose targets or selected project files"
+                )
+            if (
+                self.active_chapter_id is None
+                and any(target.content_role == "prose_body" for target in self.target_files)
+            ):
+                raise ValueError(
+                    "author-review Writer prose targets require an active chapter"
                 )
         expected_id = writer_task_id(
             run_id=self.run_id,
@@ -245,7 +257,7 @@ class WriterCandidateResult(WriterModel):
                 raise ValueError("author-review Writer results require change_proposal")
             if self.change_set_id is None or not self.target_files:
                 raise ValueError(
-                    "author-review Writer results require a ChangeSet and prose targets"
+                    "author-review Writer results require a ChangeSet and prose targets or selected project files"
                 )
         expected_id = writer_candidate_result_id(
             writer_task_id=self.writer_task_id,
@@ -575,8 +587,23 @@ def _validate_change_set_binding(
         raise ValueError("Writer ChangeSet does not bind the same Run and project revision")
 
     expected = {target.relative_path.casefold(): target for target in task.target_files}
-    if len(change_set.changes) != len(expected):
-        raise ValueError("Writer ChangeSet must update exactly the task target files")
+    has_prose_target = any(
+        target.content_role == "prose_body" for target in task.target_files
+    )
+    changed_paths = {
+        change.relative_path.casefold() for change in change_set.changes
+    }
+    required_prose_paths = {
+        path
+        for path, target in expected.items()
+        if target.content_role == "prose_body"
+    }
+    if (
+        not change_set.changes
+        or not required_prose_paths.issubset(changed_paths)
+        or len(change_set.changes) > len(expected)
+    ):
+        raise ValueError("Writer ChangeSet must update the task target files")
     for change in change_set.changes:
         target = expected.get(change.relative_path.casefold())
         if (
@@ -584,9 +611,13 @@ def _validate_change_set_binding(
             or change.operation is not ChangeOperation.UPDATE
             or change.file_id != target.file_id
             or change.before_sha256 != target.content_hash
-            or change.post_draft_gate_scope != "prose_body"
+            or change.post_draft_gate_scope != (
+                "prose_body" if target.content_role == "prose_body" else "none"
+            )
         ):
-            raise ValueError("Writer ChangeSet contains an unbound or stale prose target")
+            raise ValueError(
+                "Writer ChangeSet contains an unbound or stale prose target or project-file target"
+            )
     return change_hash
 
 

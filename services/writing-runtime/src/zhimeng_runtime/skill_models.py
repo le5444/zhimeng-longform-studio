@@ -502,6 +502,21 @@ class ManagedSkillVersionRecord(ManagedSkillModel):
     imported_at: datetime
 
 
+class ManagedSkillUnavailableVersionRecord(ManagedSkillModel):
+    """Historical import retained in the database after its snapshot disappeared."""
+
+    skill_version_id: str = Field(pattern=r"^skill-version-[0-9a-f]{32}$")
+    skill_id: str = Field(
+        min_length=3,
+        max_length=128,
+        pattern=r"^[a-z0-9][a-z0-9._-]*[a-z0-9]$",
+    )
+    version: str = Field(min_length=1, max_length=128)
+    package_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    imported_at: datetime
+    reason: Literal["snapshot_missing"] = "snapshot_missing"
+
+
 class ManagedSkillActivationRecord(ManagedSkillModel):
     scope: ManagedSkillScope
     skill_id: str = Field(
@@ -549,6 +564,9 @@ class ManagedSkillLifecycleCatalogResponse(ManagedSkillModel):
     )
     scope: ManagedSkillScope
     versions: list[ManagedSkillVersionRecord]
+    unavailable_versions: list[ManagedSkillUnavailableVersionRecord] = Field(
+        default_factory=list
+    )
     activations: list[ManagedSkillActivationRecord]
 
 

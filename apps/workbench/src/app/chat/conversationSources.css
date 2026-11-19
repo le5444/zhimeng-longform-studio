@@ -1,0 +1,19 @@
+.zm-source-link { display: inline-flex; align-items: center; gap: 5px; border: 0; padding: 3px 0; background: none; color: var(--zm-accent); font: inherit; cursor: pointer; }
+.zm-source-link svg { width: 13px; height: 13px; flex: none; }
+.zm-source-excerpts { margin: 0; padding: 0; list-style: none; }
+.zm-source-excerpts li { padding: 10px 0; border-bottom: 1px solid var(--zm-line); }
+.zm-source-excerpts p { margin: 0 0 6px; color: var(--zm-fg-3); font-size: var(--zm-fs-1); }
+.zm-source-excerpts pre { margin: 0 0 6px; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.zm-source-dialog { width: min(820px, calc(100% - 32px)); height: min(760px, calc(100dvh - 40px)); max-width: none; max-height: none; padding: 0; border: 1px solid var(--zm-line); border-radius: 8px; color: var(--zm-fg); background: var(--zm-bg); box-shadow: var(--zm-shadow-3); }
+.zm-source-dialog[open] { display: flex; flex-direction: column; }
+.zm-source-dialog::backdrop { background: rgb(0 0 0 / 30%); }
+.zm-source-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid var(--zm-line); }
+.zm-source-dialog > header div { min-width: 0; overflow-wrap: anywhere; }
+.zm-source-dialog h2 { margin: 0; font-size: var(--zm-fs-4); }
+.zm-source-dialog header p { margin: 6px 0 0; color: var(--zm-fg-2); font-size: var(--zm-fs-2); }
+.zm-source-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--zm-line); }
+.zm-source-toolbar span { flex: 1; min-width: 0; font-size: var(--zm-fs-2); }
+.zm-source-body { flex: 1; min-height: 0; padding: 18px 20px; overflow: auto; overscroll-behavior: contain; }
+.zm-source-body time, .zm-source-dialog footer { color: var(--zm-fg-3); font-size: var(--zm-fs-1); }
+.zm-source-body pre { margin: 12px 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.75; }
+.zm-source-dialog footer { padding: 12px 20px; border-top: 1px solid var(--zm-line); }

@@ -37,6 +37,7 @@ class RuntimeSettings(BaseModel):
     trusted_source_roots: tuple[Path, ...] = ()
     trusted_skill_roots: tuple[Path, ...] = ()
     managed_skill_root: Path | None = DEFAULT_MANAGED_SKILL_ROOT
+    skill_contracts_root: Path | None = None
     tomato_skill_root: Path | None = None
     tomato_downloader_script: Path | None = None
     tomato_download_dir: Path = Path.home() / "Desktop" / "番茄下载"
@@ -53,7 +54,7 @@ class RuntimeSettings(BaseModel):
     agent_provider_model: str | None = None
     agent_provider_accepted_reported_models: tuple[str, ...] = ()
     agent_provider_timeout_seconds: float = Field(default=120.0, ge=5.0, le=600.0)
-    agent_provider_max_tokens: int = Field(default=4096, ge=128, le=131_072)
+    agent_provider_max_tokens: int = Field(default=16384, ge=128, le=131_072)
     agent_provider_temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     allowed_origins: tuple[str, ...] = DEFAULT_ALLOWED_ORIGINS
     sse_heartbeat_seconds: float = Field(default=15.0, ge=0.05, le=300.0)
@@ -100,6 +101,19 @@ class RuntimeSettings(BaseModel):
         candidate = value.expanduser()
         if not candidate.is_absolute():
             raise ValueError("managed Skill root must be an absolute path")
+        return candidate
+
+    @field_validator("skill_contracts_root")
+    @classmethod
+    def validate_skill_contracts_root(cls, value: Path | None) -> Path | None:
+        # None 表示"按源码布局推断"（<repo>/packages/contracts）。那套推断在
+        # portable bundle 里必然落空——包内是 runtime/src/zhimeng_runtime，
+        # parents[4] 会指到包外——所以打包时必须显式给这个值。
+        if value is None:
+            return None
+        candidate = value.expanduser()
+        if not candidate.is_absolute():
+            raise ValueError("Skill contracts root must be an absolute path")
         return candidate
 
     @field_validator(
@@ -250,13 +264,9 @@ class RuntimeSettings(BaseModel):
             raise ValueError(
                 "Agent provider API key and credential reference must be configured together"
             )
-        if (
-            self.agent_provider_accepted_reported_models
-            and self.agent_provider_model is None
-        ):
-            raise ValueError(
-                "Agent provider accepted reported models require a configured provider"
-            )
+        # accepted_reported_models 不要求 env 配置 provider：模型也可以在
+        # 界面（provider-settings.json）里配置，接受名单对运行时实际解析出的
+        # provider 全局生效，配置期无法判断是否“没有 provider”。
         return self
 
     @classmethod
@@ -327,6 +337,10 @@ class RuntimeSettings(BaseModel):
                 source.get("ZHIMENG_MANAGED_SKILL_ROOT"),
                 default=DEFAULT_MANAGED_SKILL_ROOT,
             ),
+            skill_contracts_root=_optional_adapter_path(
+                source.get("ZHIMENG_SKILL_CONTRACTS_ROOT"),
+                default=None,
+            ),
             tomato_skill_root=_optional_adapter_path(
                 source.get("ZHIMENG_TOMATO_SKILL_ROOT"),
                 default=None,
@@ -372,7 +386,7 @@ class RuntimeSettings(BaseModel):
                 source.get("ZHIMENG_AGENT_PROVIDER_TIMEOUT_SECONDS", "120")
             ),
             agent_provider_max_tokens=int(
-                source.get("ZHIMENG_AGENT_PROVIDER_MAX_TOKENS", "4096")
+                source.get("ZHIMENG_AGENT_PROVIDER_MAX_TOKENS", "16384")
             ),
             agent_provider_temperature=float(
                 source.get("ZHIMENG_AGENT_PROVIDER_TEMPERATURE", "0.7")

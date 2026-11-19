@@ -18,6 +18,12 @@ coverage/
 .runtime/
 .codex-runtime/
 adapters/builtin/snapshots/
+
+# 四套技能包：程序与 SKILL.md 进版本管理；
+# library/ 是 GB 级知识库与下载原文，只留本机（打包 EXE 时另行纳入受管快照）
+# library/ 里的原著与报告不入库，但 cards.jsonl 是知识本体（8MB），要进版本管理
+skills/*/library/*
+!skills/novel-distillation/library/cards.jsonl
 *.sqlite3
 *.sqlite3-shm
 *.sqlite3-wal
@@ -50,11 +56,11 @@ artifacts/
 小说目录.txt
 
 # Local conversations, handoff notes, and machine-only material
-AGENTS.md
 .agents/
 .claude/
 .codex/
 .workbuddy/
+.workbuddy-ai/
 参考项目_github/
 system-repair-backups/
 qq-group-*-raw.jsonl
@@ -75,4 +81,43 @@ evidence/project-kb-e2e-targeted/
 
 # Local instruction extraction
 docs/当前目标详细-*.md
+docs/当前目标详述-*.md
 docs/用户指令要求-*.md
+
+# Local workspace clutter. These are backups, caches, screenshots and runtime
+# state; none of them belongs to the product source or a release bundle.
+/.backup/
+/资料/
+/历史归档/
+/.shots/
+/.reasonix/
+/data/
+/apps/workbench/.vite-cache/
+/services/writing-runtime/.runtime/
+# 打包用的四套 Skills 快照由 scripts/stage_four_skills_runtime.py 从 skills/ 重新生成，不入库
+/desktop_packaging/resources/
+/.audit_openapi.json
+/__shot.png
+/current-ui-screenshot.png
+/live-agent-target-workbench.png
+/ui-*.png
+/Cursor窗口接手包-*/
+/GitHub吸收项目总表-*.md
+
+# 截图与误生成产物（2026-08 逐文件核对时归档）
+apps/workbench/.shots/
+apps/workbench/apps/
+apps/workbench/dev/
+apps/workbench/*.png
+services/writing-runtime/src/data/
+apps/workbench/dev/
+
+# 研究资料与大证据文件不入库
+资料/
+evidence/p0-storage*.json
+skills/**/*.bak*
+skills/**/*_applied_*
+.vite-cache/
+
+# 审阅证据夹：含疑似密钥原文与私密材料，只留本机
+evidence/

@@ -1,5 +1,56 @@
 {
   "$defs": {
+    "FileTextExtraction": {
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "enum": [
+            "docx",
+            "xlsx",
+            "docm",
+            "xlsm"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "parser": {
+          "const": "openxml-text-v1",
+          "title": "Parser",
+          "type": "string"
+        },
+        "read_only": {
+          "const": true,
+          "title": "Read Only",
+          "type": "boolean"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        },
+        "source_bytes": {
+          "minimum": 0,
+          "title": "Source Bytes",
+          "type": "integer"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "format",
+        "parser",
+        "read_only",
+        "source_sha256",
+        "source_bytes"
+      ],
+      "title": "FileTextExtraction",
+      "type": "object"
+    },
     "ProjectFile": {
       "additionalProperties": false,
       "properties": {
@@ -133,6 +184,17 @@
     "content": {
       "title": "Content",
       "type": "string"
+    },
+    "extraction": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FileTextExtraction"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [

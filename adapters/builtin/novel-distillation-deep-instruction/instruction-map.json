@@ -2,8 +2,8 @@
   "schema": "zhimeng.distillation-instruction-map.v1",
   "package_id": "novel-distillation.deep-instruction",
   "source_path": "references/bundled-skills/novel-distillation/SKILL.md",
-  "source_sha256": "f4bffb45f6881ebb31ef2a4187ba92d5de4f6c241f7870308458e72bb9bfd003",
-  "source_bytes": 25674,
+  "source_sha256": "4068f30ce891cad0f4e9ca688b2ea06515d687184d9d2ae81391cf1bc8a7d83d",
+  "source_bytes": 25673,
   "source_line_count": 262,
   "contract_path": "instruction-contract.json",
   "included_ranges": [

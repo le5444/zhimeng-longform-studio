@@ -1,0 +1,73 @@
+{
+  "$defs": {
+    "MemoryProposal": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "default": "add",
+          "enum": [
+            "add",
+            "replace",
+            "remove"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "text": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Text",
+          "type": "string"
+        },
+        "old_text": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Old Text"
+        },
+        "source_message_id": {
+          "minLength": 1,
+          "title": "Source Message Id",
+          "type": "string"
+        },
+        "evidence": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Evidence",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_message_id",
+        "evidence"
+      ],
+      "title": "MemoryProposal",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "changes": {
+      "items": {
+        "$ref": "#/$defs/MemoryProposal"
+      },
+      "maxItems": 12,
+      "title": "Changes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "changes"
+  ],
+  "title": "MemoryExtraction",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimeng.local/contracts/memory-extraction.schema.json"
+}

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import threading
 import time
 from collections.abc import AsyncIterator, Mapping, Sequence
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -16,16 +19,25 @@ from zhimeng_runtime.agent_provider import (
     AgentProviderError,
     ProviderCompleted,
     ProviderEvent,
+    ProviderReasoningDelta,
     ProviderTextDelta,
     ProviderToolCall,
     ProviderToolDefinition,
 )
 from zhimeng_runtime.agent_models import AgentRunResumeRequest
 from zhimeng_runtime.agent_service import (
+    MAX_CONSECUTIVE_STREAM_RESUMES,
+    MAX_TURN_STREAM_RETRIES,
+    _SESSION_TITLE_PROMPT,
     AgentService,
     AgentUnavailableError,
     ToolExecutionResult,
+    _author_facing_provider_failure,
 )
+from zhimeng_runtime.project_kb_models import ProjectKbRebuildRequest, ProjectKbStatus
+from zhimeng_runtime.project_kb_service import ProjectKbService
+from zhimeng_runtime.project_reader import ProjectReader
+from zhimeng_runtime.context_models import canonical_json_hash
 from zhimeng_runtime.agent_store import (
     AgentContextPackConflict,
     AgentContextPackSourceUnavailable,
@@ -48,6 +60,7 @@ from zhimeng_runtime.execution_protocol import (
     CapabilityProfile,
     ExecutorIdentity,
     ExecutorKind,
+    MessageUsage,
     ProjectRevision,
     Run,
     RunStatus,
@@ -68,6 +81,17 @@ PROJECT_ID = "project-0123456789abcdef01234567"
 FINGERPRINT = "b" * 64
 PROJECT_KB_STATE_ID = "project-kb-state-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 PROJECT_KB_MANIFEST_HASH = "c" * 64
+
+
+def test_quota_403_is_not_reported_as_invalid_api_key() -> None:
+    error = AgentProviderError(
+        "HTTP 403", code="agent_provider_http_error", retryable=False,
+        details={"upstream_status": 403,
+                 "upstream_excerpt": '{"error":{"code":"insufficient_user_quota"}}'},
+    )
+    message = _author_facing_provider_failure(error)
+    assert "额度不足" in message
+    assert "密钥被拒" not in message
 
 
 class CurrentProjectKbVerifier:
@@ -130,6 +154,19 @@ class TrackingProjectKbVerifier(CurrentProjectKbVerifier):
             self.lease_released.set()
 
 
+def _is_session_naming_request(messages: Sequence[Mapping[str, object]]) -> bool:
+    """第一轮收尾后服务会额外打一次「给这段对话起名字」的请求。
+
+    它不是对话回合：不计进 start_count / messages / messages_by_turn 这些
+    「对话向 provider 要了什么」的账本，只单独记 naming_request_count，
+    谁在起名上出问题可以查到它。
+    """
+    return any(
+        message.get("role") == "system" and message.get("content") == _SESSION_TITLE_PROMPT
+        for message in messages
+    )
+
+
 class ScriptedProvider:
     def __init__(
         self,
@@ -143,6 +180,7 @@ class ScriptedProvider:
         self.before_events = before_events
         self.started = asyncio.Event()
         self.start_count = 0
+        self.naming_request_count = 0
         self.messages: list[dict[str, str]] = []
 
     @property
@@ -176,6 +214,11 @@ class ScriptedProvider:
         tools: Sequence[ProviderToolDefinition] = (),
     ) -> AsyncIterator[ProviderEvent]:
         del tools
+        if _is_session_naming_request(messages):
+            self.naming_request_count += 1
+            yield ProviderTextDelta("测试会话起名")
+            yield ProviderCompleted("stop", None)
+            return
         self.start_count += 1
         self.messages = [dict(message) for message in messages]
         self.started.set()
@@ -204,6 +247,11 @@ class TurnScriptedProvider(ScriptedProvider):
         tools: Sequence[ProviderToolDefinition] = (),
     ) -> AsyncIterator[ProviderEvent]:
         del tools
+        if _is_session_naming_request(messages):
+            self.naming_request_count += 1
+            yield ProviderTextDelta("测试会话起名")
+            yield ProviderCompleted("stop", None)
+            return
         self.start_count += 1
         self.started.set()
         self.messages_by_turn.append([dict(message) for message in messages])
@@ -214,6 +262,95 @@ class TurnScriptedProvider(ScriptedProvider):
                 return
             await asyncio.sleep(0.01)
             yield event
+
+
+class TruncationThenContinuationProvider(TurnScriptedProvider):
+    """第一轮正常吐字后被 token 上限掐断（provider 层 raise），
+    第二轮应当收到截断前文 + 续写指令，并把后半段补完。"""
+
+    def __init__(self, turns: list[list[ProviderEvent]]) -> None:
+        super().__init__(turns)
+
+    async def stream_chat(
+        self,
+        messages: Sequence[Mapping[str, object]],
+        *,
+        cancel_event: asyncio.Event,
+        tools: Sequence[ProviderToolDefinition] = (),
+    ) -> AsyncIterator[ProviderEvent]:
+        del tools
+        if _is_session_naming_request(messages):
+            yield ProviderTextDelta("测试会话起名")
+            yield ProviderCompleted("stop", None)
+            return
+        self.start_count += 1
+        self.started.set()
+        self.messages_by_turn.append([dict(message) for message in messages])
+        if self.start_count == 1:
+            yield ProviderTextDelta("故事从旧港开始，")
+            raise AgentProviderError(
+                "Provider stopped because the output token limit was reached",
+                code="agent_provider_output_truncated",
+                retryable=True,
+            )
+        continuation_prompt = [
+            dict(message)
+            for message in messages
+            if message.get("role") == "user" and "被截断" in str(message.get("content", ""))
+        ]
+        assert continuation_prompt, "截断后续写指令没有回喂给模型"
+        assistant_prefix = [
+            dict(message)
+            for message in messages
+            if message.get("role") == "assistant"
+            and "故事从旧港开始" in str(message.get("content", ""))
+        ]
+        assert assistant_prefix, "截断前文没有回喂给模型"
+        for event in self.turns[self.start_count - 1]:
+            if cancel_event.is_set():
+                return
+            await asyncio.sleep(0.01)
+            yield event
+
+
+def test_output_truncation_continues_instead_of_failing_the_run(tmp_path: Path) -> None:
+    # 输出打满 token 上限时，已生成的字都在作者屏幕上；整轮报废等于白写。
+    # 现在把前半段落成完整消息、自动续写后半段，Run 照常成功。
+    async def scenario() -> None:
+        provider = TruncationThenContinuationProvider(
+            [
+                [],
+                [
+                    ProviderTextDelta("然后风向变了，故事继续。"),
+                    ProviderCompleted("stop", None),
+                ],
+            ]
+        )
+        service = build_service(tmp_path, provider)
+        session, result = await create_turn(service)
+        run = await wait_terminal(service, result.run.run_id)
+
+        assert run.status is RunStatus.SUCCEEDED
+        assert provider.start_count == 2
+        truncated = [
+            payload
+            for kind, payload in lifecycle_events(service, run.run_id)
+            if kind == "model_turn_output_truncated"
+        ]
+        assert len(truncated) == 1
+        assert truncated[0]["continued"] is True
+        assistant_messages = [
+            message
+            for message in service.store.list_messages(session.session_id)
+            if message.role == "assistant"
+        ]
+        assert [message.content for message in assistant_messages] == [
+            "故事从旧港开始，",
+            "然后风向变了，故事继续。",
+        ]
+        await service.shutdown()
+
+    asyncio.run(scenario())
 
 
 class MutatingAliasProvider(ScriptedProvider):
@@ -583,6 +720,24 @@ class ResumeToolExecutor:
         self.validation_error = validation_error
         self.validation_calls = 0
 
+    @staticmethod
+    def request_hash(tool_name: str, tool_version: str, arguments: dict[str, object]) -> str:
+        del tool_name, tool_version, arguments
+        return "a" * 64
+
+    async def execute(
+        self,
+        run: Run,
+        *,
+        tool_call_id: str,
+        tool_name: str,
+        arguments: dict[str, object],
+        request_hash: str,
+        cancel_event: asyncio.Event,
+    ) -> AgentToolExecution:
+        del run, tool_call_id, tool_name, arguments, request_hash, cancel_event
+        return AgentToolExecution(output={"ok": True})
+
     async def validate_run_project(self, run: Run) -> object:
         self.validation_calls += 1
         if self.validation_error is not None:
@@ -619,6 +774,9 @@ class CaptureResumeService(AgentService):
 
 
 class ResumeExecutionStore(ResumeStore):
+    def get_run_goal(self, run_id: str):
+        return None
+
     def __init__(
         self,
         run: Run,
@@ -632,6 +790,12 @@ class ResumeExecutionStore(ResumeStore):
         self.interrupt_calls = 0
         self.recover_calls = 0
         self.last_failure: dict[str, object] | None = None
+        self.tool_calls: dict[str, StoredToolCall] = {}
+        self.transcript: list[dict[str, object]] = []
+
+    def save_run_transcript(self, run_id: str, messages: list[dict[str, object]]) -> None:
+        assert run_id == self.run.run_id
+        self.transcript = list(messages)
 
     def prepare_context_injection(self, run_id: str, **kwargs):
         del kwargs
@@ -706,6 +870,73 @@ class ResumeExecutionStore(ResumeStore):
         }:
             return [self.run.run_id]
         return []
+
+    def begin_tool_call(
+        self,
+        run_id: str,
+        *,
+        tool_call_id: str,
+        tool_name: str,
+        tool_version: str,
+        arguments: dict[str, object],
+        request_hash: str,
+        idempotency_key: str | None = None,
+    ) -> tuple[StoredToolCall, bool]:
+        assert run_id == self.run.run_id
+        existing = self.tool_calls.get(tool_call_id)
+        if existing is not None:
+            return existing, True
+        stored = StoredToolCall(
+            tool_call_id=tool_call_id,
+            run_id=run_id,
+            tool_name=tool_name,
+            tool_version=tool_version,
+            status="running",
+            idempotency_key=idempotency_key,
+            request_hash=request_hash,
+            arguments=arguments,
+            output=None,
+            error=None,
+            call_activity_id=None,
+            result_activity_id=None,
+            result_hash=None,
+            duration_ms=None,
+            started_at=datetime.now(UTC),
+            finished_at=None,
+        )
+        self.tool_calls[tool_call_id] = stored
+        return stored, False
+
+    def finish_tool_call(
+        self,
+        run_id: str,
+        *,
+        tool_call_id: str,
+        status: str,
+        output: object,
+        error: ErrorEnvelope | None,
+        duration_ms: int | None,
+        change_proposal: object = None,
+        skill_call: object = None,
+        artifacts: tuple[object, ...] = (),
+    ) -> tuple[StoredToolCall, bool]:
+        del change_proposal, skill_call, artifacts
+        assert run_id == self.run.run_id
+        stored = self.tool_calls[tool_call_id]
+        finished = replace(
+            stored,
+            status=status,
+            output=output,
+            error=error,
+            result_hash="4" * 64,
+            duration_ms=duration_ms,
+            finished_at=datetime.now(UTC),
+        )
+        self.tool_calls[tool_call_id] = finished
+        return finished, True
+
+    def get_tool_call(self, tool_call_id: str) -> StoredToolCall:
+        return self.tool_calls[tool_call_id]
 
 
 class ResumeWriterTask:
@@ -880,41 +1111,18 @@ class ReceiptResumeService(ResumeExecutionService):
             provider_model=self._provider_requested_model(provider),
         )
 
-    async def _execute_tool_call(
+    async def _finalize_prepared_tool_call(
         self,
         run: Run,
-        *,
-        provider_tool_call_id: str,
-        tool_name: str,
-        arguments: dict[str, object],
+        prepared,
         cancel_event: asyncio.Event,
     ) -> ToolExecutionResult:
-        del cancel_event
+        # 只读工具如今走并行段（begin/finalize 拆分），不再经过
+        # _execute_tool_call；在执行前记录回执数，语义与旧覆盖一致。
         self.receipt_counts_before_tools.append(
             len(self.store.provider_turn_receipts)  # type: ignore[attr-defined]
         )
-        now = datetime.now(UTC)
-        return ToolExecutionResult(
-            tool_call=StoredToolCall(
-                tool_call_id=f"tool_{provider_tool_call_id}",
-                run_id=run.run_id,
-                tool_name=tool_name,
-                tool_version="1",
-                status="succeeded",
-                idempotency_key=provider_tool_call_id,
-                request_hash="3" * 64,
-                arguments=arguments,
-                output={"ok": True},
-                error=None,
-                call_activity_id=None,
-                result_activity_id=None,
-                result_hash="4" * 64,
-                duration_ms=1,
-                started_at=now,
-                finished_at=now,
-            ),
-            replayed=False,
-        )
+        return await super()._finalize_prepared_tool_call(run, prepared, cancel_event)
 
 
 def build_service(
@@ -939,6 +1147,123 @@ def build_service(
         tool_executor=tool_executor,
         project_kb_service=CurrentProjectKbVerifier(),
     )
+
+
+def test_stale_project_kb_is_rebuilt_automatically(tmp_path: Path) -> None:
+    """作者在外部编辑器手改一个字 → KB 落后一代。
+
+    以前这会让整轮对话被 project_kb_state_stale 拒掉，逼作者先去点重建；
+    现在校验入口先自动重建一次（inspect + 推进绑定 + rebuild），校验照常通过。
+    """
+    async def scenario() -> None:
+        library = tmp_path / "library"
+        project = library / "novel"
+        volume = project / "05_正文内容" / "第一卷"
+        volume.mkdir(parents=True)
+        chapter = volume / "CH001_正文.md"
+        chapter.write_text("第一章。\n", encoding="utf-8")
+        reader = ProjectReader((library,))
+        snapshot = reader.inspect(project)
+        identity = snapshot["project"]
+        database = SqliteStore(tmp_path / "runtime.sqlite3")
+        database.initialize()
+        binding = database.sync_project_binding(
+            project_id=str(identity["project_id"]),
+            root_path=str(identity["root_path"]),
+            display_name=str(identity["display_name"]),
+            fingerprint=str(identity["fingerprint"]),
+        )
+        kb = ProjectKbService(database, reader, tmp_path / "project-kb")
+        kb.store.ensure_project_scope(binding.project_id)
+        initial = kb.store.project_state_snapshot(binding.project_id)
+        kb.rebuild(
+            binding.project_id,
+            ProjectKbRebuildRequest(
+                expected_project_revision=initial.project.revision,
+                expected_project_fingerprint=initial.project.fingerprint,
+                expected_scope_state_revision=initial.scope.state_revision,
+                expected_knowledge_fingerprint=canonical_json_hash(
+                    initial.fingerprint_material
+                ),
+            ),
+        )
+        current = kb.get_state(binding.project_id)
+        assert current.status is ProjectKbStatus.CURRENT
+        assert current.pointer is not None and current.manifest is not None
+        target = ContextPackKnowledgeTarget(
+            context_pack_id="context-pack-kb-auto",
+            pack_hash="0" * 64,
+            knowledge_fingerprint=None,
+            project_id=binding.project_id,
+            project_kb_state_id=current.pointer.state_id,
+            project_kb_manifest_hash=current.pointer.manifest_hash,
+        )
+        service = AgentService(AgentStore(database), None, project_kb_service=kb)
+
+        # 作者在外面改了一个字：旧校验直接拒（stale）。
+        chapter.write_text("第一章改了一个字。\n", encoding="utf-8")
+        with pytest.raises(AgentContextPackConflict) as stale_error:
+            await asyncio.to_thread(
+                service._require_current_project_kb_target_sync, target
+            )
+        assert stale_error.value.code == "project_kb_state_stale"
+
+        # 新校验：自动重建后照常通过，KB 回到 CURRENT。
+        await service._require_current_project_kb_target(target)
+        assert kb.get_state(binding.project_id).status is ProjectKbStatus.CURRENT
+        await service.shutdown()
+
+    asyncio.run(scenario())
+
+
+def test_chat_profiles_skip_the_managed_prose_workflow(tmp_path: Path) -> None:
+    class ProfiledContextStore:
+        def __init__(self, profile: str) -> None:
+            self.profile = profile
+
+        def get_nlcl_route(self, context_pack_id: str) -> SimpleNamespace:
+            assert context_pack_id == "context-pack-chat"
+            return SimpleNamespace(profile=self.profile)
+
+    async def scenario() -> None:
+        service = build_service(tmp_path, None)
+        service.context_store = ProfiledContextStore("chat")  # type: ignore[assignment]
+        assert await service._has_managed_workflow("context-pack-chat") is False
+        service.context_store = ProfiledContextStore("chat_isolated")  # type: ignore[assignment]
+        assert await service._has_managed_workflow("context-pack-chat") is False
+        service.context_store = ProfiledContextStore("chat_book_setup")  # type: ignore[assignment]
+        assert await service._has_managed_workflow("context-pack-chat") is False
+        # 受管流水线已退役：哪怕资料包 profile 是 chapter 也不再走它。
+        service.context_store = ProfiledContextStore("chapter")  # type: ignore[assignment]
+        assert await service._has_managed_workflow("context-pack-chat") is False
+
+    asyncio.run(scenario())
+
+
+def test_writer_targets_follow_explicitly_selected_project_file() -> None:
+    character_file_id = "file-" + "d" * 32
+    snapshot = SimpleNamespace(
+        files=(
+            SimpleNamespace(
+                file_id=character_file_id,
+                relative_path="03_人物设定/主角档案.md",
+                sha256="e" * 64,
+                kind="document",
+            ),
+        ),
+    )
+
+    targets = AgentService._writer_target_files(
+        snapshot,
+        mode="author_review_change_proposal",
+        active_chapter_id=None,
+        manual_file_ids=(character_file_id,),
+    )
+
+    assert len(targets) == 1
+    assert targets[0].file_id == character_file_id
+    assert targets[0].content_role == "project_file"
+    assert targets[0].relative_path == "03_人物设定/主角档案.md"
 
 
 async def wait_terminal(service: AgentService, run_id: str):
@@ -995,6 +1320,78 @@ def test_agent_service_persists_stream_before_success(tmp_path: Path) -> None:
             if item.root.kind.value == "message"
         ]
         assert phases == ["completed", "delta", "delta", "completed"]
+        await service.shutdown()
+
+    asyncio.run(scenario())
+
+
+def test_agent_service_persists_reasoning_without_mixing_it_into_answer_or_context(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        provider = ScriptedProvider(
+            [
+                ProviderReasoningDelta("先核对人物动机，再收紧开头节奏。"),
+                ProviderTextDelta("已经按人物动机改好开头。"),
+                ProviderCompleted("stop", None),
+            ]
+        )
+        service = build_service(tmp_path, provider)
+        session, result = await create_turn(service)
+        run = await wait_terminal(service, result.run.run_id)
+
+        assert run.status is RunStatus.SUCCEEDED
+        messages = service.store.list_messages(session.session_id)
+        assert messages[-1].content == "已经按人物动机改好开头。"
+        assert "先核对人物动机" not in messages[-1].content
+        assert provider.messages[-1]["content"] == "保留线索，收紧开头。"
+
+        reasoning = [
+            item.root
+            for item in service.store.list_activities(run.run_id)
+            if item.root.kind.value == "reasoning"
+        ]
+        assert [item.payload.phase for item in reasoning] == ["delta", "completed"]
+        assert reasoning[0].payload.block_id == reasoning[1].payload.block_id
+        assert reasoning[1].payload.summary == "先核对人物动机，再收紧开头节奏。"
+        assert reasoning[1].payload.content == "先核对人物动机，再收紧开头节奏。"
+        assert reasoning[1].payload.visibility == "full"
+        await service.shutdown()
+
+    asyncio.run(scenario())
+
+
+def test_agent_service_splits_relay_think_tags_before_persisting_answer(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        provider = ScriptedProvider(
+            [
+                ProviderTextDelta("<think>先判断作者只是提问，不需要修改正文。"),
+                ProviderTextDelta("</think><think>再把结论压成一句话。</think>\n"),
+                ProviderTextDelta("最怕开篇堆满设定，让读者进不了故事。"),
+                ProviderCompleted("stop", None),
+            ]
+        )
+        service = build_service(tmp_path, provider)
+        session, result = await create_turn(service)
+        run = await wait_terminal(service, result.run.run_id)
+
+        assert run.status is RunStatus.SUCCEEDED
+        messages = service.store.list_messages(session.session_id)
+        assert messages[-1].content == "最怕开篇堆满设定，让读者进不了故事。"
+        assert "<think>" not in messages[-1].content
+
+        reasoning = [
+            item.root
+            for item in service.store.list_activities(run.run_id)
+            if item.root.kind.value == "reasoning"
+        ]
+        assert len(reasoning) == 1
+        assert reasoning[0].payload.content == (
+            "先判断作者只是提问，不需要修改正文。\n\n"
+            "再把结论压成一句话。"
+        )
         await service.shutdown()
 
     asyncio.run(scenario())
@@ -1088,13 +1485,108 @@ def test_provider_tool_call_identity_is_scoped_to_its_run() -> None:
 
 
 def test_agent_service_marks_incomplete_provider_as_failed(tmp_path: Path) -> None:
+    # 每次都吐一点就断：自动接着写连着 3 次（MAX_CONSECUTIVE_STREAM_RESUMES）还是断，照旧整轮失败，不无限续下去。
     async def scenario() -> None:
-        service = build_service(tmp_path, ScriptedProvider([ProviderTextDelta("半段")]))
+        provider = ScriptedProvider([ProviderTextDelta("半段")])
+        service = build_service(tmp_path, provider)
         _, result = await create_turn(service)
         run = await wait_terminal(service, result.run.run_id)
         assert run.status is RunStatus.FAILED
         assert run.error is not None
         assert run.error.error.code == "agent_provider_incomplete_stream"
+        assert provider.start_count == 1 + MAX_CONSECUTIVE_STREAM_RESUMES
+        resumed = [kind for kind, _ in lifecycle_events(service, run.run_id) if kind == "model_turn_stream_resumed"]
+        assert len(resumed) == MAX_CONSECUTIVE_STREAM_RESUMES
+        await service.shutdown()
+
+    asyncio.run(scenario())
+
+
+def test_agent_service_retries_incomplete_turn_when_no_text_was_streamed(
+    tmp_path: Path,
+) -> None:
+    # 中转站在长生成中途掐断流时，这一轮作者屏幕上还什么都没有
+    # （只有公开思考内容）：保留中断块并自动重发，Run 照常成功，回答不重复。
+    async def scenario() -> None:
+        provider = TurnScriptedProvider(
+            [
+                [ProviderReasoningDelta("还在想，流就断了。")],
+                [
+                    ProviderTextDelta("重发后的完整回答。"),
+                    ProviderCompleted("stop", None),
+                ],
+            ]
+        )
+        service = build_service(tmp_path, provider)
+        session, result = await create_turn(service)
+        run = await wait_terminal(service, result.run.run_id)
+
+        assert run.status is RunStatus.SUCCEEDED
+        assert provider.start_count == 2
+        messages = service.store.list_messages(session.session_id)
+        assert messages[-1].content == "重发后的完整回答。"
+        # 断流那次的公开思考保留，末态清楚地标成中断。
+        reasoning = [
+            item.root
+            for item in service.store.list_activities(run.run_id)
+            if item.root.kind.value == "reasoning"
+        ]
+        assert [item.payload.phase for item in reasoning] == ["delta", "interrupted"]
+        assert reasoning[-1].payload.content == "还在想，流就断了。"
+        retries = [
+            payload
+            for kind, payload in lifecycle_events(service, run.run_id)
+            if kind == "model_turn_stream_retry"
+        ]
+        assert len(retries) == 1
+        assert retries[0]["error_code"] == "agent_provider_incomplete_stream"
+        await service.shutdown()
+
+    asyncio.run(scenario())
+
+
+def test_agent_service_resumes_incomplete_turn_after_text_was_streamed(
+    tmp_path: Path,
+) -> None:
+    # 已经吐字后断流：重发会把已显示的文字再吐一遍，所以不重发；已写的留着，
+    # 让模型从断点接着写（9-27 起，照 Qwen Code #7832；以前整轮失败、作者点「重发这条」）。
+    async def scenario() -> None:
+        provider = TurnScriptedProvider(
+            [
+                [ProviderTextDelta("半段")],
+                [ProviderTextDelta("接上的后半段。"), ProviderCompleted("stop", None)],
+            ]
+        )
+        service = build_service(tmp_path, provider)
+        session, result = await create_turn(service)
+        run = await wait_terminal(service, result.run.run_id)
+
+        assert run.status is RunStatus.SUCCEEDED
+        assert provider.start_count == 2
+        assert [
+            message.content
+            for message in service.store.list_messages(session.session_id)
+            if message.role == "assistant"
+        ] == ["半段", "接上的后半段。"]
+        await service.shutdown()
+
+    asyncio.run(scenario())
+
+
+def test_agent_service_turn_stream_retry_exhaustion_keeps_failure(
+    tmp_path: Path,
+) -> None:
+    # 连续断流打满重试次数后如实失败，不无限重发。
+    async def scenario() -> None:
+        provider = TurnScriptedProvider([[], [], []])
+        service = build_service(tmp_path, provider)
+        _, result = await create_turn(service)
+        run = await wait_terminal(service, result.run.run_id)
+
+        assert run.status is RunStatus.FAILED
+        assert run.error is not None
+        assert run.error.error.code == "agent_provider_incomplete_stream"
+        assert provider.start_count == 1 + MAX_TURN_STREAM_RETRIES
         await service.shutdown()
 
     asyncio.run(scenario())
@@ -1188,6 +1680,10 @@ def test_agent_service_exposes_explicit_unavailable_state(tmp_path: Path) -> Non
 def test_agent_service_sends_exact_reviewed_context_and_persists_receipt(
     tmp_path: Path,
 ) -> None:
+    # This case has a readable project with no additional instructions. A
+    # missing directory correctly adds an unavailable-context message instead.
+    (tmp_path / "novel").mkdir()
+
     async def scenario() -> None:
         provider = ScriptedProvider(
             [ProviderTextDelta("已按项目真值处理。"), ProviderCompleted("stop", None)]
@@ -1230,7 +1726,10 @@ def test_agent_service_sends_exact_reviewed_context_and_persists_receipt(
         run = await wait_terminal(service, result.run.run_id)
 
         assert run.status is RunStatus.SUCCEEDED
-        assert provider.messages == [
+        # 资料包逐字节送出；前面只多一段环境事实（纠偏指令 3.2），不进资料包、不改它的哈希。
+        assert provider.messages[0]["role"] == "system"
+        assert provider.messages[0]["content"].startswith("系统：")
+        assert provider.messages[1:] == [
             message.model_dump(mode="json")
             for message in pack.exact_provider_messages
         ]
@@ -2339,31 +2838,106 @@ def test_resumed_execution_rejects_executor_config_drift_before_workflow() -> No
 
 
 def test_provider_cannot_call_unadvertised_managed_skill_after_workflow() -> None:
+    """未通告的工具不再立刻终止 Run：失败结果回给模型自我纠正；
+    连续失败多少次都不判死、也不切收尾轮（2026-09-24 起没有连败上限，
+    停止键归作者）。技能执行器全程不被触碰。"""
+
+    repeats = 8
+
     async def scenario() -> None:
         run = workflow_run(RunStatus.RUNNING)
         store = ResumeExecutionStore(run)
-        provider = ScriptedProvider(
-            [
-                ProviderToolCall(
-                    index=0,
-                    tool_call_id="call_unadvertised_skill_0001",
-                    tool_name="skill_execute",
-                    arguments={
-                        "skill_id": "novel-creation-suite.project-audit",
-                    },
-                ),
-                ProviderCompleted("tool_calls", None),
+        bad_turn = [
+            ProviderToolCall(
+                index=0,
+                tool_call_id="call_unadvertised_skill_0001",
+                tool_name="skill_execute",
+                arguments={
+                    "skill_id": "novel-creation-suite.project-audit",
+                },
+            ),
+            # 中转站把 finish_reason 报成 stop 也不影响拒绝路径。
+            ProviderCompleted("stop", None),
+        ]
+        provider = TurnScriptedProvider(
+            [list(bad_turn) for _ in range(repeats)]
+            + [
+                [
+                    ProviderTextDelta("这一步走不通，已经试过的方法都告诉作者。"),
+                    ProviderCompleted("stop", None),
+                ]
             ]
         )
         service = ResumeExecutionService(store, provider, ResumeToolExecutor())
 
         await service._execute(run.run_id, asyncio.Event(), resumed=True)
 
-        assert store.run.status is RunStatus.FAILED
-        assert store.last_failure is not None
-        assert store.last_failure["code"] == "agent_provider_tool_not_advertised"
+        # 不再整轮失败：8 次拒绝回喂之后模型自己给出文本，Run 成功收尾。
+        assert store.run.status is RunStatus.SUCCEEDED
+        assert store.last_failure is None
         assert service.boundary_persisted is True
-        assert provider.start_count == 1
+        assert provider.start_count == repeats + 1
+        # 最后一轮带着全量历史：8 次拒绝回喂都在里面；没有任何「收尾轮」指令。
+        closing = provider.messages_by_turn[-1]
+        rejected = [
+            message
+            for message in closing
+            if message.get("role") == "tool"
+            and "agent_tool_not_advertised" in str(message.get("content"))
+        ]
+        assert len(rejected) == repeats
+        assert not any(
+            message.get("role") == "user"
+            and "用中文向作者交代" in str(message.get("content"))
+            for message in closing
+        )
+
+    asyncio.run(scenario())
+
+
+def test_invalid_tool_arguments_are_fed_back_instead_of_failing_the_run(
+    tmp_path: Path,
+) -> None:
+    """模型写出的工具参数不是合法 JSON：不再整轮作废。这次调用以失败结果
+    回喂（请重发这次调用），模型下一轮重发或照常回答，Run 成功收尾。"""
+
+    async def scenario() -> None:
+        provider = TurnScriptedProvider(
+            [
+                [
+                    ProviderToolCall(
+                        index=0,
+                        tool_call_id="call_bad_arguments_0001",
+                        tool_name="project_read_file",
+                        arguments={},
+                        arguments_error=(
+                            "Provider tool arguments are not strict JSON"
+                            "（Expecting property name @ 1：…{…）"
+                        ),
+                    ),
+                    ProviderCompleted("tool_calls", None),
+                ],
+                [
+                    ProviderTextDelta("重发之前先给出结论。"),
+                    ProviderCompleted("stop", None),
+                ],
+            ]
+        )
+        service = build_service(tmp_path, provider, tool_executor=ResumeToolExecutor())
+        _, result = await create_turn(service)
+        run = await wait_terminal(service, result.run.run_id)
+
+        assert run.status is RunStatus.SUCCEEDED
+        assert provider.start_count == 2
+        fed_back = [
+            message
+            for message in provider.messages_by_turn[1]
+            if message.get("role") == "tool"
+        ]
+        assert len(fed_back) == 1
+        assert "请重发这次调用" in str(fed_back[0].get("content"))
+        assert "agent_provider_tool_arguments_invalid" in str(fed_back[0].get("content"))
+        await service.shutdown()
 
     asyncio.run(scenario())
 
@@ -2610,5 +3184,294 @@ def test_shutdown_translation_cannot_hide_uncertain_provider_boundary(
         assert store.pause_calls == 0
         assert store.interrupt_calls == 1
         assert store.run.status is RunStatus.INTERRUPTED
+
+    asyncio.run(scenario())
+
+
+def test_rejected_tool_result_message_reports_a_failed_tool_result() -> None:
+    message = AgentService._rejected_tool_result_message(
+        "call_reject_0001",
+        code="agent_tool_not_advertised",
+        message="这个工具在本回合不可用",
+    )
+    assert message["role"] == "tool"
+    assert message["tool_call_id"] == "call_reject_0001"
+    payload = json.loads(str(message["content"]))
+    assert payload["status"] == "failed"
+    assert payload["error"]["error"]["code"] == "agent_tool_not_advertised"
+    assert payload["error"]["error"]["retryable"] is False
+
+
+LONG_NOTE_OUTPUT = {"text": "很长的结果" * 400}
+
+
+class ImmediateNotesToolExecutor:
+    """立即返回长诊断结果的工具替身。"""
+
+    def __init__(self, output: dict[str, object] | None = None) -> None:
+        self.definitions = (
+            ProviderToolDefinition(
+                name="project_notes",
+                version="1",
+                description="Read a long diagnostic note",
+                parameters={
+                    "type": "object",
+                    "properties": {"note_id": {"type": "string"}},
+                    "required": ["note_id"],
+                    "additionalProperties": False,
+                },
+            ),
+        )
+        self.output = LONG_NOTE_OUTPUT if output is None else output
+        self.calls = 0
+
+    @staticmethod
+    def request_hash(tool_name: str, tool_version: str, arguments: dict[str, object]) -> str:
+        del tool_name, tool_version, arguments
+        return "a" * 64
+
+    async def execute(self, *args, **kwargs) -> AgentToolExecution:
+        del args, kwargs
+        self.calls += 1
+        return AgentToolExecution(output=self.output)
+
+
+class ToolAwareTurnProvider(TurnScriptedProvider):
+    def __init__(
+        self,
+        turns: list[list[ProviderEvent]],
+        *,
+        clock=None,
+        advance_after_turn: float = 0.0,
+    ) -> None:
+        super().__init__(turns)
+        self.tools_by_turn: list[tuple[str, ...]] = []
+        self.clock = clock
+        self.advance_after_turn = advance_after_turn
+
+    async def stream_chat(
+        self,
+        messages: Sequence[Mapping[str, object]],
+        *,
+        cancel_event: asyncio.Event,
+        tools: Sequence[ProviderToolDefinition] = (),
+    ) -> AsyncIterator[ProviderEvent]:
+        if _is_session_naming_request(messages):
+            async for event in super().stream_chat(
+                messages,
+                cancel_event=cancel_event,
+                tools=(),
+            ):
+                yield event
+            return
+        self.tools_by_turn.append(tuple(definition.name for definition in tools))
+        async for event in super().stream_chat(
+            messages,
+            cancel_event=cancel_event,
+            tools=tools,
+        ):
+            yield event
+        if self.clock is not None and self.advance_after_turn:
+            self.clock.advance(self.advance_after_turn)
+
+
+class FakeMonotonicClock:
+    def __init__(self, start: float = 5000.0) -> None:
+        self.now = start
+
+    def __call__(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds
+
+
+def notes_loop_turns(
+    tool_turns: int,
+    final_text: str,
+    *,
+    usage: MessageUsage | None = None,
+) -> list[list[ProviderEvent]]:
+    turns: list[list[ProviderEvent]] = []
+    for index in range(tool_turns):
+        turns.append(
+            [
+                ProviderToolCall(
+                    index=0,
+                    tool_call_id=f"call_notes_{index:04d}xxxx",
+                    tool_name="project_notes",
+                    arguments={"note_id": f"note-{index}"},
+                ),
+                ProviderCompleted("tool_calls", usage),
+            ]
+        )
+    turns.append([ProviderTextDelta(final_text), ProviderCompleted("stop", usage)])
+    return turns
+
+
+def lifecycle_events(
+    service: AgentService, run_id: str
+) -> list[tuple[str, dict[str, object]]]:
+    with service.store.database.connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT event_type, payload_json FROM run_event
+            WHERE run_id = ? AND event_type != 'activity'
+            ORDER BY sequence ASC
+            """,
+            (run_id,),
+        ).fetchall()
+    return [
+        (str(row["event_type"]), json.loads(str(row["payload_json"])))
+        for row in rows
+    ]
+
+
+def unfolded_note_results(messages: list[dict[str, object]]) -> int:
+    return sum(
+        1
+        for message in messages
+        if message.get("role") == "tool"
+        and isinstance(message.get("content"), str)
+        and not str(message["content"]).startswith('{"folded"')
+    )
+
+
+def test_each_model_turn_records_how_much_of_the_previous_request_it_kept(
+    tmp_path: Path,
+) -> None:
+    """缓存诊断（cache_shape.py，9-27）：一轮里来回调工具，每次请求都是上一次原样加在后面，记成 append_only。"""
+
+    async def scenario() -> None:
+        provider = ToolAwareTurnProvider(notes_loop_turns(3, "三轮查完。"))
+        service = build_service(
+            tmp_path, provider, tool_executor=ImmediateNotesToolExecutor()
+        )
+        _, result = await create_turn(service)
+        run = await wait_terminal(service, result.run.run_id)
+
+        assert run.status is RunStatus.SUCCEEDED
+        shapes = [
+            payload["cache_shape"]
+            for kind, payload in lifecycle_events(service, run.run_id)
+            if kind == "model_turn_started"
+        ]
+        assert len(shapes) == 4
+        assert shapes[0]["reason"] == "first_request"
+        assert [shape["reason"] for shape in shapes[1:]] == ["append_only"] * 3
+        assert all(
+            later["kept_messages"] == earlier["messages"]
+            for earlier, later in zip(shapes, shapes[1:])
+        )
+        await service.shutdown()
+
+    asyncio.run(scenario())
+
+
+def test_model_turn_events_and_prefix_stability_across_turns(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        provider = ToolAwareTurnProvider(notes_loop_turns(6, "六轮查完，结论不变。"))
+        service = build_service(
+            tmp_path, provider, tool_executor=ImmediateNotesToolExecutor()
+        )
+        _, result = await create_turn(service)
+        run = await wait_terminal(service, result.run.run_id)
+
+        assert run.status is RunStatus.SUCCEEDED
+        events = lifecycle_events(service, run.run_id)
+        started = [payload for kind, payload in events if kind == "model_turn_started"]
+        completed = [
+            payload for kind, payload in events if kind == "model_turn_completed"
+        ]
+        assert [payload["turn"] for payload in started] == [1, 2, 3, 4, 5, 6, 7]
+        assert [payload["turn"] for payload in completed] == [1, 2, 3, 4, 5, 6, 7]
+        assert all(payload["wrap_up"] is False for payload in started)
+        assert completed[-1]["finish_reason"] == "stop"
+        assert completed[0]["tool_calls"] == 1
+
+        # 不超预算就不折叠：消息序列逐字节不变，前缀稳定（上游提示缓存的前提）。
+        assert not [
+            payload for kind, payload in events if kind == "run_context_compaction"
+        ]
+        turns = provider.messages_by_turn
+        head = json.dumps(turns[0], ensure_ascii=False, sort_keys=True)
+        for later in turns[1:]:
+            # 每一轮的头部与第 1 轮逐字节相同（前面只追加、不改写）
+            assert json.dumps(later[: len(turns[0])], ensure_ascii=False, sort_keys=True) == head
+        # 工具定义按名字排序后发出，每轮相同
+        tools_turn_1 = provider.tools_by_turn[0]
+        assert list(tools_turn_1) == sorted(tools_turn_1)
+        for later_tools in provider.tools_by_turn[1:]:
+            assert later_tools == tools_turn_1
+
+        # SSE 活动流只捞 event_type='activity'，新事件类型不混进去。
+        assert len(service.store.list_run_events(run.run_id)) == len(
+            service.store.list_activities(run.run_id)
+        )
+        await service.shutdown()
+
+    asyncio.run(scenario())
+
+
+def test_normal_budget_never_touches_the_message_sequence(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        provider = ToolAwareTurnProvider(notes_loop_turns(6, "默认预算收尾。"))
+        service = build_service(
+            tmp_path, provider, tool_executor=ImmediateNotesToolExecutor()
+        )
+        _, result = await create_turn(service)
+        run = await wait_terminal(service, result.run.run_id)
+
+        assert run.status is RunStatus.SUCCEEDED
+        events = lifecycle_events(service, run.run_id)
+        assert not [
+            payload
+            for kind, payload in events
+            if kind == "run_context_compaction"
+        ]
+        # 不超预算时完全不折叠：6 条工具结果全部完整保留。
+        assert unfolded_note_results(provider.messages_by_turn[-1]) == 6
+        await service.shutdown()
+
+    asyncio.run(scenario())
+
+
+def test_unknown_exception_fails_the_run_as_a_program_error_not_retryable(
+    tmp_path: Path,
+) -> None:
+    """A bug inside the runtime is reported as a program error, never as retryable (review 2.7)."""
+
+    async def scenario() -> None:
+        provider = TurnScriptedProvider(
+            [
+                [
+                    ProviderToolCall(
+                        index=0,
+                        tool_call_id="call_boom_0001",
+                        tool_name="project_read_file",
+                        arguments={"file_id": "file-" + "a" * 32},
+                    ),
+                    ProviderCompleted("tool_calls", None),
+                ]
+            ]
+        )
+        service = build_service(tmp_path, provider, tool_executor=ResumeToolExecutor())
+
+        async def boom(*_args, **_kwargs):
+            raise RuntimeError("boom")
+
+        service._execute_tool_call = boom  # type: ignore[method-assign]
+        _, result = await create_turn(service)
+        run = await wait_terminal(service, result.run.run_id)
+        assert run.status is RunStatus.FAILED
+        assert run.error is not None
+        assert run.error.error.code == "agent_execution_failed"
+        assert run.error.error.retryable is False
+        assert run.error.error.message.startswith("\u7a0b\u5e8f\u51fa\u9519\u4e86")
+        await service.shutdown()
 
     asyncio.run(scenario())

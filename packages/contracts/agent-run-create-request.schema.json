@@ -1,0 +1,218 @@
+{
+  "$defs": {
+    "GoalAdmission": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "start",
+            "resume"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "expected_revision": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Revision"
+        },
+        "goal_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Goal Id"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "title": "GoalAdmission",
+      "type": "object"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/agent-run-create-request.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "active_chapter_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Active Chapter Id"
+    },
+    "context_pack_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Context Pack Id"
+    },
+    "continuation_source_run_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Continuation Source Run Id"
+    },
+    "expected_context_pack_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Context Pack Hash"
+    },
+    "expected_project_fingerprint": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Project Fingerprint"
+    },
+    "expected_project_revision": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Project Revision"
+    },
+    "goal": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GoalAdmission"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "image_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Image Ids",
+      "type": "array"
+    },
+    "manual_file_ids": {
+      "items": {
+        "maxLength": 128,
+        "minLength": 8,
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Manual File Ids",
+      "type": "array"
+    },
+    "manual_skill_names": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Manual Skill Names",
+      "type": "array"
+    },
+    "message": {
+      "default": "",
+      "maxLength": 100000,
+      "title": "Message",
+      "type": "string"
+    },
+    "open_file_path": {
+      "anyOf": [
+        {
+          "maxLength": 1024,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Open File Path"
+    },
+    "review_source_run_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Review Source Run Id"
+    },
+    "writer_mode": {
+      "default": "repair_only",
+      "enum": [
+        "repair_only",
+        "author_review_change_proposal"
+      ],
+      "title": "Writer Mode",
+      "type": "string"
+    }
+  },
+  "title": "AgentRunCreateRequest",
+  "type": "object"
+}
