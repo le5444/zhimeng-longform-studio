@@ -1,125 +1,105 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { getChangeSet, listProjectChangeSets, summarizeChangeSet } from '../../api/changeSets'
-import { getSessionFileChange, listSessionFileChanges, type SessionFileChangeDetail } from '../../api/fileChanges'
-import { useChangeSets } from '../../hooks/useChangeSets'
-import { useSessionFileChanges } from '../../hooks/useSessionFileChanges'
-import { changeSetFixture } from '../../test/changeSetFixture'
-import { ChangeHistory } from '../panel/ChangeHistory'
-import { makeFile, makeSnapshot } from './fixtures'
+import { readChangeHistory, readHistoryDetail, undoHistoryChange, type ChangeHistoryDetail, type ChangeHistoryPage } from '../../api/changeHistory'
+import { RuntimeApiError } from '../../api/runtime'
+import { ChangeWorkspace as ChangeHistory } from '../panel/ChangeWorkspace'
+import { makeSnapshot } from './fixtures'
+import type { ComponentProps } from 'react'
 
-vi.mock('../../api/changeSets', async (original) => ({ ...await original<typeof import('../../api/changeSets')>(), getChangeSet: vi.fn(), listProjectChangeSets: vi.fn() }))
-vi.mock('../../api/fileChanges', () => ({ getSessionFileChange: vi.fn(), listSessionFileChanges: vi.fn(), undoSessionFileChange: vi.fn() }))
-
-const projectChange = changeSetFixture({ origin: 'manual', status: 'applied', postDraftGateScope: 'none' })
-projectChange.title = '更新预算说明'
-projectChange.summary = '补齐总额'
-projectChange.changes[0].relative_path = 'budget.md'
-projectChange.changes[0].hunks[0].before_text = 'Total: 0'
-projectChange.changes[0].hunks[0].after_text = 'Total: 378'
-projectChange.created_at = '2026-10-19T03:00:00Z'
-const snapshot = makeSnapshot({ chapters: [], volumes: [], files: [makeFile('budget.md')] })
-snapshot.project = { ...snapshot.project, project_id: projectChange.project_id, display_name: '采购预算', root_path: 'C:/Temp/budget' }
-const outside: SessionFileChangeDetail = {
-  change_id: 'filechange-outside', session_id: 'chat-a', run_id: '', title: '导出 CSV',
-  created_at: '2026-10-19T12:00:00+08:00', undone_at: null, status: 'applied',
-  files: [{ sequence: 0, operation: 'create', path: 'C:/Temp/export.csv', target_path: null, undone_at: null }],
-  previews: [], undo_available: true, undo_reason: null,
+vi.mock('../../api/changeHistory',()=>({readChangeHistory:vi.fn(),readHistoryDetail:vi.fn(),undoHistoryChange:vi.fn()}))
+const read=vi.mocked(readChangeHistory),detail=vi.mocked(readHistoryDetail),undo=vi.mocked(undoHistoryChange)
+const openFile=vi.fn(),changed=vi.fn()
+const record:ChangeHistoryDetail={id:'filechange-one',source:'file_change',session_id:'chat-a',project_id:'project-a',run_id:null,
+ title:'导出 C:/results/report.csv',status:'applied',created_at:'2026-11-19T03:00:00Z',
+ files:[{path:'C:/results/report.csv',target_path:null,operation:'create'}],undo_available:true,undo_reason:null,review_revision:null,
+ previews:[{path:'C:/results/report.csv',target_path:null,operation:'create',current_state:'file',open_path:'C:/results/report.csv',note:null,hunks:[{before:'',after:'Total: 49.50'}]}]}
+const projectRecord:ChangeHistoryDetail={...record,id:'changeset-two',source:'change_set',title:'更新预算',review_revision:2}
+const page=(changes=[record,projectRecord],scope:'session'|'project'='session'):ChangeHistoryPage=>({session_id:'chat-a',scope,project_id:'project-a',revision:'v1',total:changes.length,changes,next_offset:null})
+const project={snapshot:makeSnapshot(),review:{refresh:vi.fn()},onRefreshProject:vi.fn(),notify:vi.fn(),askConfirm:vi.fn(),focusId:null} as unknown as NonNullable<ComponentProps<typeof ChangeHistory>['project']>
+function mount(sessionId='chat-a',focusId:string|null=null,focusRequest=0){
+ return <><textarea aria-label="草稿" defaultValue="继续核对"/><ChangeHistory project={project} session={{sessionId,focusId,focusRequest,onChanged:changed}} onOpenFile={openFile}/></>
 }
-const notify = vi.fn(), refreshProject = vi.fn(), askConfirm = vi.fn()
-function Harness({ sid = 'chat-a', focusId = null, focusRequest = 0, bound = true }: { sid?: string; focusId?: string | null; focusRequest?: number; bound?: boolean }) {
-  const review = useChangeSets(bound ? snapshot.project.project_id : null)
-  const session = useSessionFileChanges(sid)
-  return <ChangeHistory key={`${sid}:${bound}`} project={bound ? { snapshot, review, focusId, focusRequest, onRefreshProject: refreshProject, notify, askConfirm } : null}
-    session={{ sessionId: sid, review: session, focusId, focusRequest }} />
-}
-
-beforeEach(() => {
-  vi.clearAllMocks()
-  vi.mocked(listProjectChangeSets).mockResolvedValue([summarizeChangeSet(projectChange)])
-  vi.mocked(getChangeSet).mockResolvedValue(projectChange)
-  vi.mocked(listSessionFileChanges).mockImplementation(async (sid) => sid === 'chat-a' ? [outside] : [])
-  vi.mocked(getSessionFileChange).mockResolvedValue(outside)
-})
+beforeEach(()=>{vi.clearAllMocks();read.mockResolvedValue(page());detail.mockImplementation(async(_sid,id)=>id===projectRecord.id?projectRecord:record);undo.mockResolvedValue({} as never)})
 afterEach(cleanup)
 
-it('按真实时间合并两类修改，返回同一列表并保留来源标签', async () => {
-  render(<Harness />)
-  await screen.findByRole('button', { name: /导出 CSV/ })
-  const rows = within(screen.getByRole('list')).getAllByRole('button')
-  expect(rows).toHaveLength(2)
-  expect(rows[0]).toHaveTextContent('导出 CSV')
-  expect(rows[0]).toHaveTextContent('对话中的其他文件')
-  expect(rows[1]).toHaveTextContent('项目文件')
-  fireEvent.click(rows[1])
-  expect(await screen.findByText('Total: 378')).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: '全部修改' }))
-  fireEvent.click(screen.getByRole('button', { name: /导出 CSV/ }))
-  expect(await screen.findByRole('heading', { name: '导出 CSV' })).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: '返回记录' }))
-  expect(within(screen.getByRole('list')).getAllByRole('button')).toHaveLength(2)
+it('默认按对话列出两类文件，共用详情、打开和撤回操作并保持草稿',async()=>{
+ render(mount())
+ await screen.findByRole('button',{name:/导出 report.csv/})
+ expect(read.mock.calls[0].slice(0,2)).toEqual(['chat-a','session'])
+ fireEvent.click(screen.getByRole('button',{name:/导出 report.csv/}))
+ await screen.findByText('Total: 49.50')
+ fireEvent.click(screen.getByRole('button',{name:'打开 report.csv'}))
+ expect(openFile).toHaveBeenCalledWith(record.files[0].path)
+ detail.mockResolvedValue({...record,status:'undone',undo_available:false,previews:[{...record.previews[0],current_state:'missing',open_path:null,hunks:[]}]})
+ fireEvent.click(screen.getByRole('button',{name:'撤回这次修改'}))
+ await screen.findByText('已撤回')
+ expect(undo).toHaveBeenCalledWith(record)
+ expect(changed).toHaveBeenCalled()
+ expect(screen.queryByRole('button',{name:'打开 report.csv'})).toBeNull()
+ expect(screen.getByRole('textbox')).toHaveValue('继续核对')
+ fireEvent.click(screen.getByRole('button',{name:'全部修改'}))
+ expect(screen.getByRole('button',{name:'当前对话'})).toHaveAttribute('aria-pressed','true')
 })
 
-it('一类读取失败仍显示另一类，并能单独重试失败来源', async () => {
-  vi.mocked(listProjectChangeSets).mockRejectedValue(new Error('项目记录暂时离线'))
-  render(<Harness />)
-  expect(await screen.findByRole('alert')).toHaveTextContent('项目记录暂时离线')
-  expect(screen.getByRole('button', { name: /导出 CSV/ })).toBeInTheDocument()
-  expect(screen.queryByText('还没有文件修改记录。')).toBeNull()
-  vi.mocked(listProjectChangeSets).mockResolvedValue([summarizeChangeSet(projectChange)])
-  fireEvent.click(screen.getByRole('button', { name: '重试' }))
-  expect(await screen.findByRole('button', { name: /项目文件/ })).toBeInTheDocument()
-  expect(screen.queryByRole('alert')).toBeNull()
+it('项目修改与文件journal使用同样详情，不要求当前项目重新打开',async()=>{
+ render(<ChangeHistory project={null} session={{sessionId:'chat-a',focusId:projectRecord.id,onChanged:changed}} onOpenFile={openFile}/>)
+ await screen.findByText('Total: 49.50')
+ fireEvent.click(screen.getByRole('button',{name:'撤回这次修改'}))
+ await waitFor(()=>expect(undo).toHaveBeenCalledWith(projectRecord))
 })
 
-it('项目详情失败留在详情，有原因和重试，成功后能继续撤回', async () => {
-  vi.mocked(getChangeSet).mockRejectedValue(new Error('详情读取失败 503'))
-  render(<Harness focusId={projectChange.change_set_id} />)
-  expect(await screen.findByRole('alert')).toHaveTextContent('详情读取失败 503')
-  expect(screen.queryByRole('list')).toBeNull()
-  vi.mocked(getChangeSet).mockResolvedValue(projectChange)
-  fireEvent.click(screen.getByRole('button', { name: '重试' }))
-  expect(await screen.findByText('Total: 378')).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: '撤回' })).toBeEnabled()
+it('切换范围取消迟到请求，整个项目的记录不会污染当前对话',async()=>{
+ let finish!:(v:ChangeHistoryPage)=>void
+ read.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}))
+ render(mount())
+ const signal=read.mock.calls[0][4]!.signal!
+ read.mockResolvedValue(page([{...projectRecord,session_id:'another'}],'project'))
+ fireEvent.click(screen.getByRole('button',{name:'整个项目'}))
+ await screen.findByRole('button',{name:/更新预算/})
+ expect(signal.aborted).toBe(true)
+ await act(async()=>finish(page()))
+ expect(screen.queryByRole('button',{name:/导出 report.csv/})).toBeNull()
+ expect(read.mock.calls.at(-1)?.slice(0,2)).toEqual(['chat-a','project'])
 })
 
-it('切另一条时不展示旧详情和旧操作；返回后可再次定位同一卡片', async () => {
-  const view = render(<Harness focusId={projectChange.change_set_id} focusRequest={1} />)
-  await screen.findByText('Total: 378')
-  let finish!: (value: typeof projectChange) => void
-  const pending = new Promise<typeof projectChange>((resolve) => { finish = resolve })
-  vi.mocked(getChangeSet).mockImplementation((id) => id === 'changeset-new' ? pending : Promise.resolve(projectChange))
-  view.rerender(<Harness focusId="changeset-new" focusRequest={2} />)
-  expect(screen.queryByText('Total: 378')).toBeNull()
-  expect(screen.queryByRole('button', { name: '撤回' })).toBeNull()
-  await act(async () => finish({ ...projectChange, change_set_id: 'changeset-new' }))
-  await screen.findByText('Total: 378')
-  fireEvent.click(screen.getByRole('button', { name: '全部修改' }))
-  view.rerender(<Harness focusId="changeset-new" focusRequest={3} />)
-  expect(await screen.findByText('Total: 378')).toBeInTheDocument()
+it('撤回遇到外部改动时保留错误并刷新磁盘状态',async()=>{
+ render(mount('chat-a',record.id))
+ await screen.findByText('Total: 49.50')
+ undo.mockRejectedValue(new Error('文件已由其他程序修改'))
+ detail.mockResolvedValue({...record,undo_available:false,undo_reason:'文件已改变，请刷新核对'})
+ fireEvent.click(screen.getByRole('button',{name:'撤回这次修改'}))
+ expect(await screen.findByRole('alert')).toHaveTextContent('其他程序修改')
+ await screen.findByText('文件已改变，请刷新核对')
+ expect(screen.queryByRole('button',{name:'撤回这次修改'})).toBeNull()
 })
 
-it('详情接口返回同项目的其他记录时显示错误，不提供错误记录的撤回', async () => {
-  vi.mocked(getChangeSet).mockResolvedValue({ ...projectChange, change_set_id: 'changeset-wrong' })
-  render(<Harness focusId={projectChange.change_set_id} />)
-  expect(await screen.findByRole('alert')).toHaveTextContent('修改详情与当前选中的记录不一致')
-  expect(screen.queryByText('Total: 378')).toBeNull()
-  expect(screen.queryByRole('button', { name: '撤回' })).toBeNull()
+it('列表网络失败不冒充空记录，分页变化后刷新再继续',async()=>{
+ read.mockRejectedValueOnce(new Error('连接失败'))
+ render(mount())
+ await screen.findByRole('alert')
+ expect(screen.queryByText('还没有文件修改')).toBeNull()
+ read.mockResolvedValueOnce({...page([record]),total:2,next_offset:1})
+ fireEvent.click(screen.getByRole('button',{name:'重试'}))
+ await screen.findByRole('button',{name:'显示更多修改'})
+ read.mockRejectedValueOnce(new RuntimeApiError(409,{error:{message:'记录已变化'}}))
+ fireEvent.click(screen.getByRole('button',{name:'显示更多修改'}))
+ await screen.findByRole('alert')
+ expect(screen.getByRole('button',{name:'显示更多修改'})).toBeDisabled()
+ read.mockResolvedValueOnce(page())
+ fireEvent.click(screen.getByRole('button',{name:'刷新修改记录'}))
+ await screen.findByRole('button',{name:/更新预算/})
+ expect(within(screen.getByRole('list')).getAllByRole('button')).toHaveLength(2)
 })
 
-it('列表尚未包含指定记录时仍读该详情，404 保留为可重试错误', async () => {
-  vi.mocked(listProjectChangeSets).mockResolvedValue([])
-  vi.mocked(getChangeSet).mockRejectedValue(new Error('404：这条修改已不存在'))
-  render(<Harness focusId="changeset-missing" />)
-  expect(await screen.findByRole('alert')).toHaveTextContent('这条修改已不存在')
-  expect(screen.getByRole('button', { name: '重试' })).toBeEnabled()
-  expect(screen.queryByText('还没有文件修改记录。')).toBeNull()
-})
-
-it('切换对话清除其他文件详情，无项目时仍能浏览当前对话', async () => {
-  const view = render(<Harness bound={false} focusId={outside.change_id} />)
-  await screen.findByRole('heading', { name: '导出 CSV' })
-  view.rerender(<Harness bound={false} sid="chat-b" />)
-  expect(screen.queryByRole('heading', { name: '导出 CSV' })).toBeNull()
-  await waitFor(() => expect(screen.getByText('还没有文件修改记录。')).toBeInTheDocument())
+it('新会话同步清除旧详情和撤回操作，重开同一记录仍定位',async()=>{
+ const view=render(mount('chat-a',record.id,1))
+ await screen.findByText('Total: 49.50')
+ fireEvent.click(screen.getByRole('button',{name:'全部修改'}))
+ view.rerender(mount('chat-a',record.id,2))
+ await screen.findByText('Total: 49.50')
+ read.mockResolvedValue({...page([]),session_id:'chat-b'})
+ view.rerender(mount('chat-b'))
+ expect(screen.queryByText('Total: 49.50')).toBeNull()
+ expect(screen.queryByRole('button',{name:'撤回这次修改'})).toBeNull()
+ await screen.findByText('还没有文件修改')
 })

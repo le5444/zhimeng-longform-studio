@@ -38,18 +38,6 @@ function route(sessionId: string, changeId?: string) {
   return `/api/v1/agent/sessions/${encodeURIComponent(sessionId)}/file-changes${changeId ? `/${encodeURIComponent(changeId)}` : ''}`
 }
 
-export async function listSessionFileChanges(sessionId: string, options: RuntimeClientOptions = {}) {
-  const result = await fetchRuntimeJson<{ session_id: string; changes: SessionFileChange[] }>(route(sessionId), options)
-  if (result.session_id !== sessionId || result.changes.some((change) => change.session_id !== sessionId)) {
-    throw new Error('修改记录与当前对话不一致，请重新加载。')
-  }
-  return result.changes
-}
-
-export function getSessionFileChange(sessionId: string, changeId: string, options: RuntimeClientOptions = {}): Promise<SessionFileChangeDetail> {
-  return fetchRuntimeJson(route(sessionId, changeId), options)
-}
-
 export function undoSessionFileChange(sessionId: string, changeId: string, options: RuntimeClientOptions = {}): Promise<SessionFileChangeDetail> {
   return fetchRuntimeJson(`${route(sessionId, changeId)}/undo`, { timeoutMs: 120_000, ...options }, { method: 'POST' })
 }

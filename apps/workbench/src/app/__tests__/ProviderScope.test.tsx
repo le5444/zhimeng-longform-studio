@@ -29,7 +29,6 @@ vi.mock('../chat/ChatView', async () => {
 })
 vi.mock('../panel/Files', () => ({ FilesPanel: () => null }))
 vi.mock('../panel/Changes', () => ({ ChangesPanel: () => null }))
-vi.mock('../panel/SessionChangesPanel', () => ({ SessionChangesPanel: () => null }))
 vi.mock('../folder/FolderPicker', () => ({ FolderPicker: () => null }))
 
 function catalog() { return { schema: 'zhimeng.provider-catalog.v1', providers: state.profiles, active_provider_id: state.profiles.find((p) => p.active)?.provider_id } }

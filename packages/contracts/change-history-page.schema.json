@@ -1,0 +1,179 @@
+{
+  "$defs": {
+    "HistoryChange": {
+      "properties": {
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/HistoryFile"
+          },
+          "title": "Files",
+          "type": "array"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "project_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Project Id"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Run Id"
+        },
+        "session_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Session Id"
+        },
+        "source": {
+          "enum": [
+            "change_set",
+            "file_change"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "session_id",
+        "project_id",
+        "run_id",
+        "title",
+        "status",
+        "created_at",
+        "files"
+      ],
+      "title": "HistoryChange",
+      "type": "object"
+    },
+    "HistoryFile": {
+      "properties": {
+        "operation": {
+          "title": "Operation",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "target_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Path"
+        }
+      },
+      "required": [
+        "path",
+        "operation"
+      ],
+      "title": "HistoryFile",
+      "type": "object"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/change-history-page.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "changes": {
+      "items": {
+        "$ref": "#/$defs/HistoryChange"
+      },
+      "title": "Changes",
+      "type": "array"
+    },
+    "next_offset": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Next Offset"
+    },
+    "project_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Project Id"
+    },
+    "revision": {
+      "title": "Revision",
+      "type": "string"
+    },
+    "scope": {
+      "enum": [
+        "session",
+        "project"
+      ],
+      "title": "Scope",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "total": {
+      "title": "Total",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "session_id",
+    "scope",
+    "project_id",
+    "revision",
+    "total",
+    "changes",
+    "next_offset"
+  ],
+  "title": "ChangeHistoryPage",
+  "type": "object"
+}

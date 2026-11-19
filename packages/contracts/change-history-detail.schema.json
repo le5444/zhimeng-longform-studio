@@ -1,0 +1,266 @@
+{
+  "$defs": {
+    "HistoryFile": {
+      "properties": {
+        "operation": {
+          "title": "Operation",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "target_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Path"
+        }
+      },
+      "required": [
+        "path",
+        "operation"
+      ],
+      "title": "HistoryFile",
+      "type": "object"
+    },
+    "HistoryHunk": {
+      "properties": {
+        "after": {
+          "title": "After",
+          "type": "string"
+        },
+        "before": {
+          "title": "Before",
+          "type": "string"
+        }
+      },
+      "required": [
+        "before",
+        "after"
+      ],
+      "title": "HistoryHunk",
+      "type": "object"
+    },
+    "HistoryPreview": {
+      "properties": {
+        "after_characters": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "After Characters"
+        },
+        "before_characters": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Before Characters"
+        },
+        "current_state": {
+          "enum": [
+            "file",
+            "directory",
+            "missing",
+            "unverified"
+          ],
+          "title": "Current State",
+          "type": "string"
+        },
+        "hunks": {
+          "items": {
+            "$ref": "#/$defs/HistoryHunk"
+          },
+          "title": "Hunks",
+          "type": "array"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "open_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Open Path"
+        },
+        "operation": {
+          "title": "Operation",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "target_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Path"
+        }
+      },
+      "required": [
+        "path",
+        "operation",
+        "current_state"
+      ],
+      "title": "HistoryPreview",
+      "type": "object"
+    }
+  },
+  "$id": "https://zhimeng.local/contracts/change-history-detail.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "created_at": {
+      "title": "Created At",
+      "type": "string"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/HistoryFile"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "previews": {
+      "items": {
+        "$ref": "#/$defs/HistoryPreview"
+      },
+      "title": "Previews",
+      "type": "array"
+    },
+    "project_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Project Id"
+    },
+    "review_revision": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Review Revision"
+    },
+    "run_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Run Id"
+    },
+    "session_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Session Id"
+    },
+    "source": {
+      "enum": [
+        "change_set",
+        "file_change"
+      ],
+      "title": "Source",
+      "type": "string"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "undo_available": {
+      "title": "Undo Available",
+      "type": "boolean"
+    },
+    "undo_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Undo Reason"
+    }
+  },
+  "required": [
+    "id",
+    "source",
+    "session_id",
+    "project_id",
+    "run_id",
+    "title",
+    "status",
+    "created_at",
+    "files",
+    "previews",
+    "undo_available",
+    "undo_reason"
+  ],
+  "title": "ChangeHistoryDetail",
+  "type": "object"
+}
