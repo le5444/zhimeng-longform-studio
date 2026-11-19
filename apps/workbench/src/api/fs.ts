@@ -47,3 +47,25 @@ export function makeFolder(parent: string, name: string, options: RuntimeClientO
     body: JSON.stringify({ parent, name }),
   })
 }
+
+export interface LocalFilePreview {
+  path: string
+  kind: 'text' | 'office' | 'unavailable' | 'directory'
+  size_bytes: number | null
+  sha256: string | null
+  content: string | null
+  encoding: string | null
+  format: string | null
+  truncated: boolean
+  warnings: string[]
+}
+
+export function readLocalFile(paths: string[], options: RuntimeClientOptions = {}): Promise<LocalFilePreview> {
+  return fetchRuntimeJson(`/api/v1/fs/file?${new URLSearchParams(paths.map(path => ['path', path]))}`, options)
+}
+
+export function revealLocalFile(path: string, options: RuntimeClientOptions = {}): Promise<{ path: string }> {
+  return fetchRuntimeJson('/api/v1/fs/reveal', options, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }),
+  })
+}

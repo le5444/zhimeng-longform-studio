@@ -10,7 +10,7 @@ import httpx
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
-from zhimeng_runtime.agent_tools import CommandSessionArguments, ProjectWriteFileArguments
+from zhimeng_runtime.agent_tools import CommandSessionArguments, ProjectWriteFileArguments, ProjectEditFileArguments, SkillReadFileArguments
 from zhimeng_runtime.agent_provider import OpenAICompatibleAgentProvider, ProviderToolCall, ProviderToolDefinition
 from test_agent_provider import ChunkStream, sse
 
@@ -70,6 +70,8 @@ def test_command_schema_and_executor_agree_on_operation_inputs(body, valid):
 
 
 @pytest.mark.parametrize("filename,model", [
+    ("tool-edit-file-arguments.schema.json", ProjectEditFileArguments),
+    ("tool-skill-read-file-arguments.schema.json", SkillReadFileArguments),
     ("tool-write-file-arguments.schema.json", ProjectWriteFileArguments),
     ("tool-command-session-arguments.schema.json", CommandSessionArguments),
 ])

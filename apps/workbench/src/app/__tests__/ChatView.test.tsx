@@ -229,7 +229,7 @@ it('任务失败也展示记录同步重试，重试保留草稿且不重发任�
   expect(screen.queryByRole('button', { name: '重试同步记录' })).not.toBeInTheDocument()
 })
 
-it('本轮文件核对只出现一次，按需读真实轮次并保留草稿，项目外走原修改预览', async () => {
+it('本轮文件核对只出现一次，项目外文件能直接打开并查看修改，保留草稿', async () => {
   vi.mocked(readRunArtifacts).mockResolvedValueOnce({ session_id: 's1', run_id: 'r1', run_status: 'succeeded',
     revision: 'v1', observed_at: '2026-11-08T10:00:00Z', total_paths: 1, next_offset: null, scope: 'run_receipt_paths_only',
     observations: [{ receipt_id: 'filechange-result', source: 'file_change', record_state: 'applied', operation: 'create',
@@ -241,14 +241,16 @@ it('本轮文件核对只出现一次，按需读真实轮次并保留草稿，�
     msg('a1', 'r1', 'assistant', '开始读取表格。', 2, { session_id: 's1' }),
     msg('a2', 'r1', 'assistant', '采购表已经整理。', 3, { session_id: 's1' }),
   ] })
-  const { props } = renderChat(conv, NO_FOLDER)
+  const openLocal = vi.fn()
+  const { props } = renderChat(conv, { ...NO_FOLDER, onOpenLocalFile: openLocal })
   expect(screen.getAllByRole('button', { name: '核对本轮文件' })).toHaveLength(1)
   expect(readRunArtifacts).not.toHaveBeenCalled()
   fireEvent.change(screen.getByRole('textbox'), { target: { value: '下一条草稿' } })
   fireEvent.click(screen.getByRole('button', { name: '核对本轮文件' }))
   await screen.findByText('与记录一致')
   expect(readRunArtifacts).toHaveBeenCalledWith('s1', 'r1', 0, undefined, expect.objectContaining({ signal: expect.any(AbortSignal) }))
-  expect(screen.queryByRole('button', { name: '打开文件' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '打开文件' }))
+  expect(openLocal).toHaveBeenCalledWith('C:/outside/report.csv')
   fireEvent.click(screen.getByRole('button', { name: '查看修改与撤回' }))
   expect(props.onShowChange).toHaveBeenCalledWith('filechange-result')
   expect(screen.getByRole('textbox')).toHaveValue('下一条草稿')
@@ -425,6 +427,19 @@ describe('对话', () => {
     await waitFor(() => expect(queueApi.steerQueuedMessage).toHaveBeenCalledOnce())
     expect(queueApi.steerQueuedMessage.mock.calls[0][2]).toBe('r1')
     expect(conv.send).not.toHaveBeenCalled()
+  })
+
+  it('启动时先恢复对话归属，再允许输入；首条草稿不会落到临时作用域', () => {
+    const conv = conversation({ session: null, availability: 'checking' })
+    const view = renderChat(conv, NO_FOLDER)
+    expect(screen.getByRole('textbox')).toBeDisabled()
+    const restored = conversation()
+    view.rerenderWith({ conversation: restored, runtime })
+    const input = screen.getByRole('textbox')
+    expect(input).toBeEnabled()
+    fireEvent.change(input, { target: { value: '读取配置并核对金额' } })
+    view.rerenderWith({ conversation: { ...restored }, runtime })
+    expect(input).toHaveValue('读取配置并核对金额')
   })
 
   it('本机服务离线仍可阅读和编辑草稿，恢复前不发送', async () => {

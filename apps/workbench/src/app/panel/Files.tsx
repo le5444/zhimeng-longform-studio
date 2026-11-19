@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, FileText, Folder } from 'lucide-react'
 import type { ProjectFile, ProjectInspection } from '../../api/projects'
 import { A } from '../text'
 import { Btn, type Notify } from '../ui'
-import { resolveFileNavigation } from '../lib/fileNavigation'
+import { localFileCandidates, resolveFileNavigation } from '../lib/fileNavigation'
 import type { FileLocation } from '../lib/fileReferences'
 import type { FileFocus } from '../lib/filePosition'
 import type { FileQuotation } from '../lib/fileQuotation'
@@ -24,6 +24,7 @@ export function FilesPanel({
   onOpenPath,
   onSaved,
   onQuote,
+  onOpenLocalFile,
   notify,
 }: {
   projectId: string
@@ -35,6 +36,7 @@ export function FilesPanel({
   /** 存完以后：外面刷新文件夹快照（修改记录、对话里的「开着哪个文件」都跟着新版本走）。 */
   onSaved: () => void
   onQuote?: (quote: FileQuotation) => void
+  onOpenLocalFile?: (path: string) => void
   notify: Notify
 }) {
   // 在右栏内切文件、返回文件树时保留各自的草稿，连同开始编辑时的版本一起留着。
@@ -70,6 +72,7 @@ export function FilesPanel({
         const target = snapshot.files.some((item) => item.relative_path === candidate?.relativePath) ? candidate : resolveFileNavigation(snapshot, path) ?? candidate
         if (target?.location) onOpenPath(target.relativePath, target.location)
         else if (target) onOpenPath(target.relativePath)
+        else if (onOpenLocalFile && localFileCandidates(path).length) onOpenLocalFile(path)
         else notify('warn', `这个链接暂时无法在当前文件夹打开：${path}`)
       }}
       onBack={() => onOpenPath(null)} onSaved={onSaved} onQuote={onQuote} notify={notify} />

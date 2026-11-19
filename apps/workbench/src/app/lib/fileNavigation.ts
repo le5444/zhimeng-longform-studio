@@ -12,6 +12,13 @@ export interface FileTarget {
   location?: FileLocation
 }
 
+/** Project paths retain their editor; absolute paths can also be read without a project. */
+export function localFileCandidates(rawPath: string): string[] {
+  const input = rawPath.trim().replace(/^@/, '').replace(/^(?:"|')|(?:"|')$/g, '')
+  if (!isLocalFileHref(input)) return []
+  return filePathCandidates(input).filter(path => /^(?:[a-z]:[\\/]|\/|\\\\|~[\\/])/i.test(path))
+}
+
 export function resolveFileNavigation(snapshot: ProjectInspection | null | undefined, rawPath: string): FileTarget | null {
   if (!rawPath) return null
   const input = rawPath.trim().replace(/^@/, '').replace(/^(?:"|')|(?:"|')$/g, '')

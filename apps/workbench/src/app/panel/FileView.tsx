@@ -24,7 +24,7 @@ function countLines(text: string): number {
   return lines.length - (lines[lines.length - 1] === '' ? 1 : 0)
 }
 
-function TextPreview({ text, path, wrap, focus, textRef }: { text: string; path: string; wrap: boolean; focus?: FileFocus; textRef: RefObject<HTMLElement | null> }) {
+export function TextPreview({ text, path, wrap, focus, textRef }: { text: string; path: string; wrap: boolean; focus?: FileFocus; textRef: RefObject<HTMLElement | null> }) {
   const numbers = useMemo(() => Array.from({ length: Math.max(1, countLines(text)) }, (_, index) => index + 1).join('\n'), [text])
   const selection = useMemo(() => focus?.location ? fileTextSelection(text, focus.location) : null, [text, focus])
   const marker = useRef<HTMLElement | null>(null)

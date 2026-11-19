@@ -11,7 +11,7 @@ import { AgentSendUnconfirmedError, type AgentConversationState } from '../../ho
 import { useChangeCards } from './useChangeCards'
 import { readAgentAccessMode, writeAgentAccessMode, type AgentAccessMode } from '../lib/accessMode'
 import { agentFileEffects } from '../lib/agentFileEffects'
-import { resolveFileNavigation } from '../lib/fileNavigation'
+import { localFileCandidates, resolveFileNavigation } from '../lib/fileNavigation'
 import type { FileLocation } from '../lib/fileReferences'
 import { useConversationDraft } from '../lib/useConversationDraft'
 import { useConversationSkills } from '../lib/useConversationSkills'
@@ -87,6 +87,7 @@ export interface ChatViewProps {
   onOpenFolder: () => void
   onNewFolder: () => void
   onOpenFile: (relativePath: string, location?: FileLocation) => void
+  onOpenLocalFile?: (path: string) => void
   onShowChange: (changeSetId: string) => void
   onShowChanges: () => void
   onShowCommands?: (commandId?: string) => void
@@ -149,12 +150,14 @@ export function ChatView(props: ChatViewProps) {
   })
 
   // 对话里点了文件名：认得出是文件夹里的哪一个就在右栏打开。
-  const { onOpenFile, onShowChange, onShowCommands, onOpenMemorySettings } = props
+  const { onOpenFile, onOpenLocalFile, onShowChange, onShowCommands, onOpenMemorySettings } = props
   const openFile = useCallback((rawPath: string) => {
-    const target = resolveFileNavigation(snapshot, rawPath)
+    const target = snapshot ? resolveFileNavigation(snapshot, rawPath) : null
     if (target?.location) onOpenFile(target.relativePath, target.location)
     else if (target) onOpenFile(target.relativePath)
-  }, [onOpenFile, snapshot])
+    else if (onOpenLocalFile && localFileCandidates(rawPath).length) onOpenLocalFile(rawPath)
+    else notify('warn', `请使用文件的完整路径打开：${rawPath}`)
+  }, [onOpenFile, onOpenLocalFile, snapshot, notify])
 
   // ---- 输入框 ----
   const [draft, setDraft, draftRecovery] = useConversationDraft(projectId, conversation.session?.session_id ?? null,
@@ -510,8 +513,8 @@ export function ChatView(props: ChatViewProps) {
   const { byRun, approve, discard, rollback } = cards
   const renderArtifacts = useCallback((sessionId: string, runId: string) => sessionId !== conversation.session?.session_id ? null : <RunArtifacts sessionId={sessionId} runId={runId}
     refreshKey={`${props.changesRefreshKey ?? ''}:${(byRun.get(runId) ?? []).map((card) => `${card.changeSetId}:${card.status}`).join('|')}`}
-    canOpenFile={(path) => Boolean(resolveFileNavigation(snapshot, path))}
-    onOpenFile={openFile} onShowChange={onShowChange} />, [byRun, conversation.session?.session_id, onShowChange, openFile, props.changesRefreshKey, snapshot])
+    canOpenFile={(path) => Boolean(snapshot && resolveFileNavigation(snapshot, path) || onOpenLocalFile && localFileCandidates(path).length)}
+    onOpenFile={openFile} onShowChange={onShowChange} />, [byRun, conversation.session?.session_id, onShowChange, openFile, onOpenLocalFile, props.changesRefreshKey, snapshot])
   const renderCards = useCallback((runId: string): ReactNode => (byRun.get(runId) ?? []).map((card) => (
     <ChangeCard
       key={card.changeSetId}
@@ -864,7 +867,8 @@ export function ChatView(props: ChatViewProps) {
             running={conversation.running}
             busy={conversation.busy}
             available={available}
-            inputDisabled={conversation.switchingSession || conversation.contextState === 'restoring'}
+            inputDisabled={conversation.switchingSession || conversation.contextState === 'restoring'
+              || (conversation.availability === 'checking' && !conversation.session)}
             placeholder={projectId ? T.agent.placeholder : T.agent.placeholderCasual}
             files={snapshot?.files ?? null}
             skills={skills}

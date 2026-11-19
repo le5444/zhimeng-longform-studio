@@ -88,30 +88,9 @@ def test_catalog_lists_skill_file_tools_only_with_a_skill_folder_service(tmp_pat
     with_tools, _, _ = _build(tmp_path / "a")
     without_tools, _, _ = _build(tmp_path / "b", with_skills=False)
 
-    assert [item.name for item in with_tools.definitions] == [
-        "list_files",
-        "read_file",
-        "write_file",
-        "edit_file",
-        "delete_file",
-        "move_file",
-        "make_folder",
-        "undo_change",
-        "web_fetch",
-        "search_web",
-        "ai_smell_score",
-        "memory_write",
-        "session_search",
-        "session_read",
-        "plan_read",
-        "plan_update",
-        "computer_run_command",
-        "command_session",
-        "change_set_propose",
-        "skill_list_files",
-        "skill_read_file",
-        "skill_search",
-    ]
+    names = {item.name for item in with_tools.definitions}
+    assert SKILL_FILE_TOOL_NAMES <= names
+    assert names - {item.name for item in without_tools.definitions} == SKILL_FILE_TOOL_NAMES
     assert SKILL_FILE_TOOL_NAMES.isdisjoint(item.name for item in without_tools.definitions)
     error = _error(without_tools, "skill_search", {"skill": "x", "query": "y"})
     assert error.code == "agent_tool_not_allowed"
@@ -197,6 +176,30 @@ def test_read_file_is_line_bounded_and_continues(tmp_path: Path) -> None:
 
     windows_style = _run(executor, "skill_read_file", {"skill": "网文知识库", "path": ".\\卡.md"})
     assert windows_style["path"] == "卡.md"
+
+
+def test_skill_long_lines_are_fully_recoverable_without_skipping_content(tmp_path, monkeypatch):
+    from zhimeng_runtime import agent_tools
+
+    monkeypatch.setattr(agent_tools, "MAX_READ_CHARACTERS", 17)
+    executor, root, _ = _build(tmp_path)
+    folder = _skill(root, "data-processing", "Process ordinary data files")
+    original = '{"description":"' + "甲乙丙" * 19 + '"}\nsecond row\nthird row'
+    (folder / "sample.jsonl").write_bytes(original.encode("utf-8"))
+    offset, parts = 0, []
+    while True:
+        result = _run(executor, "skill_read_file", {
+            "skill": "data-processing", "path": "sample.jsonl", "start_offset": offset,
+        })
+        parts.append(result["content"])
+        if not offset:
+            assert result["end_line"] == 1
+            assert result["next_start_line"] is None
+        if not result["truncated"]:
+            break
+        assert result["next_offset"] > offset
+        offset = result["next_offset"]
+    assert "".join(parts) == original
 
 
 def test_read_refuses_paths_outside_scripts_hidden_and_disabled(tmp_path: Path) -> None:

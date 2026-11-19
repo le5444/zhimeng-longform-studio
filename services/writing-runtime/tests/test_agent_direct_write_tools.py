@@ -489,8 +489,6 @@ def test_edit_file_missing_and_ambiguous_find_fail_closed(
     [
         "../隔壁书/正文.md",
         "05_正文内容/../秘密.md",
-        ".git/config",
-        "08_素材库/.env",
         # 9-26 起绝对路径（打开的文件夹以外记进 file_journal）和反斜杠都照收，
         # 见 test_correction_p0_20260926.py。
     ],
@@ -508,6 +506,61 @@ def test_write_file_rejects_unsafe_paths(tmp_path: Path, bad_path: str) -> None:
             )
         )
     assert excinfo.value.code == "agent_tool_validation_failed"
+
+
+@pytest.mark.parametrize("relative", [".env", ".config/app.env", "node_modules/example/config.txt"])
+def test_explicit_config_edits_preserve_encoding_secrets_and_undo(tmp_path, relative):
+    executor, run, _chapter, _db, _cs, project = _build_runtime(tmp_path)
+    file = project / relative
+    file.parent.mkdir(parents=True, exist_ok=True)
+    original = "PORT=3000\r\nAPI_KEY=example-test-credential-12345678\r\n名称=本地应用\r\n".encode("utf-16")
+    file.write_bytes(original)
+    read = asyncio.run(_call(executor, run, "read_file", {"path": relative}, call_id="config-read"))
+    assert "PORT=3000" in read.output["content"]
+    assert read.output["encoding"] == "utf-16-le"
+    assert read.output["bom"] is True
+    assert read.output["newline"] == "CRLF"
+    assert "example-test-credential-12345678" not in read.output["content"]
+    result = asyncio.run(_call(executor, run, "edit_file", {
+        "path": relative, "find": "PORT=3000", "replace": "PORT=4000",
+    }, call_id="config-edit"))
+    assert file.read_bytes() == original.decode("utf-16").replace("PORT=3000", "PORT=4000").encode("utf-16")
+    assert result.output["change_id"].startswith("filechange-")
+    asyncio.run(_call(executor, run, "undo_change", {"change_set_id": result.output["change_id"]}, call_id="config-undo"))
+    assert file.read_bytes() == original
+
+
+@pytest.mark.parametrize("relative", ["settings.txt", ".config/settings.txt"])
+def test_ordered_edits_commit_once_or_leave_the_whole_file_unchanged(tmp_path, relative):
+    executor, run, _chapter, database, _cs, project = _build_runtime(tmp_path)
+    file = project / relative
+    file.parent.mkdir(parents=True, exist_ok=True)
+    original = b"PORT=3000\r\nMODE=development\r\n"
+    file.write_bytes(original)
+    asyncio.run(_call(executor, run, "read_file", {"path": relative}, call_id="batch-read"))
+    with pytest.raises(AgentToolError, match="第 2 处修改"):
+        asyncio.run(_call(executor, run, "edit_file", {"path": relative, "edits": [
+            {"find": "PORT=3000", "replace": "PORT=4000"},
+            {"find": "DOES_NOT_EXIST", "replace": "nothing"},
+        ]}, call_id="batch-failed"))
+    assert file.read_bytes() == original
+    result = asyncio.run(_call(executor, run, "edit_file", {"path": relative, "edits": [
+        {"find": "PORT=3000", "replace": "PORT=4000"},
+        {"find": "PORT=4000", "replace": "PORT=5000"},
+        {"find": "MODE=development", "replace": "MODE=production"},
+    ]}, call_id="batch-saved"))
+    assert file.read_bytes() == b"PORT=5000\r\nMODE=production\r\n"
+    assert result.output["occurrences"] == 3 and result.output["edits_count"] == 3
+    change = result.output.get("change_id") or result.output["change_set_id"]
+    # A second intentional edit can use the now-current text without a forced
+    # re-read of the entire file after the Agent's own preceding change.
+    second = asyncio.run(_call(executor, run, "edit_file", {
+        "path": relative, "find": "PORT=5000", "replace": "PORT=6000",
+    }, call_id="batch-followup"))
+    second_change = second.output.get("change_id") or second.output["change_set_id"]
+    asyncio.run(_call(executor, run, "undo_change", {"change_set_id": second_change}, call_id="batch-undo-second"))
+    asyncio.run(_call(executor, run, "undo_change", {"change_set_id": change}, call_id="batch-undo"))
+    assert file.read_bytes() == original
 
 
 def test_write_file_follows_the_authors_own_folder_layout(tmp_path: Path) -> None:
@@ -602,17 +655,8 @@ def test_computer_tools_read_anywhere_but_never_env_files(tmp_path: Path) -> Non
 
     env_file = tmp_path / "library" / ".env"
     env_file.write_text("SECRET=1\n", encoding="utf-8")
-    with pytest.raises(AgentToolError) as env_exc:
-        asyncio.run(
-            _call(
-                executor,
-                run,
-                "computer_read_file",
-                {"path": str(env_file)},
-                call_id="call-0005",
-            )
-        )
-    assert env_exc.value.code == "agent_tool_computer_outside_roots"
+    result = asyncio.run(_call(executor, run, "computer_read_file", {"path": str(env_file)}, call_id="call-0005"))
+    assert result.output["path"] == str(env_file.resolve())
 
 
 def test_computer_read_file_reads_any_text_suffix_and_hints_binary(tmp_path: Path) -> None:

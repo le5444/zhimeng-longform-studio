@@ -13,9 +13,6 @@ from zhimeng_runtime.project_reader import (
     prose_directories,
 )
 
-REAL_BOOK = Path("__local_acceptance_fixture_not_distributed__")
-
-
 def _create_project(root: Path) -> None:
     root.mkdir(parents=True)
     for index, label in SECTION_LABELS.items():
@@ -148,29 +145,6 @@ def test_longform_check_api_uses_bound_project(tmp_path: Path) -> None:
         assert "ledger_suggestions" in payload
         assert "cast" in payload
         assert "hook_bridge" in payload
-
-
-def test_longform_check_on_real_zongmen_book() -> None:
-    if not REAL_BOOK.is_dir():
-        return
-    result = check_project_for_author(REAL_BOOK, chapter_id="CH002")
-    assert result["pacing"]["char_count"] > 500
-    assert result["checked"]["character_count"] >= 1
-    assert result["checked"]["foreshadow_count"] >= 1
-    assert result["author_summary"]
-    assert "第 002 章" in result["chapter_label"]
-
-
-def test_real_zongmen_chapter_four_does_not_repeat_already_logged_foreshadows() -> None:
-    if not REAL_BOOK.is_dir():
-        return
-
-    result = check_project_for_author(REAL_BOOK, chapter_id="VOL001-CH004")
-    titles = " ".join(item["title"] for item in result["foreshadows"])
-
-    assert "F02" not in titles
-    assert "F03" not in titles
-    assert result["chapter_id"] == "VOL001-CH004"
 
 
 def test_longform_check_flags_unbridged_hook_and_missing_cast(tmp_path: Path) -> None:

@@ -107,6 +107,7 @@ from zhimeng_runtime.project_api import create_project_router
 from zhimeng_runtime.author_phrases_api import create_author_phrases_router
 from zhimeng_runtime.user_memory_api import create_user_memory_router
 from zhimeng_runtime.fs_browse_api import create_fs_router
+from zhimeng_runtime.local_file_api import create_local_file_router
 from zhimeng_runtime.user_skill_api import create_user_skill_router
 from zhimeng_runtime.user_skill_folder_service import KNOWN_SKILL_SOURCES, UserSkillFolderService
 from zhimeng_runtime.project_kb_service import ProjectKbService
@@ -993,6 +994,7 @@ def create_app(
     app.include_router(create_mcp_router(mcp_service, mcp_adapter))
     app.include_router(create_author_phrases_router(runtime_state_root))
     app.include_router(create_user_memory_router(runtime_state_root))
+    app.include_router(create_local_file_router())
     # 选文件夹的框（纠偏 P2）：常用位置、列一层文件夹、新建文件夹；打开成项目仍走受信根 + 读项目两个老接口。
     app.include_router(
         create_fs_router(

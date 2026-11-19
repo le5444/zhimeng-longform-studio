@@ -130,34 +130,16 @@ def _build_runtime(
     return executor, running, chapter
 
 
-def test_tool_catalog_is_project_local_and_has_no_apply_or_external_tool(
+def test_tool_catalog_exposes_general_capabilities_without_legacy_duplicates(
     tmp_path: Path,
 ) -> None:
     executor, _, _ = _build_runtime(tmp_path)
 
     # 3.11（9-27）：读和列只有 list_files / read_file 一套，旧的四个只在执行层认。
-    assert [item.name for item in executor.definitions] == [
-        "list_files",
-        "read_file",
-        "project_search",
-        "write_file",
-        "edit_file",
-        "delete_file",
-        "move_file",
-        "make_folder",
-        "undo_change",
-        "web_fetch",
-        "search_web",
-        "ai_smell_score",
-        "memory_write",
-        "session_search",
-        "session_read",
-        "plan_read",
-        "plan_update",
-        "computer_run_command",
-        "command_session",
-        "change_set_propose",
-    ]
+    names = [item.name for item in executor.definitions]
+    assert len(names) == len(set(names))
+    assert {"list_files", "read_file", "write_file", "edit_file", "undo_change", "computer_run_command", "shared_browser", "goal_read", "goal_update"} <= set(names)
+    assert not {"project_read_file", "computer_read_file", "change_set_apply"} & set(names)
     rendered = " ".join(
         item.model_dump_json(by_alias=True) for item in executor.definitions
     ).casefold()

@@ -81,14 +81,14 @@ def test_missing_file_error_lists_what_the_nearest_folder_really_has(tmp_path: P
     assert "CH001_正文.md" in str(caught.value)
 
 
-def test_nearby_listing_walks_up_to_an_existing_folder_and_hides_secrets(tmp_path: Path) -> None:
+def test_nearby_listing_walks_up_and_lists_names_without_reading_values(tmp_path: Path) -> None:
     (tmp_path / "书").mkdir()
     (tmp_path / "书" / "001_开篇.md").write_text("x", encoding="utf-8")
     (tmp_path / "书" / "设定").mkdir()
     (tmp_path / "书" / ".env").write_text("KEY=1", encoding="utf-8")
     listing = AgentToolExecutor._nearby_listing(tmp_path / "书" / "打错的夹" / "更深" / "x.md")
     assert "001_开篇.md" in listing and "设定/" in listing
-    assert ".env" not in listing
+    assert ".env" in listing and "KEY=1" not in listing
 
 
 def test_list_query_treats_a_bar_as_or(tmp_path: Path) -> None:

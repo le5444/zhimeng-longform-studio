@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react'
 import { PanelLeftOpen, Search, Settings, SquarePen } from 'lucide-react'
 import './zm.css'
 import './chat/chat.css'
@@ -19,6 +19,8 @@ import { readFlag, writeFlag } from './lib/local'
 import { useTheme } from './lib/theme'
 import { onUiSizeChange, readUiSize, uiSizePixels } from './lib/uiSize'
 import { WorkspacePanel, type PanelTab } from './panel/WorkspacePanel'
+import type { LocalFileTarget } from './panel/LocalFile'
+import { localFileCandidates, resolveFileNavigation } from './lib/fileNavigation'
 import type { FileLocation } from './lib/fileReferences'
 import type { SettingsSection } from './settings/Settings'
 import { SETTINGS_PAGES } from './settings/registry'
@@ -51,6 +53,7 @@ export default function Root() {
   const [panelOpen, setPanelOpen] = useState(false)
   const [panelTab, setPanelTab] = useState<PanelTab>('files')
   const [openPath, setOpenPath] = useState<string | null>(null)
+  const [localFile, setLocalFile] = useState<LocalFileTarget | null>(null)
   const [fileFocus, setFileFocus] = useState<{ projectId: string | null; path: string; location?: FileLocation; request: number } | null>(null)
   const [overlay, setOverlayState] = useState<Overlay>(null)
   const visibleOpenPath = panelOpen && panelTab === 'files' && projectId && snapshot && overlay === null ? openPath : null
@@ -102,7 +105,8 @@ export default function Root() {
   const changesFocus = changeTarget?.sessionId === (conversation.session?.session_id ?? null) && changeTarget?.projectId === projectId ? changeTarget.id : null
   const [changesFocusRequest, setChangesFocusRequest] = useState(0)
   const [commandFocus, setCommandFocus] = useState<{ sessionId: string | null; id: string | null; request: number }>({ sessionId: null, id: null, request: 0 })
-  const effectivePanelTab = panelTab === 'commands' || panelTab === 'browser' ? panelTab : projectId && snapshot ? panelTab : 'changes'
+  const visibleLocalFile = localFile?.sessionId === (conversation.session?.session_id ?? null) && localFile?.projectId === projectId ? localFile : null
+  const effectivePanelTab = panelTab === 'commands' || panelTab === 'browser' ? panelTab : projectId && snapshot || visibleLocalFile ? panelTab : 'changes'
   const panelShown = Boolean(panelOpen && (projectId || conversation.session) && overlay === null)
   const returnToConversation = () => {
     closePanel()
@@ -133,10 +137,38 @@ export default function Root() {
     return () => { alive = false; off() }
   }, [conversation.session?.session_id, showPanel, overlay])
   const openFile = useCallback((relativePath: string, location?: FileLocation) => {
+    setLocalFile(null)
     setOpenPath(relativePath)
     setFileFocus((previous) => ({ projectId, path: relativePath, location, request: (previous?.request ?? 0) + 1 }))
     showPanel('files')
   }, [projectId, showPanel])
+  const openLocalFile = useCallback((path: string) => {
+    const target = resolveFileNavigation(snapshot, path)
+    if (target && projectId) { openFile(target.relativePath, target.location); return }
+    if (!localFileCandidates(path).length) { notify('warn', `请使用文件的完整路径打开：${path}`); return }
+    setOpenPath(null)
+    setLocalFile(previous => ({ path, sessionId: conversation.session?.session_id ?? null, projectId, request: (previous?.request ?? 0) + 1, returnPath: openPath }))
+    showPanel('files')
+  }, [snapshot, projectId, openFile, notify, conversation.session?.session_id, openPath, showPanel])
+  const backFromLocalFile = useCallback(() => {
+    const returnPath = visibleLocalFile?.returnPath ?? null
+    setLocalFile(null)
+    if (!projectId || !snapshot) { closePanel(); return }
+    setOpenPath(returnPath)
+    setPanelTab('files')
+    setPanelOpen(true)
+    setPane('panel')
+  }, [projectId, snapshot, visibleLocalFile])
+  const openWebLink = (event: MouseEvent<HTMLElement>) => {
+    const bridge = sharedBrowser()
+    const anchor = (event.target as Element).closest?.('a[href]') as HTMLAnchorElement | null
+    if (!bridge || event.defaultPrevented || event.button > 1 || !anchor || anchor.hasAttribute('download') || !/^https?:/i.test(anchor.href)) return
+    event.preventDefault()
+    const sessionId = conversation.session?.session_id
+    if (sessionId) showPanel('browser')
+    void bridge.command(sessionId ? { action: 'create', session_id: sessionId, url: anchor.href }
+      : { action: 'open-external', url: anchor.href }).catch(error => notify('warn', authorFacingError(error, '网页没有打开，请重试。')))
+  }
   const showChange = useCallback((changeSetId: string) => {
     setChangeTarget({ id: changeSetId, sessionId: conversation.session?.session_id ?? null, projectId })
     setChangesFocusRequest((value) => value + 1)
@@ -284,6 +316,8 @@ export default function Root() {
       panelShown={panelShown}
       panelWide={panelWide}
       settingsOpen={overlay?.kind === 'settings'}
+      onClick={openWebLink}
+      onAuxClick={openWebLink}
       data-theme={theme}
       data-side={sideCollapsed ? 'off' : 'on'}
       data-panel={panelShown ? (panelWide ? 'wide' : 'on') : 'off'}
@@ -382,6 +416,7 @@ export default function Root() {
             onOpenFolder={() => setOverlay({ kind: 'folder', mode: 'open', after: 'move-chat' })}
             onNewFolder={() => setOverlay({ kind: 'folder', mode: 'new', after: 'move-chat' })}
             onOpenFile={openFile}
+            onOpenLocalFile={openLocalFile}
             onShowChange={showChange}
             onShowChanges={() => showPanel('changes')}
             onShowCommands={showCommands}
@@ -409,10 +444,20 @@ export default function Root() {
             focus: fileFocus?.projectId === projectId && fileFocus.path === openPath ? fileFocus : undefined,
             onOpenPath: (path, location) => path ? openFile(path, location) : setOpenPath(null),
             onSaved: workspace.refresh, notify,
+            onOpenLocalFile: openLocalFile,
             onQuote: conversation.switchingSession || conversation.contextState === 'restoring' ? undefined : (quote) => {
               composerRef.current?.quoteFile(quote)
               setPanelWide(false)
               setPane('chat')
+            },
+          } : null}
+          localFile={visibleLocalFile ? {
+            target: visibleLocalFile,
+            refreshKey: `${fileChangesRefreshKey}:${sessionFileChanges.records.map(record => `${record.change_id}:${record.status}`).join('|')}`,
+            onOpenFile: openLocalFile, onBack: backFromLocalFile, notify,
+            onQuote: conversation.switchingSession || conversation.contextState === 'restoring' ? undefined : quote => {
+              composerRef.current?.quoteFile(quote)
+              setPanelWide(false); setPane('chat')
             },
           } : null}
           projectChanges={projectId && snapshot ? {

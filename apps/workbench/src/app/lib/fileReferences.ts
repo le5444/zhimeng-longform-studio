@@ -49,14 +49,22 @@ export function isLocalFileHref(href: string): boolean {
   return !/^(?:[a-z][a-z\d+.-]*:|#|\?)/i.test(stripFileLocation(href))
 }
 
+function fileHrefPath(href: string): string {
+  if (!/^file:\/\//i.test(href)) return href.replace(/^#file\//, '')
+  const path = href.slice(7)
+  if (/^\/[a-z]:[\\/]/i.test(path)) return path.slice(1)
+  if (/^localhost\//i.test(path)) return `/${path.slice(10)}`.replace(/^\/([a-z]:[\\/])/i, '$1')
+  return path.startsWith('/') || /^[a-z]:[\\/]/i.test(path) ? path : `//${path}`
+}
+
 export function decodeFileHref(href: string): string {
-  const path = href.replace(/^file:\/\/\/?/i, '').replace(/^#file\//, '')
+  const path = fileHrefPath(href)
   try { return decodeURIComponent(path) } catch { return path }
 }
 
 /** 实际完整文件名优先；只有 URL 中原样出现的 # 才可能是章节锚点。 */
 export function filePathCandidates(href: string): string[] {
-  const raw = href.replace(/^file:\/\/\/?/i, '').replace(/^#file\//, '')
+  const raw = fileHrefPath(href)
   const full = decodeFileHref(raw)
   const candidates = [full, decodeFileHref(stripFileLocation(raw))]
   const fragment = raw.indexOf('#')

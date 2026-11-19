@@ -24,7 +24,6 @@ from zhimeng_runtime.agent_broker import AgentEventBroker
 from zhimeng_runtime.agent_transcript import repair_tool_pairs, tool_result_message
 from zhimeng_runtime.run_compaction import compact_tool_results
 from zhimeng_runtime.session_goal import GOAL_CONTEXT_PREFIX, GoalAdmission, goal_context
-from zhimeng_runtime.hashline import LEDGER
 from zhimeng_runtime.agent_candidate_models import AgentCandidateSubmission
 from zhimeng_runtime.agent_models import (
     AgentMessageResponse,
@@ -2850,7 +2849,6 @@ class AgentService:
                     run_id, "run_transcript_failed", {"reason": str(exc)[:300] or exc.__class__.__name__}
                 )
             finally:
-                LEDGER.clear_run(run_id)
                 if project_kb_lease is not None:
                     project_kb_lease.__exit__(None, None, None)
                 current = asyncio.current_task()

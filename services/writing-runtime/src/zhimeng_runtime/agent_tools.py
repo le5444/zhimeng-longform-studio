@@ -42,9 +42,9 @@ from zhimeng_runtime.memory_files import (
     user_memory_path,
 )
 from zhimeng_runtime.memory_updates import MemoryChange, apply_memory_changes, update_user_memory
-from zhimeng_runtime.hashline import LEDGER, ReadRecord, file_tag, line_tags, tag_content
 from zhimeng_runtime.fs_atomic import replace_with_retry
 from zhimeng_runtime.text_encoding import decode_project_text
+from zhimeng_runtime.text_page import read_text_page
 from zhimeng_runtime.web_reader import (
     decode_web_text,
     is_verification_page,
@@ -155,7 +155,7 @@ SKILL_READ_FILE_DESCRIPTION = (
     "Read part of one text file inside an enabled skill folder: a skill's SKILL.md, or a "
     "reference file it points to. Give the skill name and a path relative to that skill's "
     "folder, e.g. skill=\"<name>\", path=\"SKILL.md\". When next_start_line is returned, "
-    "pass it as start_line to continue. Read-only."
+    "pass it as start_line to continue; next_offset continues a partial line via start_offset. Read-only."
 )
 # 9-27 试过在上面加一句用途（「技能是有人为一类活写下的做法……对得上时用它，从 SKILL.md 读起」，照 memory_write 那句的先例）：
 # 只换这一句的真机对照，grok-4.6 接到「接着写第 5 章」开写前翻技能 0/5 → 0/5（`.runtime/absorb-20260926/skill_use_probe.py`），退回。
@@ -260,9 +260,6 @@ READONLY_TOOL_NAMES = frozenset(
     | {"plan_read", "goal_read"}
     | AI_SMELL_TOOL_NAMES
 )
-# 写工具不碰的目录名（任何一段命中即拒）。读不拦：电脑读工具和执行命令一样能读 .git 这些
-# （纠偏指令 3.12；9-22 审阅：读的范围不该比能执行的窄）。.env 读写都不开：工具结果会存进对话库。
-FORBIDDEN_PATH_SEGMENTS = frozenset({".git", "node_modules", "__pycache__"})
 # 模型常写 Linux 那种盘符路径（/mnt/c/Users/...，2026-09-26 grok-4.6 真机），在 Windows 上换成 C:/Users/...
 _WSL_DRIVE_PATH = re.compile(r"^/mnt/([a-zA-Z])(?:/(.*))?$")
 
@@ -280,10 +277,6 @@ def _host_path_text(raw: str) -> str:
         if match:
             return f"{match.group(1).upper()}:/{match.group(2) or ''}"
     return text
-
-
-def _is_env_file(part: str) -> bool:
-    return part.casefold().startswith(".env")
 
 
 # computer_list_files 往下找（recursive）时不钻的工具目录，和一次最多看多少、多久。
@@ -957,21 +950,47 @@ class WebSearchArguments(_ContainerToolArguments):
     limit: int = Field(default=8, ge=1, le=20)
 
 
-class ProjectEditFileArguments(_ToolArguments):
-    """Replace one exact passage inside an existing text file."""
-
-    path: str = Field(min_length=1, max_length=1024)
+class TextEditArguments(_ToolArguments):
     find: str = Field(min_length=1, max_length=20_000)
-    # 必填：以前默认空串，没写 replace 就等于把 find 那段删掉（9-27 晚改稿题 grok-4.6 交了六次只有 find 的 edit，
-    # 次次被收成「删掉这一段」）。要删一段就写 replace: ""；没写时的报错见 _missing_replace_message。
     replace: str = Field(max_length=MAX_CHANGE_CONTENT_CHARACTERS)
     replace_all: bool = False
+
+
+class ProjectEditFileArguments(_ToolArguments):
+    """Apply one replacement or an ordered batch, committing once."""
+    model_config = ConfigDict(extra="forbid", strict=True, json_schema_extra={
+        "oneOf": [
+            {"required": ["find", "replace"], "properties": {"find": {"type": "string"}, "replace": {"type": "string"}}, "not": {"required": ["edits"]}},
+            {"required": ["edits"], "properties": {"edits": {"type": "array"}},
+             "not": {"anyOf": [{"required": ["find"]}, {"required": ["replace"]}, {"required": ["replace_all"]}]}},
+        ],
+    })
+    path: str = Field(min_length=1, max_length=1024)
+    find: str | None = Field(default=None, min_length=1, max_length=20_000)
+    replace: str | None = Field(default=None, max_length=MAX_CHANGE_CONTENT_CHARACTERS)
+    replace_all: bool = False
+    edits: list[TextEditArguments] | None = Field(default=None, min_length=1,
+        description="Ordered replacements in one file. All must match before one save; use instead of top-level find/replace.")
     note: str = Field(default="", max_length=500)
 
     @model_validator(mode="before")
     @classmethod
     def accept_legacy_keys(cls, data: object) -> object:
         return _legacy_path_keys(data, _PATH_RENAMES)
+
+    @model_validator(mode="after")
+    def validate_edit_shape(self):
+        if self.edits is not None:
+            if self.model_fields_set & {"find", "replace", "replace_all"}:
+                raise ValueError("pass either edits or find + replace, not both")
+        else:
+            if "edits" in self.model_fields_set:
+                raise ValueError("edits must be a nonempty array")
+            TextEditArguments.model_validate({key: getattr(self, key) for key in ("find", "replace", "replace_all") if key in self.model_fields_set})
+        return self
+
+    def replacements(self) -> list[TextEditArguments]:
+        return self.edits if self.edits is not None else [TextEditArguments(find=self.find, replace=self.replace, replace_all=self.replace_all)]
 
 
 class ComputerListFilesArguments(_ContainerToolArguments):
@@ -1085,6 +1104,7 @@ class SkillReadFileArguments(_ContainerToolArguments):
     # 默认一次给全（读文件的上限 800 行）：以前默认 200 行，《小说蒸馏》252 行、《番茄下书蒸馏》202 行都读不全，
     # 模型读了第一页多半不接着读（Hermes 档案 5.8：「models read page 1 and skip the rest」）。
     max_lines: int = Field(default=MAX_READ_LINES, ge=1, le=MAX_READ_LINES)
+    start_offset: int = Field(default=0, ge=0, le=MAX_READ_CHARACTERS * 1024)
 
 
 class SkillSearchArguments(_ContainerToolArguments):
@@ -1553,8 +1573,7 @@ class AgentToolExecutor:
                 "paths: the quick way to see a whole project, or to find a file whose exact "
                 "name you don't know (together with query) instead of guessing paths. "
                 "query keeps entries whose names contain all its words ('|' separates "
-                "alternatives; * and ? work as wildcards, e.g. *.md). Entries named .env* "
-                "are left out.",
+                "alternatives; * and ? work as wildcards, e.g. *.md).",
                 ComputerListFilesArguments,
             ),
             self._definition(
@@ -1569,10 +1588,7 @@ class AgentToolExecutor:
                 "when no folder is open. When next_start_line is returned, pass it as "
                 "start_line to continue; when next_offset is returned (a very long line was "
                 "cut), pass it as start_offset. Files inside the open folder also come back "
-                "with their file_id, which change_set_propose uses. The result also carries "
-                "a file_tag and a hashline_content view where every line has a line_number#HASH "
-                "tag: edit_file later checks against these tags, so edit only lines you actually "
-                "read here.",
+                "with their file_id, which change_set_propose uses, and source SHA-256.",
                 ReadFileArguments,
             ),
         )
@@ -1602,14 +1618,14 @@ class AgentToolExecutor:
             self._definition(
                 "edit_file",
                 "1",
-                "Replace one exact passage ('find') with new text ('replace') inside one "
-                "existing text file, saved right away; path works as in write_file. "
-                "The edit applies where 'find' matches the file content exactly; when it "
-                "matches more than once, set replace_all or include more surrounding "
-                "context. Only lines you actually read with read_file in this conversation "
-                "can be edited — hashline rejects edits to unread lines and asks you to "
-                "read_file first; if the file changed since you read it, read_file again and retry. "
-                "Recorded, and undo_change can undo it.",
+                "Replace text in one existing file and save once. Use find + replace for one "
+                "replacement, or edits for ordered replacements; do not mix both forms. "
+                "Each replacement matches the current text after preceding edits. "
+                "All replacements must match before the file is saved. For repeated matches, "
+                "set replace_all or include enough surrounding text to identify one occurrence. "
+                "path works as in write_file. Original encoding, BOM and CRLF/LF newline style "
+                "are preserved. The file version is checked during commit; "
+                "every saved change is recorded and undo_change can undo it.",
                 ProjectEditFileArguments,
             ),
             self._definition(
@@ -2278,13 +2294,13 @@ class AgentToolExecutor:
                 return await self._ai_smell_score(run, parsed, cancel_event)
             if tool_name in {"list_files", "computer_list_files"}:
                 parsed = ComputerListFilesArguments.model_validate(arguments)
-                return await self._computer_list_files(parsed, await self._book_root_or_none(run))
+                return await self._computer_list_files(parsed, await self._read_root(run, parsed.path))
             if tool_name == "read_file":
                 parsed = ReadFileArguments.model_validate(arguments)
                 return await self._read_any_file(run, parsed, cancel_event)
             if tool_name == "computer_read_file":
                 parsed = ComputerReadFileArguments.model_validate(arguments)
-                return await self._computer_read_file(parsed, await self._book_root_or_none(run))
+                return await self._computer_read_file(parsed, await self._read_root(run, parsed.path))
             if tool_name == "computer_run_command":
                 parsed = ComputerRunCommandArguments.model_validate(arguments)
                 return await self._computer_run_command(
@@ -2725,29 +2741,22 @@ class AgentToolExecutor:
                 retryable=False,
             )
         text = self._skill_text(target, value)
-        lines = text.splitlines(keepends=True)
-        start_index = min(arguments.start_line - 1, len(lines))
-        selected = lines[start_index : start_index + arguments.max_lines]
-        excerpt = "".join(selected)
-        character_truncated = len(excerpt) > MAX_READ_CHARACTERS
-        if character_truncated:
-            excerpt = excerpt[:MAX_READ_CHARACTERS]
-        end_line = start_index + len(selected)
-        has_more_lines = end_line < len(lines)
+        page = read_text_page(text, start_line=arguments.start_line, max_lines=arguments.max_lines,
+                              start_offset=arguments.start_offset, max_characters=MAX_READ_CHARACTERS)
         return {
             "schema": "zhimeng.tool-result.skill-read-file.v1",
             "skill": entry.name,
             "path": relative.as_posix(),
             # 完整位置：技能说明里写的脚本、相对路径，模型可以照这个拼出来再用执行命令去跑。
             "file": str(target),
-            "start_line": start_index + 1,
-            "end_line": max(start_index + 1, end_line),
-            "total_lines": len(lines),
-            "truncated": character_truncated or has_more_lines,
-            "next_start_line": (
-                end_line + 1 if has_more_lines and not character_truncated else None
-            ),
-            "content": excerpt,
+            "start_line": page.start_line,
+            "end_line": page.end_line,
+            "total_lines": page.total_lines,
+            "truncated": page.truncated,
+            "next_start_line": page.next_start_line,
+            "next_offset": page.next_offset,
+            "content": page.content,
+            **({"note": page.note} if page.note else {}),
         }
 
     async def _skill_search(
@@ -3036,33 +3045,9 @@ class AgentToolExecutor:
                 allowed_kinds=WRITING_CONTEXT_FILE_KINDS,
             )
             content = str(result["content"])
-            lines = content.splitlines(keepends=True)
-            note: str | None = None
-            if not arguments.start_offset and lines and arguments.start_line > len(lines):
-                # 起点超过文件长度：模型多半是想读结尾（真机：185 行的章从第 300 行读起，读空了也没重试，
-                # 最后凭印象写了一章）。给最后一段，并说清文件总共几行。
-                start = max(1, len(lines) - arguments.max_lines + 1)
-                note = (
-                    f"文件只有 {len(lines)} 行，第 {arguments.start_line} 行之后没有内容；"
-                    f"这里给的是第 {start}–{len(lines)} 行（结尾）。"
-                )
-                arguments = arguments.model_copy(update={"start_line": start})
-            if arguments.start_offset:
-                offset = min(arguments.start_offset, len(content))
-                line_start = content.count("\n", 0, offset) + 1
-                selected = content[offset:].splitlines(keepends=True)[
-                    : arguments.max_lines
-                ]
-                base_offset = offset
-            else:
-                start_index = min(arguments.start_line - 1, len(lines))
-                line_start = start_index + 1
-                selected = lines[start_index : start_index + arguments.max_lines]
-                base_offset = sum(len(line) for line in lines[:start_index])
-            excerpt = "".join(selected)
-            character_truncated = len(excerpt) > MAX_READ_CHARACTERS
-            if character_truncated:
-                excerpt = excerpt[:MAX_READ_CHARACTERS]
+            page = read_text_page(content, start_line=arguments.start_line, max_lines=arguments.max_lines,
+                                  start_offset=arguments.start_offset, max_characters=MAX_READ_CHARACTERS)
+            excerpt, note, line_start, end_line = page.content, page.note, page.start_line, page.end_line
             file_record = result["file"]
             if not isinstance(file_record, dict):
                 raise AgentToolError(
@@ -3070,12 +3055,6 @@ class AgentToolExecutor:
                     code="agent_tool_result_invalid",
                     retryable=False,
                 )
-            consumed_offset = base_offset + len(excerpt)
-            has_more = consumed_offset < len(content)
-            ends_with_newline = excerpt.endswith(("\n", "\r"))
-            end_line = line_start + excerpt.count("\n") - (
-                1 if ends_with_newline and excerpt else 0
-            )
             # 偏移和行号按原文算完再遮（遮挡不增减换行）；像密钥的值只留末 4 位。
             excerpt, masked = mask_secrets(excerpt)
             if masked:
@@ -3090,27 +3069,10 @@ class AgentToolExecutor:
                     "file_id": file_id, "relative_path": file_record.get("relative_path"),
                     "sha256": result["etag"], "extraction": result["extraction"],
                     "start_line": line_start, "end_line": max(line_start, end_line),
-                    "total_lines": len(lines), "truncated": character_truncated or has_more,
-                    "next_offset": consumed_offset if has_more else None, "content": excerpt,
+                    "total_lines": page.total_lines, "truncated": page.truncated,
+                    "next_offset": page.next_offset, "content": excerpt,
                     **({"note": note} if note else {}),
                 })
-            # 给这轮回一份内容指纹：每行一个 tag，整份一个 file_tag；
-            # 模型后面 edit_file / write_file 要拿着它来对，没读过的行不许改（Hashline）。
-            raw_lines = excerpt.splitlines(keepends=True)
-            rel_path = str(file_record.get("relative_path") or arguments.relative_path)
-            ftag = file_tag(content)
-            hashline_text = tag_content(raw_lines, line_start)
-            LEDGER.record(
-                run.run_id,
-                rel_path,
-                ReadRecord(
-                    file_tag=ftag,
-                    line_tags=line_tags(raw_lines),
-                    excerpt_lines=set(
-                        range(line_start, max(line_start, end_line) + 1)
-                    ),
-                ),
-            )
             return self._bounded_result(
                 {
                     "schema": "zhimeng.tool-result.project-read-file.v1",
@@ -3120,18 +3082,12 @@ class AgentToolExecutor:
                     "file_id": file_id,
                     "relative_path": file_record.get("relative_path"),
                     "sha256": file_record.get("sha256"),
-                    "file_tag": ftag,
                     "start_line": line_start,
                     "end_line": max(line_start, end_line),
-                    "total_lines": len(lines),
-                    "truncated": character_truncated or has_more,
-                    "next_offset": consumed_offset if has_more else None,
+                    "total_lines": page.total_lines,
+                    "truncated": page.truncated,
+                    "next_offset": page.next_offset,
                     "content": excerpt,
-                    "hashline_content": hashline_text,
-                    "hashline_note": (
-                        f"这份内容每行有 `行号#HASH:` 指纹（见 hashline_content）；{rel_path} 整份的 file_tag 是 {ftag}。"
-                        "edit_file 时按这份指纹复述要改的行，没读过的行不许改；文件变了 file_tag 会对不上，先重读。"
-                    ),
                     **({"note": note} if note else {}),
                 }
             )
@@ -3187,40 +3143,35 @@ class AgentToolExecutor:
         request_hash: str,
         cancel_event: asyncio.Event,
     ) -> AgentToolExecution:
-        if arguments.find == arguments.replace:
-            raise AgentToolError(
-                "查找内容和替换内容完全一样，没有要改的地方。",
-                code="agent_tool_edit_noop",
-                retryable=False,
-            )
+        edits = arguments.replacements()
         occurrences = 0
         loose = False
-
-        # Hashline：find 必须在这一 run 最近 read_file 的内容里出现过（没读过的行不让改）。
-        ledger_rec = LEDGER.last_read(run.run_id, str(arguments.path))
+        failed_find = edits[0].find
 
         def transform(existing: str | None) -> str:
-            nonlocal occurrences, loose
+            nonlocal occurrences, loose, failed_find
             if existing is None:
                 raise AgentToolError(
-                    f"还没有这个文件：{arguments.path}。先列一下那个文件夹确认路径，"
-                    "或者改用 write_file 新建。",
-                    code="agent_tool_edit_target_missing",
-                    retryable=False,
+                    f"还没有这个文件：{arguments.path}。先列一下那个文件夹确认路径，或者改用 write_file 新建。",
+                    code="agent_tool_edit_target_missing", retryable=False,
                 )
-            if ledger_rec is not None:
-                allowed, stale_msg = LEDGER.evaluate(
-                    run.run_id, str(arguments.path), file_tag(existing)
-                )
-                if not allowed:
-                    raise AgentToolError(
-                        stale_msg or "文件在你读过之后被改了，先 read_file 重读再改。",
-                        code="agent_tool_edit_stale",
-                        retryable=False,
+            updated = existing
+            for index, item in enumerate(edits, 1):
+                failed_find = item.find
+                if item.find == item.replace:
+                    raise AgentToolError("查找内容和替换内容完全一样，没有要改的地方。",
+                                         code="agent_tool_edit_noop", retryable=False)
+                try:
+                    updated, count, matched_loosely = _find_and_replace(
+                        updated, item.find, item.replace, replace_all=item.replace_all,
                     )
-            updated, occurrences, loose = _find_and_replace(
-                existing, arguments.find, arguments.replace, replace_all=arguments.replace_all
-            )
+                except AgentToolError as exc:
+                    if len(edits) == 1:
+                        raise
+                    raise AgentToolError(f"第 {index} 处修改未匹配，本批尚未保存：{exc}",
+                                         code=exc.code, retryable=exc.retryable) from exc
+                occurrences += count
+                loose = loose or matched_loosely
             return updated
 
         try:
@@ -3236,6 +3187,7 @@ class AgentToolExecutor:
                 extra_output=lambda: {
                     "occurrences": occurrences,
                     "replace_all": arguments.replace_all,
+                    "edits_count": len(edits),
                     **(
                         {
                             "match": "loose",
@@ -3249,7 +3201,7 @@ class AgentToolExecutor:
             )
         except AgentToolError as exc:
             if exc.code == "agent_tool_edit_find_missing":
-                hint = await self._passage_elsewhere_for(run, arguments.path, arguments.find)
+                hint = await self._passage_elsewhere_for(run, arguments.path, failed_find)
                 if not hint:
                     raise
                 raise AgentToolError(f"{hint}。\n{exc}", code=exc.code, retryable=exc.retryable) from exc
@@ -4474,16 +4426,15 @@ class AgentToolExecutor:
             if root is not None:
                 resolved_root = root.resolve()
                 if resolved != resolved_root and self._path_within(resolved, resolved_root):
-                    return "project", self._safe_write_relative_path(
-                        resolved.relative_to(resolved_root).as_posix()
-                    )
+                    relative = self._safe_write_relative_path(resolved.relative_to(resolved_root).as_posix())
+                    return self._project_write_route(resolved_root, relative)
             return "file", resolved
         relative = text.replace("\\", "/")
         while relative.startswith("./"):
             relative = relative[2:]
         relative = relative.lstrip("/")
         if root is not None:
-            return "project", self._safe_write_relative_path(relative)
+            return self._project_write_route(root, self._safe_write_relative_path(relative))
         if run.project_revision is not None:
             # 打开着文件夹却解析不出来（挪走了、删了）：相对路径照实报错，不悄悄写进主目录。
             raise AgentToolError(
@@ -4492,6 +4443,13 @@ class AgentToolExecutor:
                 retryable=False,
             )
         return "file", self._checked_write_path(_home_folder() / relative)
+
+    @staticmethod
+    def _project_write_route(root: Path, relative: str) -> tuple[str, Any]:
+        parts = PurePosixPath(relative).parts
+        if parts[-1].startswith(".") or any(skip_scan_directory(part) for part in parts[:-1]):
+            return "file", AgentToolExecutor._checked_write_path(root.joinpath(*parts))
+        return "project", relative
 
     @staticmethod
     def _checked_write_path(candidate: Path) -> Path:
@@ -4503,15 +4461,6 @@ class AgentToolExecutor:
                 code="agent_tool_computer_path_invalid",
                 retryable=False,
             ) from exc
-        if any(
-            part.casefold() in FORBIDDEN_PATH_SEGMENTS or _is_env_file(part)
-            for part in resolved.parts
-        ):
-            raise AgentToolError(
-                "这个位置不写（.git、node_modules、__pycache__、.env 这类）。",
-                code="agent_tool_validation_failed",
-                retryable=False,
-            )
         return resolved
 
     @staticmethod
@@ -4878,16 +4827,6 @@ class AgentToolExecutor:
                 code="agent_tool_validation_failed",
                 retryable=False,
             )
-        lowered = [part.casefold() for part in parts]
-        if any(
-            part in FORBIDDEN_PATH_SEGMENTS or part.startswith(".env")
-            for part in lowered
-        ):
-            raise AgentToolError(
-                "这个位置不许动（.git、node_modules、.env 这类系统位置）。",
-                code="agent_tool_validation_failed",
-                retryable=False,
-            )
         return "/".join(parts)
 
     # ------------------------------------------------------------------
@@ -4931,29 +4870,20 @@ class AgentToolExecutor:
                 code="agent_tool_computer_path_invalid",
                 retryable=False,
             ) from exc
-        if any(_is_env_file(part) for part in resolved.parts):
-            raise AgentToolError(
-                "这个位置不开放（.env 这类放密钥的文件）。",
-                code="agent_tool_computer_outside_roots",
-                retryable=False,
-            )
         return resolved
 
-    def _resolve_read_path(self, raw: str, *, book_root: Path | None = None) -> Path:
-        """读和列用的路径：相对路径先按打开的文件夹找，那里没有、主目录下有，就用主目录下的。
+    async def _read_root(self, run: Run, raw: str) -> Path | None:
+        root = await self._book_root_or_none(run)
+        if root is None and getattr(run, "project_revision", None) is not None and not Path(_host_path_text(raw)).expanduser().is_absolute():
+            raise AgentToolError(
+                "打开的文件夹当前无法读取，相对路径仍属于该文件夹；可恢复文件夹或提供完整路径。",
+                code="agent_tool_project_not_found", retryable=True,
+            )
+        return root
 
-        9-27 真机（3.11 合成 list_files / read_file 之后）：grok-4.6 打开书时照环境里的「主目录」写
-        「Desktop\\新项目\\…\\书名」这种从主目录算的相对路径，按打开的文件夹解析全落空，连错三次才改用「.」。
-        只管读和列；写还是只按打开的文件夹（新文件本来就不存在，猜主目录会写错地方）。
-        """
-        target = self._resolve_computer_path(raw, book_root=book_root)
-        if book_root is None or target.exists():
-            return target
-        text = _host_path_text(raw)
-        if not text or Path(text).expanduser().is_absolute():
-            return target
-        from_home = self._resolve_computer_path(raw, book_root=None)
-        return from_home if from_home.exists() else target
+    def _resolve_read_path(self, raw: str, *, book_root: Path | None = None) -> Path:
+        """Relative paths belong to the open folder; otherwise to the home folder."""
+        return self._resolve_computer_path(raw, book_root=book_root)
 
     @staticmethod
     def _path_within(path: Path, root: Path) -> bool:
@@ -5014,8 +4944,6 @@ class AgentToolExecutor:
             ) from exc
         for child in children:
             lowered = child.name.casefold()
-            if _is_env_file(lowered):
-                continue
             if alternatives and not _name_matches(lowered, alternatives):
                 continue
             if len(entries) >= arguments.limit:
@@ -5071,8 +4999,6 @@ class AgentToolExecutor:
                     incomplete = True
                     break
                 lowered = child.name.casefold()
-                if _is_env_file(lowered):
-                    continue
                 try:
                     is_dir = child.is_dir(follow_symlinks=False)
                     is_link = child.is_symlink() or AgentToolExecutor._is_link_or_reparse(Path(child.path))
@@ -5118,7 +5044,7 @@ class AgentToolExecutor:
         """路径不存在时，往上找最近一层还在的文件夹，列出里面有什么，让模型照着改。
 
         2026-09-26 真机：grok-4.6 对着自己编的「第004章_玉佩上的青云_控制卡.md」连读 5 次，每次只拿到「没有找到」。
-        最多往上六层、到盘符根就不列；只列名字（文件夹带 /），最多 20 项，不露 .env。
+        最多往上六层、到盘符根就不列；只列名字（文件夹带 /），最多 20 项。
         """
         folder = target.parent
         for _ in range(6):
@@ -5137,7 +5063,6 @@ class AgentToolExecutor:
                 (
                     child.name + ("/" if child.is_dir() else "")
                     for child in folder.iterdir()
-                    if not _is_env_file(child.name)
                 ),
                 key=str.casefold,
             )
@@ -5158,7 +5083,7 @@ class AgentToolExecutor:
         先广后深、不跟链接，点号文件夹和 node_modules 这类不进（和项目快照一样）；最多看 20,000 项、2 秒，最多报 3 处。
         """
         name = target.name.casefold()
-        if not name or _is_env_file(name):
+        if not name:
             return ""
         inside_book = book_root is not None and AgentToolExecutor._path_within(target, book_root)
         root = book_root if inside_book else target.parent
@@ -5318,7 +5243,7 @@ class AgentToolExecutor:
         """read_file：路径落在打开的文件夹里、快照里有这个文件 → 走项目那条（带 file_id、版本，长行按字符接着读）；
         快照里没有（点号文件夹里的、刚被命令建出来还没扫到的）或在文件夹外 → 走电脑那条。两条都遮密钥。"""
 
-        book_root = await self._book_root_or_none(run)
+        book_root = await self._read_root(run, arguments.path)
         target = self._resolve_read_path(arguments.path, book_root=book_root)
         if book_root is not None and self._path_within(target, book_root) and target != book_root:
             relative = target.relative_to(book_root).as_posix()
@@ -5397,13 +5322,20 @@ class AgentToolExecutor:
                 retryable=False,
             )
         extraction = None
+        text_format: dict[str, Any] = {}
         try:
             if is_office:
                 extracted = read_office_file(target)
                 text = extracted.extracted_text
                 extraction = extraction_receipt(extracted)
             else:
-                text, _, _ = decode_project_text(target.read_bytes())
+                raw = target.read_bytes()
+                text, encoding, bom = decode_project_text(raw)
+                endings = set(re.findall(r"\r\n|\r|\n", text))
+                newline = {"\r\n": "CRLF", "\n": "LF", "\r": "CR"}[next(iter(endings))] if len(endings) == 1 else "mixed" if endings else "none"
+                text_format = {"encoding": encoding, "bom": bool(bom),
+                               "newline": newline,
+                               "sha256": hashlib.sha256(raw).hexdigest()}
         except OfficeError as exc:
             raise AgentToolError(str(exc), code="agent_tool_office_unreadable", retryable=False) from exc
         except ValueError as exc:
@@ -5413,46 +5345,21 @@ class AgentToolExecutor:
                 retryable=False,
             ) from exc
         text = text.replace("\r\n", "\n").replace("\r", "\n")
-        lines = text.splitlines(keepends=True)
-        note: str | None = None
-        if start_offset:
-            # 上一次一行太长被截断：从这个字符位置接着读（和项目那条读一样）。
-            offset = min(start_offset, len(text))
-            start_index = text.count("\n", 0, offset)
-            selected = text[offset:].splitlines(keepends=True)[: arguments.max_lines]
-            base_offset = offset
-        else:
-            start_index = min(arguments.start_line - 1, len(lines))
-            if lines and arguments.start_line > len(lines):
-                # 起点超过结尾：多半是想读结尾，给最后一段并说清一共几行（项目那条读 9-25 起就这样）。
-                start_index = max(0, len(lines) - arguments.max_lines)
-                note = (
-                    f"文件只有 {len(lines)} 行，第 {arguments.start_line} 行之后没有内容；"
-                    f"这里给的是第 {start_index + 1}–{len(lines)} 行（结尾）。"
-                )
-            selected = lines[start_index : start_index + arguments.max_lines]
-            base_offset = sum(len(line) for line in lines[:start_index])
-        excerpt = "".join(selected)
-        character_truncated = len(excerpt) > MAX_READ_CHARACTERS
-        if character_truncated:
-            excerpt = excerpt[:MAX_READ_CHARACTERS]
-        consumed_offset = base_offset + len(excerpt)
-        end_line = start_index + len(selected)
-        has_more_lines = end_line < len(lines)
+        page = read_text_page(text, start_line=arguments.start_line, max_lines=arguments.max_lines,
+                              start_offset=start_offset, max_characters=MAX_READ_CHARACTERS)
+        excerpt, note = page.content, page.note
         excerpt, masked = mask_secrets(excerpt)
         payload: dict[str, Any] = {
             "schema": "zhimeng.tool-result.computer-read-file.v1",
             "path": str(target),
+            **text_format,
             **({"extraction": extraction, "sha256": extraction["source_sha256"]} if extraction else {}),
-            "start_line": start_index + 1,
-            "end_line": max(start_index + 1, end_line),
-            "total_lines": len(lines),
-            "truncated": character_truncated or has_more_lines,
-            "next_start_line": (
-                end_line + 1 if has_more_lines and not character_truncated else None
-            ),
-            # 这一段被字数截断：从这个字符位置接着读（传给 start_offset）。
-            "next_offset": consumed_offset if character_truncated and consumed_offset < len(text) else None,
+            "start_line": page.start_line,
+            "end_line": page.end_line,
+            "total_lines": page.total_lines,
+            "truncated": page.truncated,
+            "next_start_line": page.next_start_line,
+            "next_offset": page.next_offset,
             "content": excerpt,
         }
         notes = [note] if note else []

@@ -13,7 +13,6 @@ from zhimeng_runtime.agent_provider import (
     AgentProviderError, OpenAICompatibleAgentProvider, ProviderCompleted, ProviderTextDelta, ProviderToolCall,
 )
 from zhimeng_runtime.agent_service import AgentService
-from zhimeng_runtime.hashline import LEDGER
 
 
 def assert_protocol_pairs(history):
@@ -191,7 +190,6 @@ def test_completed_runs_release_their_file_read_ledger(tmp_path, ending):
                     yield ProviderToolCall(0, "read", "read_file", {"path": str(folder / "README.md")})
                     yield ProviderCompleted("tool_calls", None)
                     return
-                assert LEDGER.has_read(run_id, "README.md")
                 reached.set()
                 if ending == "failed":
                     raise AgentProviderError("Injected failure", code="offline_fatal", retryable=False)
@@ -218,7 +216,6 @@ def test_completed_runs_release_their_file_read_ledger(tmp_path, ending):
             else:
                 await task
             assert service.store.get_run(run_id).status.value == ending
-            assert not LEDGER.has_read(run_id, "README.md")
         finally:
             await service.shutdown()
             await base.shutdown()

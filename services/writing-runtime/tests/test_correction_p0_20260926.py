@@ -299,7 +299,7 @@ def test_secret_values_are_masked_in_reads_and_command_output(tmp_path: Path) ->
 # 电脑读工具：从打开的文件夹 / 用户主目录起，哪里都能读
 
 
-def test_computer_tools_start_at_home_without_a_folder_and_read_git_but_not_env(tmp_path: Path, monkeypatch) -> None:
+def test_computer_tools_start_at_home_without_a_folder_and_resolve_explicit_files(tmp_path: Path, monkeypatch) -> None:
     executor, _run, _chapter, _database, _change_sets, project = _build_runtime(tmp_path)
     home = tmp_path / "home"
     (home / "Desktop").mkdir(parents=True)
@@ -317,9 +317,7 @@ def test_computer_tools_start_at_home_without_a_folder_and_read_git_but_not_env(
     git_config.parent.mkdir()
     git_config.write_text("[core]\n", encoding="utf-8")
     assert executor._resolve_computer_path(str(git_config)) == git_config.resolve()
-    with pytest.raises(AgentToolError) as env_refused:
-        executor._resolve_computer_path(str(project / ".env"))
-    assert env_refused.value.code == "agent_tool_computer_outside_roots"
+    assert executor._resolve_computer_path(str(project / ".env")) == (project / ".env").resolve()
 
 
 def test_recursive_listing_finds_a_memory_folder_a_few_levels_down(tmp_path: Path, monkeypatch) -> None:

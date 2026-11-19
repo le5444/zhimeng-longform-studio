@@ -69,6 +69,7 @@ def test_plain_read_continues_a_very_long_line_by_offset_and_gives_the_tail_past
     first = asyncio.run(_call(executor, run, "read_file", {"path": str(outside)}, "call-long-0001"))
     assert first.output["content"] == "甲" * 10
     assert first.output["next_offset"] == 10
+    assert first.output["end_line"] == 1
     second = asyncio.run(
         _call(executor, run, "read_file", {"path": str(outside), "start_offset": first.output["next_offset"]}, "call-long-0002")
     )
@@ -109,9 +110,9 @@ def test_reading_a_folder_says_it_is_a_folder_and_which_tool_to_use(tmp_path) ->
     assert "这是一个文件夹" in str(caught.value) and "list_files" in str(caught.value)
 
 
-def test_read_and_list_accept_relative_paths_counted_from_the_home_folder(tmp_path, monkeypatch) -> None:
-    """9-27 真机：打开了书，grok-4.6 照环境里的「主目录」写从主目录算的相对路径（Desktop/…），按打开的文件夹全落空。
-    读和列：打开的文件夹里没有、主目录下有，就用主目录下的。"""
+def test_missing_project_path_does_not_silently_read_a_different_home_file(tmp_path, monkeypatch) -> None:
+    import pytest
+    from zhimeng_runtime.agent_tools import AgentToolError
     from zhimeng_runtime import environment_context
 
     home = tmp_path / "home"
@@ -120,10 +121,33 @@ def test_read_and_list_accept_relative_paths_counted_from_the_home_folder(tmp_pa
     monkeypatch.setattr(environment_context, "home_folder", lambda: home)
     executor, run, *_ = _build_runtime(tmp_path)
 
-    listed = asyncio.run(_call(executor, run, "list_files", {"path": "Desktop/资料"}, "call-home-0001"))
+    with pytest.raises(AgentToolError, match="没有找到"):
+        asyncio.run(_call(executor, run, "list_files", {"path": "Desktop/资料"}, "call-missing-0001"))
+    with pytest.raises(AgentToolError, match="没有找到"):
+        asyncio.run(_call(executor, run, "read_file", {"path": "Desktop/资料/a.md"}, "call-missing-0002"))
+    listed = asyncio.run(_call(executor, run, "list_files", {"path": str(home / "Desktop/资料")}, "call-home-0001"))
     assert [entry["name"] for entry in listed.output["entries"]] == ["a.md"]
-    read = asyncio.run(_call(executor, run, "read_file", {"path": "Desktop/资料/a.md"}, "call-home-0002"))
+    read = asyncio.run(_call(executor, run, "read_file", {"path": str(home / "Desktop/资料/a.md")}, "call-home-0002"))
     assert read.output["content"] == "主目录下的\n"
     # 打开的文件夹里有的，照旧先认打开的文件夹。
     inside = asyncio.run(_call(executor, run, "list_files", {"path": "05_正文内容"}, "call-home-0003"))
     assert [entry["name"] for entry in inside.output["entries"]] == ["第一卷"]
+
+
+def test_unavailable_project_keeps_relative_reads_out_of_home(tmp_path, monkeypatch):
+    import pytest
+    from zhimeng_runtime import environment_context
+    from zhimeng_runtime.agent_tools import AgentToolError
+
+    executor, run, _chapter, _db, _cs, project = _build_runtime(tmp_path)
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / "report.txt").write_text("different file", encoding="utf-8")
+    monkeypatch.setattr(environment_context, "home_folder", lambda: home)
+    project.rename(project.with_name("moved-project"))
+    for tool in ("read_file", "list_files"):
+        with pytest.raises(AgentToolError) as error:
+            asyncio.run(_call(executor, run, tool, {"path": "report.txt"}, call_id=f"missing-{tool}"))
+        assert error.value.code == "agent_tool_project_not_found"
+    result = asyncio.run(_call(executor, run, "read_file", {"path": str(home / "report.txt")}, call_id="explicit-read"))
+    assert result.output["content"] == "different file"

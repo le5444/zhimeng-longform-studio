@@ -3,6 +3,11 @@ import { ipcMain, shell } from 'electron'
 // Only the workbench's own main frame receives desktop commands. Guest pages
 // can relinquish input ownership through their preload and have no bridge API.
 export function connectWorkbench(window, host) {
+  const external = url => {
+    const parsed = new URL(url)
+    if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('这个链接不是网页地址。')
+    return shell.openExternal(parsed.href)
+  }
   const trusted = event => {
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) {
       throw new Error('此页面没有桌面接口。')
@@ -13,6 +18,7 @@ export function connectWorkbench(window, host) {
   ipcMain.handle('browser:command', async (event, request) => {
     trusted(event)
     const { action, session_id, id } = request
+    if (action === 'open-external') return external(request.url)
     if (action === 'reveal-download') {
       const download = host.downloads.find(item => item.id === id && item.session_id === session_id)
       if (!download) throw new Error('当前对话里找不到这份下载记录。')
@@ -29,9 +35,15 @@ export function connectWorkbench(window, host) {
   host.on('changed', state => {
     if (!window.webContents.isDestroyed()) window.webContents.send('browser:changed', state)
   })
-  window.webContents.on('will-navigate', event => event.preventDefault())
+  window.webContents.on('will-navigate', (event, url) => {
+    event.preventDefault()
+    if (/^https?:/i.test(url)) void external(url).catch(error => console.error('Open link failed:', error))
+  })
   window.webContents.on('did-start-loading', () => host.layout(null))
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/i.test(url)) void external(url).catch(error => console.error('Open link failed:', error))
+    return { action: 'deny' }
+  })
   window.on('resize', () => {
     if (!window.webContents.isDestroyed()) window.webContents.send('browser:layout')
   })

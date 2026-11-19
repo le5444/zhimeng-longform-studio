@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import type { ProjectInspection } from '../../api/projects'
-import { resolveFileNavigation } from '../lib/fileNavigation'
+import { localFileCandidates, resolveFileNavigation } from '../lib/fileNavigation'
+
+it('absolute files outside the project retain literal and positional candidates without treating web URLs as files', () => {
+  expect(localFileCandidates('C:/outside/report%20one.md#L2')).toEqual(['C:/outside/report one.md#L2', 'C:/outside/report one.md'])
+  expect(localFileCandidates('C:/outside/report%23L2.md')).toEqual(['C:/outside/report#L2.md'])
+  expect(localFileCandidates('https://example.com/report.md')).toEqual([])
+  expect(localFileCandidates('report.md')).toEqual([])
+  expect(localFileCandidates('file:///tmp/report%20one.md#L2')).toEqual(['/tmp/report one.md#L2', '/tmp/report one.md'])
+  expect(localFileCandidates('file://localhost/C:/work/report.md')).toEqual(['C:/work/report.md'])
+  expect(localFileCandidates('file://server/share/report.md')).toEqual(['//server/share/report.md'])
+  expect(localFileCandidates('\\\\server\\share\\report.md')).toEqual(['\\\\server\\share\\report.md'])
+})
 
 const mockSnapshot = {
   schema: 'zhimeng.project-inspection.v1',

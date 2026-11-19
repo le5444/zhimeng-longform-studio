@@ -1,7 +1,7 @@
 import { formatFileMention, type FileLocation } from './fileReferences'
 
 export interface FileQuotation {
-  projectId: string
+  projectId: string | null
   path: string
   text?: string
   source?: 'original' | 'preview' | 'draft'

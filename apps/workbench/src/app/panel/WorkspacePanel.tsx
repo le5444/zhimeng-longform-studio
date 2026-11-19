@@ -8,6 +8,7 @@ import { FilesPanel } from './Files'
 import { SessionChangesPanel } from './SessionChangesPanel'
 import { ChangeHistory } from './ChangeHistory'
 import { BrowserPanel } from './Browser'
+import { LocalFilePanel } from './LocalFile'
 
 export type PanelTab = 'files' | 'changes' | 'commands' | 'browser'
 const icons = { files: Files, changes: FileDiff, commands: SquareTerminal, browser: Globe }
@@ -21,6 +22,7 @@ interface WorkspacePanelProps {
   onClose: () => void
   onReturn: () => void
   files: ComponentProps<typeof FilesPanel> | null
+  localFile?: ComponentProps<typeof LocalFilePanel> | null
   projectChanges: ComponentProps<typeof ChangesPanel> | null
   sessionChanges: ComponentProps<typeof SessionChangesPanel>
   commands: ComponentProps<typeof CommandsPanel>
@@ -29,7 +31,7 @@ interface WorkspacePanelProps {
 // Durable saves and undo stay with Root; this component owns panel navigation and presentation.
 export function WorkspacePanel(props: WorkspacePanelProps) {
   const id = useId()
-  const tabs: PanelTab[] = props.files ? ['files', 'changes', 'commands', 'browser'] : ['changes', 'commands', 'browser']
+  const tabs: PanelTab[] = props.files || props.localFile ? ['files', 'changes', 'commands', 'browser'] : ['changes', 'commands', 'browser']
   const navigate = (event: KeyboardEvent<HTMLButtonElement>, tab: PanelTab) => {
     const index = tabs.indexOf(tab)
     const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length
@@ -63,6 +65,7 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
     </header>
     <div id={`${id}-body`} className="zm-panel-body" role="tabpanel" aria-labelledby={`${id}-${props.tab}`}>
       {props.tab === 'browser' ? <BrowserPanel sessionId={props.commands.sessionId} /> : props.tab === 'commands' ? <CommandsPanel {...props.commands} />
+        : props.tab === 'files' && props.localFile ? <LocalFilePanel {...props.localFile} />
         : props.tab === 'files' && props.files ? <FilesPanel {...props.files} />
           : <ChangeHistory key={`${props.sessionChanges.sessionId}:${props.projectChanges?.snapshot.project.project_id ?? ''}`} project={props.projectChanges} session={props.sessionChanges} />}
     </div>

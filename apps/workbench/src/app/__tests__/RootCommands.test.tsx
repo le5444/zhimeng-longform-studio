@@ -23,7 +23,7 @@ vi.mock('../../hooks/useAgentConversation', () => ({ AgentBusyError: class exten
   session: { session_id: state.sid, title: state.sid }, sessions: [], activities: [], messages: [], activeRun: null, cancel: state.cancel,
 } } }))
 vi.mock('../Sidebar', () => ({ Sidebar: () => null }))
-vi.mock('../chat/ChatView', () => ({ ChatView: ({ onShowCommands, onShowChange, onOpenFile, onOpenSettings, onOpenMemorySettings, openFileLabel }: { onShowCommands: (id?: string) => void; onShowChange: (id: string) => void; onOpenFile: (path: string, location?: FileLocation) => void; onOpenSettings: () => void; onOpenMemorySettings: () => void; openFileLabel: string | null }) => {
+vi.mock('../chat/ChatView', () => ({ ChatView: ({ onShowCommands, onShowChange, onOpenFile, onOpenLocalFile, onOpenSettings, onOpenMemorySettings, openFileLabel }: { onShowCommands: (id?: string) => void; onShowChange: (id: string) => void; onOpenFile: (path: string, location?: FileLocation) => void; onOpenLocalFile: (path: string) => void; onOpenSettings: () => void; onOpenMemorySettings: () => void; openFileLabel: string | null }) => {
   historyActions({ onShowCommands, onOpenMemorySettings })
   return <>
   <textarea className="zm-composer-input" defaultValue="待继续的草稿" aria-label="消息草稿" />
@@ -31,11 +31,14 @@ vi.mock('../chat/ChatView', () => ({ ChatView: ({ onShowCommands, onShowChange, 
   <button onClick={() => onShowCommands('cmd-a')}>定位指定命令</button>
   <button onClick={() => onShowChange('filechange-1')}>打开修改测试</button>
   <button onClick={() => onOpenFile('notes.txt')}>打开测试文件</button>
+  <button onClick={() => onOpenLocalFile('C:/outside/report.md')}>打开外部文件</button>
+  <a href="https://example.com/report" target="_blank" rel="noreferrer">资料网页</a>
   <button onClick={() => onOpenFile('notes.txt', { line: 80, column: 4 })}>定位测试文件</button>
   <button onClick={onOpenSettings}>测试设置入口</button>
   <output data-testid="open-file-label">{openFileLabel}</output>
 </> } }))
 vi.mock('../panel/Files', () => ({ FilesPanel: ({ focus }: { focus?: FileFocus }) => <div>文件预览<output data-testid="file-focus">{JSON.stringify(focus)}</output></div> }))
+vi.mock('../panel/LocalFile', () => ({ LocalFilePanel: ({ target }: { target: { path: string } }) => <div>外部预览 {target.path}</div> }))
 vi.mock('../settings/Settings', () => ({ SettingsView: ({ onClose }: { onClose: () => void }) => <button onClick={onClose}>关闭测试设置</button> }))
 vi.mock('../panel/Commands', async () => {
   const { useEffect } = await import('react')
@@ -48,7 +51,32 @@ vi.mock('../panel/SessionChangesPanel', () => ({ SessionChangesPanel: ({ review 
   <button disabled={review.busy} onClick={() => void review.undo('filechange-1')}>撤回文件测试</button> }))
 
 beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); state.sid = 'chat-a'; state.snapshot = null; state.openFilePath = null })
-afterEach(cleanup)
+afterEach(() => { cleanup(); delete window.zhimengBrowser; vi.unstubAllGlobals() })
+
+it('opens outside artifacts without a project and drops the preview in a different conversation', () => {
+  vi.mocked(listSessionFileChanges).mockResolvedValue([])
+  const view = render(<Root />)
+  fireEvent.click(screen.getByRole('button', { name: '打开外部文件' }))
+  expect(screen.getByText('外部预览 C:/outside/report.md')).toBeInTheDocument()
+  expect(screen.getByRole('tab', { name: '文件' })).toHaveAttribute('aria-selected', 'true')
+  expect(state.openFilePath).toBeNull()
+  state.sid = 'chat-b'
+  view.rerender(<Root />)
+  expect(screen.queryByText('外部预览 C:/outside/report.md')).toBeNull()
+  expect(screen.getByRole('textbox', { name: '消息草稿' })).toHaveValue('待继续的草稿')
+})
+
+it('desktop links open a shared page belonging to the active conversation and keep its draft', async () => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  const command = vi.fn().mockResolvedValue(undefined)
+  window.zhimengBrowser = { command, state: async () => ({ tabs: [], active: null, downloads: [], error: null }), onChange: () => () => {}, onLayout: () => () => {} }
+  render(<Root />)
+  fireEvent.click(screen.getByRole('link', { name: '资料网页' }))
+  expect(command).toHaveBeenCalledWith({ action: 'create', session_id: 'chat-a', url: 'https://example.com/report' })
+  expect(screen.getByRole('tab', { name: '浏览器' })).toHaveAttribute('aria-selected', 'true')
+  expect(screen.getByRole('textbox', { name: '消息草稿' })).toHaveValue('待继续的草稿')
+  await act(async () => {})
+})
 
 it('根页面更新保持历史导航回调，换会话后的命令入口使用新会话', () => {
   const view = render(<Root />)

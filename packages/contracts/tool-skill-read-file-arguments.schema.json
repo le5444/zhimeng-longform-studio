@@ -1,0 +1,45 @@
+{
+  "$id": "https://zhimeng.local/contracts/tool-skill-read-file-arguments.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "max_lines": {
+      "default": 800,
+      "maximum": 800,
+      "minimum": 1,
+      "title": "Max Lines",
+      "type": "integer"
+    },
+    "path": {
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "Path",
+      "type": "string"
+    },
+    "skill": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Skill",
+      "type": "string"
+    },
+    "start_line": {
+      "default": 1,
+      "minimum": 1,
+      "title": "Start Line",
+      "type": "integer"
+    },
+    "start_offset": {
+      "default": 0,
+      "maximum": 201326592,
+      "minimum": 0,
+      "title": "Start Offset",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "skill",
+    "path"
+  ],
+  "title": "SkillReadFileArguments",
+  "type": "object"
+}
